@@ -1,0 +1,141 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-navy: var(--navy);
+  --color-ink: var(--ink);
+  --color-info: var(--info);
+  --color-brand-green: var(--brand-green);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 12px;
+
+  --background: #F4F6F8;
+  --foreground: #33414F;
+  --navy: #22324A;
+  --ink: #33414F;
+
+  --card: #FFFFFF;
+  --card-foreground: #33414F;
+  --popover: #FFFFFF;
+  --popover-foreground: #33414F;
+
+  --primary: #12C2A0;
+  --primary-foreground: #FFFFFF;
+  --primary-dark: #0FA98B;
+  --primary-soft: #E2F8F2;
+
+  --secondary: #F1F4F7;
+  --secondary-foreground: #22324A;
+  --muted: #F1F4F7;
+  --muted-foreground: #6B7B8C;
+  --accent: #E2F8F2;
+  --accent-foreground: #0FA98B;
+
+  --info: #2F9BE0;
+  --brand-green: #3A8C3A;
+  --warning: #F0A92B;
+  --danger: #E2574C;
+  --destructive: #E2574C;
+  --destructive-foreground: #FFFFFF;
+  --success: #2FA45A;
+
+  --border: #E6E9ED;
+  --input: #E6E9ED;
+  --ring: #12C2A0;
+
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #33414F;
+  --sidebar-primary: #12C2A0;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #E2F8F2;
+  --sidebar-accent-foreground: #0FA98B;
+  --sidebar-border: #E6E9ED;
+  --sidebar-ring: #12C2A0;
+}
+
+.dark {
+  /* No dark mode for this admin app */
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html, body { font-family: var(--font-sans); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { color: var(--navy); font-weight: 700; letter-spacing: -0.01em; }
+}
+
+@layer utilities {
+  .card-base {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; font-size: 11px; font-weight: 600;
+    border-radius: 999px; line-height: 1.4;
+  }
+  .chip-ok    { background: #E5F6EC; color: #2FA45A; }
+  .chip-warn  { background: #FDF1DC; color: #B47411; }
+  .chip-info  { background: #E1F0FA; color: #1E78B4; }
+  .chip-danger{ background: #FBE3E1; color: #B83A30; }
+  .chip-muted { background: #ECEFF3; color: #4B5A6B; }
+  .chip-teal  { background: #E2F8F2; color: #0FA98B; }
+
+  .label-group {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+    font-weight: 700;
+    color: #8B97A6;
+  }
+}
