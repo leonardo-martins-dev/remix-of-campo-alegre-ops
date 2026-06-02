@@ -77,6 +77,16 @@ Deno.serve(async (req) => {
 
     const userRole = role === "admin" ? "admin" : "user";
 
+    if (email.toLowerCase() === "admin@noponto.io") {
+      return new Response(
+        JSON.stringify({ error: "Este email é reservado ao administrador do sistema" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,

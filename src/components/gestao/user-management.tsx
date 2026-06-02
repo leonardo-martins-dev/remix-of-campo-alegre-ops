@@ -26,6 +26,7 @@ import {
   useSetPermission,
   createUserViaEdge,
 } from "@/hooks/use-users";
+import { isSuperAdmin, SUPER_ADMIN_EMAIL } from "@/lib/super-admin";
 
 export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
   const [nome, setNome] = useState("");
@@ -38,6 +39,10 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
     e.preventDefault();
     if (!nome.trim() || !email.trim() || !password.trim()) {
       toast.error("Preencha todos os campos");
+      return;
+    }
+    if (isSuperAdmin(email.trim())) {
+      toast.error(`O email ${SUPER_ADMIN_EMAIL} é reservado ao administrador do sistema`);
       return;
     }
     setLoading(true);

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { isSuperAdmin, SUPER_ADMIN_EMAIL } from "@/lib/super-admin";
 
 export function useProfiles() {
   return useQuery({
@@ -8,9 +9,10 @@ export function useProfiles() {
       const { data, error } = await supabase
         .from("profiles")
         .select("id, nome, email, role, ativo, created_at")
+        .not("email", "ilike", SUPER_ADMIN_EMAIL)
         .order("nome");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).filter((u) => !isSuperAdmin(u.email));
     },
   });
 }
