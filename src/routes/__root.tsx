@@ -3,10 +3,15 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
+  Outlet,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/layout/app-shell";
+import { AuthProvider } from "@/lib/auth";
+import { AuthGate } from "@/components/auth-gate";
 
 import appCss from "../styles.css?url";
 
@@ -91,9 +96,16 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const isLogin = useRouterState({ select: (s) => s.location.pathname === "/login" });
+
   return (
     <QueryClientProvider client={queryClient}>
-      <AppShell />
+      <AuthProvider>
+        <Toaster />
+        <AuthGate>
+          {isLogin ? <Outlet /> : <AppShell />}
+        </AuthGate>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

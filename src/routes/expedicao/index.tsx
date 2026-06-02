@@ -6,7 +6,14 @@ import { PageHeader } from "@/components/page-header";
 import { StatStrip } from "@/components/stat-strip";
 import { ProgressRing } from "@/components/charts";
 import { NumberStepper } from "@/components/number-stepper";
-import { cargasExpedicao, romaneioItens } from "@/lib/mock";
+import {
+  useCargasDia,
+  useCargaDetail,
+  useUpdateRomaneioItem,
+  useUpdateCargaResumo,
+  useFinalizarCarga,
+} from "@/hooks/use-cargas";
+import { formatTime } from "@/lib/utils-date";
 
 export const Route = createFileRoute("/expedicao/")({
   component: Page,
@@ -15,82 +22,194 @@ export const Route = createFileRoute("/expedicao/")({
 
 type TipoCx = "G" | "I" | "P";
 
+type RomaneioItemView = {
+  id: string;
+  produto: string;
+  romaneio: number;
+  real: number;
+  caixas: Record<TipoCx, number>;
+  status: "ok" | "corrigido" | "pendente";
+};
+
+type FamiliaView = { familia: string; itens: RomaneioItemView[] };
+
+function groupRomaneio(
+  items: {
+    id: string;
+    quantidade_romaneio: number;
+    quantidade_real: number;
+    caixas_g: number;
+    caixas_i: number;
+    caixas_p: number;
+    status: string;
+    produtos: { nome: string; familias_produto: { nome: string } | null } | null;
+  }[] | undefined
+): FamiliaView[] {
+  const map = new Map<string, RomaneioItemView[]>();
+  for (const it of items ?? []) {
+    const familia = it.produtos?.familias_produto?.nome ?? "Outros";
+    const row: RomaneioItemView = {
+      id: it.id,
+      produto: it.produtos?.nome ?? "—",
+      romaneio: Number(it.quantidade_romaneio),
+      real: Number(it.quantidade_real),
+      caixas: { G: it.caixas_g, I: it.caixas_i, P: it.caixas_p },
+      status: it.status as RomaneioItemView["status"],
+    };
+    if (!map.has(familia)) map.set(familia, []);
+    map.get(familia)!.push(row);
+  }
+  return [...map.entries()].map(([familia, itens]) => ({ familia, itens }));
+}
+
+function computeStatus(romaneio: number, real: number): RomaneioItemView["status"] {
+  if (real === romaneio) return "ok";
+  if (real > 0) return "corrigido";
+  return "pendente";
+}
+
 function Page() {
-  const [familias, setFamilias] = useState(() =>
-    romaneioItens.map(f => ({ ...f, itens: f.itens.map(i => ({ ...i, caixas: { ...i.caixas } })) }))
-  );
-  const [carga] = useState(cargasExpedicao[0]);
-  const [elapsed, setElapsed] = useState(0);
+  const { data: cargas = [], isLoading: loadingCargas } = useCargasDia();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"todas" | "carregando" | "aguardando" | "concluida">("todas");
-
-  // Caixas reais enviadas (editáveis) — independente das sugeridas calculadas
-  const sugCaixas = useMemo<Record<TipoCx, number>>(() => {
-    const sum = (k: TipoCx) => familias.flatMap(f => f.itens).reduce((a, i) => a + i.caixas[k], 0);
-    return { G: sum("G"), I: sum("I"), P: sum("P") };
-  }, [familias]);
-
-  const [realCaixas, setRealCaixas] = useState<Record<TipoCx, number>>(sugCaixas);
   const [realTouched, setRealTouched] = useState(false);
-  // Quando não tocado manualmente, real acompanha o sugerido
-  useEffect(() => {
-    if (!realTouched) setRealCaixas(sugCaixas);
-  }, [sugCaixas, realTouched]);
+  const [elapsed, setElapsed] = useState(0);
+
+  const activeId = useMemo(() => {
+    if (selectedId && cargas.some((c) => c.id === selectedId)) return selectedId;
+    const carregando = cargas.find((c) => c.status === "carregando");
+    return carregando?.id ?? cargas[0]?.id ?? null;
+  }, [cargas, selectedId]);
+
+  const { data: detail, isLoading: loadingDetail } = useCargaDetail(activeId);
+  const updateItem = useUpdateRomaneioItem();
+  const updateResumo = useUpdateCargaResumo();
+  const finalizar = useFinalizarCarga();
+
+  const familias = useMemo(() => groupRomaneio(detail?.romaneio_itens), [detail?.romaneio_itens]);
+
+  const resumo = Array.isArray(detail?.carga_caixas_resumo)
+    ? detail.carga_caixas_resumo[0]
+    : detail?.carga_caixas_resumo;
+
+  const sugCaixas = useMemo<Record<TipoCx, number>>(() => {
+    const sum = (k: TipoCx) => familias.flatMap((f) => f.itens).reduce((a, i) => a + i.caixas[k], 0);
+    return {
+      G: resumo?.sugerido_g ?? sum("G"),
+      I: resumo?.sugerido_i ?? sum("I"),
+      P: resumo?.sugerido_p ?? sum("P"),
+    };
+  }, [familias, resumo]);
+
+  const [realCaixas, setRealCaixas] = useState<Record<TipoCx, number>>({ G: 0, I: 0, P: 0 });
 
   useEffect(() => {
-    const t = setInterval(() => setElapsed(e => e + 1), 1000);
+    setRealTouched(false);
+  }, [activeId]);
+
+  useEffect(() => {
+    if (realTouched) return;
+    if (resumo) {
+      setRealCaixas({ G: resumo.real_g, I: resumo.real_i, P: resumo.real_p });
+    } else {
+      setRealCaixas(sugCaixas);
+    }
+  }, [resumo, sugCaixas, realTouched]);
+
+  useEffect(() => {
+    if (!detail?.hora_inicio) {
+      setElapsed(0);
+      return;
+    }
+    const start = new Date(detail.hora_inicio).getTime();
+    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - start) / 1000)));
+    tick();
+    const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [detail?.hora_inicio]);
 
-  const updateReal = (fi: number, ii: number, v: number) => {
-    setFamilias(prev =>
-      prev.map((f, i) =>
-        i !== fi
-          ? f
-          : {
-              ...f,
-              itens: f.itens.map((it, j) => {
-                if (j !== ii) return it;
-                const real = Math.max(0, v);
-                const status: "ok" | "corrigido" | "pendente" =
-                  real === it.romaneio ? "ok" : real > 0 ? "corrigido" : "pendente";
-                return { ...it, real, status };
-              }),
-            }
-      )
-    );
+  const persistResumo = (next: Record<TipoCx, number>) => {
+    if (!activeId) return;
+    updateResumo.mutate({
+      cargaId: activeId,
+      real_g: next.G,
+      real_i: next.I,
+      real_p: next.P,
+      sugerido_g: sugCaixas.G,
+      sugerido_i: sugCaixas.I,
+      sugerido_p: sugCaixas.P,
+    });
   };
 
-  const updateCaixaItem = (fi: number, ii: number, tipo: TipoCx, v: number) => {
-    setFamilias(prev =>
-      prev.map((f, i) =>
-        i !== fi
-          ? f
-          : {
-              ...f,
-              itens: f.itens.map((it, j) =>
-                j !== ii ? it : { ...it, caixas: { ...it.caixas, [tipo]: Math.max(0, v) } }
-              ),
-            }
-      )
-    );
+  const updateReal = (itemId: string, romaneio: number, v: number) => {
+    if (!activeId) return;
+    const real = Math.max(0, v);
+    const status = computeStatus(romaneio, real);
+    updateItem.mutate({ cargaId: activeId, itemId, quantidade_real: real, status });
   };
 
-  const flat = familias.flatMap(f => f.itens);
-  const conferidos = flat.filter(i => i.status !== "pendente").length;
+  const updateCaixaItem = (itemId: string, tipo: TipoCx, v: number) => {
+    if (!activeId) return;
+    const field = tipo === "G" ? "caixas_g" : tipo === "I" ? "caixas_i" : "caixas_p";
+    updateItem.mutate({ cargaId: activeId, itemId, [field]: Math.max(0, v) });
+  };
+
+  const flat = familias.flatMap((f) => f.itens);
+  const conferidos = flat.filter((i) => i.status !== "pendente").length;
   const totalItens = flat.length;
-  const progresso = Math.round((conferidos / totalItens) * 100);
+  const progresso = totalItens ? Math.round((conferidos / totalItens) * 100) : 0;
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const ss = String(elapsed % 60).padStart(2, "0");
 
-  const cargasFiltradas = cargasExpedicao.filter(c => tab === "todas" || c.status === tab);
+  const cargasFiltradas = cargas.filter((c) => tab === "todas" || c.status === tab);
 
-  const finalizar = () => {
-    const total = realCaixas.G + realCaixas.I + realCaixas.P;
-    toast.success("Carga finalizada", {
-      description: `${carga.cliente} · ${total} caixas registradas como enviadas (G ${realCaixas.G} / I ${realCaixas.I} / P ${realCaixas.P}).`,
-    });
+  const emCarregamento = cargas.filter((c) => c.status === "carregando").length;
+
+  const handleFinalizar = () => {
+    if (!activeId || !detail) return;
+    persistResumo(realCaixas);
+    finalizar.mutate(
+      { cargaId: activeId },
+      {
+        onSuccess: () => {
+          const total = realCaixas.G + realCaixas.I + realCaixas.P;
+          const cliente =
+            (detail.clientes as { nome: string } | null)?.nome ?? "Cliente";
+          toast.success("Carga finalizada", {
+            description: `${cliente} · ${total} caixas registradas (G ${realCaixas.G} / I ${realCaixas.I} / P ${realCaixas.P}).`,
+          });
+        },
+        onError: () => toast.error("Não foi possível finalizar a carga."),
+      }
+    );
   };
+
+  if (loadingCargas) {
+    return <Loading message="Carregando cargas do dia..." />;
+  }
+
+  if (!cargas.length) {
+    return (
+      <div>
+        <PageHeader title="Painel de Carga" subtitle="Abastecimento e conferência por loja" />
+        <p className="text-sm text-muted-foreground text-center py-12">Nenhuma carga programada para hoje.</p>
+      </div>
+    );
+  }
+
+  const clienteNome = (detail?.clientes as { nome: string } | null)?.nome ?? "—";
+  const motorista = (detail?.motoristas as { nome: string } | null)?.nome ?? "—";
+  const placa = (detail?.caminhoes as { placa: string } | null)?.placa ?? "—";
+  const rota = (detail?.rotas as { nome: string } | null)?.nome ?? "—";
+  const statusLabel =
+    detail?.status === "carregando"
+      ? "Em carregamento"
+      : detail?.status === "concluida"
+        ? "Concluída"
+        : detail?.status === "aguardando"
+          ? "Aguardando"
+          : detail?.status ?? "";
 
   return (
     <div>
@@ -98,7 +217,10 @@ function Page() {
         title="Painel de Carga"
         subtitle="Abastecimento e conferência por loja"
         actions={
-          <Link to="/expedicao/tv" className="inline-flex items-center gap-2 h-9 px-3 rounded-lg bg-navy text-white text-sm font-semibold hover:opacity-90">
+          <Link
+            to="/expedicao/tv"
+            className="inline-flex items-center gap-2 h-9 px-3 rounded-lg bg-navy text-white text-sm font-semibold hover:opacity-90"
+          >
             <Tv size={14} /> Abrir Modo TV
           </Link>
         }
@@ -106,92 +228,106 @@ function Page() {
 
       <StatStrip
         items={[
-          { label: "Cargas hoje", value: "21" },
-          { label: "Em carregamento", value: "4", tone: "info" },
-          { label: "Tempo médio de carga", value: "48 min" },
-          { label: "Acuracidade de caixas", value: "96.4%", tone: "ok" },
+          { label: "Cargas hoje", value: String(cargas.length) },
+          { label: "Em carregamento", value: String(emCarregamento), tone: "info" },
+          {
+            label: "Concluídas",
+            value: String(cargas.filter((c) => c.status === "concluida").length),
+            tone: "ok",
+          },
+          {
+            label: "Itens conferidos",
+            value: totalItens ? `${progresso}%` : "—",
+            tone: "ok",
+          },
         ]}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 card-base overflow-hidden">
-          <div className="p-5 border-b border-border">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <h2 className="text-lg font-bold text-navy">{carga.cliente}</h2>
-              <span className="chip chip-info">Em carregamento</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="chip chip-muted">🚚 {carga.caminhao}</span>
-              <span className="chip chip-muted">👤 {carga.motorista}</span>
-              <span className="chip chip-muted">📍 Rota {carga.rota}</span>
-              <span className="chip chip-muted">⏱ Início {carga.inicio}</span>
-              <span className="chip chip-teal">
-                {carga.itens} itens · {realCaixas.G + realCaixas.I + realCaixas.P} caixas
-              </span>
-            </div>
-          </div>
-
-          <div className="divide-y divide-border">
-            {familias.map((fam, fi) => (
-              <div key={fam.familia}>
-                <div className="px-5 py-2 bg-secondary/50 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Família {fi + 1} · {fam.familia}
+          {loadingDetail ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">Carregando romaneio...</div>
+          ) : (
+            <>
+              <div className="p-5 border-b border-border">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <h2 className="text-lg font-bold text-navy">{clienteNome}</h2>
+                  <span className="chip chip-info">{statusLabel}</span>
                 </div>
-                <table className="w-full text-sm">
-                  <thead className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                    <tr>
-                      <th className="text-left px-5 py-2">Produto</th>
-                      <th className="text-right px-3 py-2">Romaneio</th>
-                      <th className="text-center px-3 py-2">Real</th>
-                      <th className="text-center px-3 py-2">Caixas G / I / P</th>
-                      <th className="text-right px-5 py-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fam.itens.map((it, ii) => (
-                      <tr key={it.produto} className="border-t border-border">
-                        <td className="px-5 py-3 font-semibold text-navy">{it.produto}</td>
-                        <td className="px-3 py-3 text-right text-ink">{it.romaneio}</td>
-                        <td className="px-3 py-3">
-                          <NumberStepper
-                            size="sm"
-                            value={it.real}
-                            onChange={v => updateReal(fi, ii, v)}
-                          />
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center justify-center gap-2">
-                            {(["G", "I", "P"] as const).map(k => (
-                              <div key={k} className="flex items-center gap-1">
-                                <span className="text-[10px] font-bold text-muted-foreground w-3">{k}</span>
-                                <NumberStepper
-                                  size="sm"
-                                  width="w-8"
-                                  value={it.caixas[k]}
-                                  onChange={v => updateCaixaItem(fi, ii, k, v)}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          {it.status === "ok" && <span className="chip chip-ok">OK</span>}
-                          {it.status === "corrigido" && (
-                            <span className="chip chip-warn">
-                              {it.real > it.romaneio
-                                ? `Sobra +${it.real - it.romaneio}`
-                                : `Corrigido −${it.romaneio - it.real}`}
-                            </span>
-                          )}
-                          {it.status === "pendente" && <span className="chip chip-muted">Pendente</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="flex flex-wrap gap-2">
+                  <span className="chip chip-muted">🚚 {placa}</span>
+                  <span className="chip chip-muted">👤 {motorista}</span>
+                  <span className="chip chip-muted">📍 Rota {rota}</span>
+                  <span className="chip chip-muted">⏱ Início {formatTime(detail?.hora_inicio)}</span>
+                  <span className="chip chip-teal">
+                    {totalItens} itens · {realCaixas.G + realCaixas.I + realCaixas.P} caixas
+                  </span>
+                </div>
               </div>
-            ))}
-          </div>
+
+              <div className="divide-y divide-border">
+                {familias.map((fam, fi) => (
+                  <div key={fam.familia}>
+                    <div className="px-5 py-2 bg-secondary/50 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Família {fi + 1} · {fam.familia}
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        <tr>
+                          <th className="text-left px-5 py-2">Produto</th>
+                          <th className="text-right px-3 py-2">Romaneio</th>
+                          <th className="text-center px-3 py-2">Real</th>
+                          <th className="text-center px-3 py-2">Caixas G / I / P</th>
+                          <th className="text-right px-5 py-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fam.itens.map((it) => (
+                          <tr key={it.id} className="border-t border-border">
+                            <td className="px-5 py-3 font-semibold text-navy">{it.produto}</td>
+                            <td className="px-3 py-3 text-right text-ink">{it.romaneio}</td>
+                            <td className="px-3 py-3">
+                              <NumberStepper
+                                size="sm"
+                                value={it.real}
+                                onChange={(v) => updateReal(it.id, it.romaneio, v)}
+                              />
+                            </td>
+                            <td className="px-3 py-3">
+                              <div className="flex items-center justify-center gap-2">
+                                {(["G", "I", "P"] as const).map((k) => (
+                                  <div key={k} className="flex items-center gap-1">
+                                    <span className="text-[10px] font-bold text-muted-foreground w-3">{k}</span>
+                                    <NumberStepper
+                                      size="sm"
+                                      width="w-8"
+                                      value={it.caixas[k]}
+                                      onChange={(v) => updateCaixaItem(it.id, k, v)}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              {it.status === "ok" && <span className="chip chip-ok">OK</span>}
+                              {it.status === "corrigido" && (
+                                <span className="chip chip-warn">
+                                  {it.real > it.romaneio
+                                    ? `Sobra +${it.real - it.romaneio}`
+                                    : `Corrigido −${it.romaneio - it.real}`}
+                                </span>
+                              )}
+                              {it.status === "pendente" && <span className="chip chip-muted">Pendente</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="card-base p-5 self-start sticky top-4">
@@ -217,6 +353,7 @@ function Page() {
                   onClick={() => {
                     setRealTouched(false);
                     setRealCaixas(sugCaixas);
+                    persistResumo(sugCaixas);
                   }}
                   className="text-[10px] font-semibold text-primary-dark hover:underline"
                 >
@@ -234,7 +371,7 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {(["G", "I", "P"] as const).map(k => {
+                {(["G", "I", "P"] as const).map((k) => {
                   const diff = realCaixas[k] - sugCaixas[k];
                   return (
                     <tr key={k} className="border-t border-border">
@@ -246,9 +383,11 @@ function Page() {
                         <NumberStepper
                           size="sm"
                           value={realCaixas[k]}
-                          onChange={v => {
+                          onChange={(v) => {
                             setRealTouched(true);
-                            setRealCaixas(prev => ({ ...prev, [k]: v }));
+                            const next = { ...realCaixas, [k]: v };
+                            setRealCaixas(next);
+                            persistResumo(next);
                           }}
                         />
                       </td>
@@ -278,8 +417,9 @@ function Page() {
             </table>
           </div>
           <button
-            onClick={finalizar}
-            className="mt-5 w-full inline-flex items-center justify-center gap-2 h-11 rounded-lg bg-primary text-primary-foreground font-bold hover:bg-primary-dark active:scale-[0.99] transition"
+            onClick={handleFinalizar}
+            disabled={finalizar.isPending || detail?.status === "concluida"}
+            className="mt-5 w-full inline-flex items-center justify-center gap-2 h-11 rounded-lg bg-primary text-primary-foreground font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
           >
             <CheckCircle2 size={16} /> Finalizar carga
           </button>
@@ -321,28 +461,44 @@ function Page() {
               Nenhuma carga neste filtro.
             </div>
           )}
-          {cargasFiltradas.map(c => (
-            <div key={c.id} className="card-base p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-muted-foreground">{c.id}</span>
-                {c.status === "concluida" && <span className="chip chip-ok">Concluída</span>}
-                {c.status === "carregando" && <span className="chip chip-info">Carregando</span>}
-                {c.status === "aguardando" && <span className="chip chip-warn">Aguardando</span>}
-              </div>
-              <div className="font-bold text-navy text-sm">{c.cliente}</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {c.itens} itens · {c.caixas} cx · {c.motorista}
-              </div>
-              <div className="mt-3 h-1.5 rounded-full bg-secondary overflow-hidden">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${c.progresso * 100}%`, background: "var(--primary)" }}
-                />
-              </div>
-            </div>
-          ))}
+          {cargasFiltradas.map((c) => {
+            const nome = (c.clientes as { nome: string } | null)?.nome ?? "—";
+            const mot = (c.motoristas as { nome: string } | null)?.nome ?? "—";
+            const active = c.id === activeId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelectedId(c.id)}
+                className={`card-base p-4 text-left transition ring-2 ${active ? "ring-primary" : "ring-transparent"}`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-muted-foreground">{c.codigo}</span>
+                  {c.status === "concluida" && <span className="chip chip-ok">Concluída</span>}
+                  {c.status === "carregando" && <span className="chip chip-info">Carregando</span>}
+                  {c.status === "aguardando" && <span className="chip chip-warn">Aguardando</span>}
+                </div>
+                <div className="font-bold text-navy text-sm">{nome}</div>
+                <div className="text-xs text-muted-foreground mt-1">{mot}</div>
+                <div className="mt-3 h-1.5 rounded-full bg-secondary overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${Number(c.progresso)}%`, background: "var(--primary)" }}
+                  />
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
+    </div>
+  );
+}
+
+function Loading({ message }: { message: string }) {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <p className="text-sm text-muted-foreground">{message}</p>
     </div>
   );
 }

@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndicadoresRouteImport } from './routes/indicadores'
 import { Route as GestaoRouteImport } from './routes/gestao'
 import { Route as IndexRouteImport } from './routes/index'
@@ -21,6 +22,11 @@ import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
 import { Route as CaixasEconomiaRouteImport } from './routes/caixas/economia'
 
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndicadoresRoute = IndicadoresRouteImport.update({
   id: '/indicadores',
   path: '/indicadores',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/gestao': typeof GestaoRoute
   '/indicadores': typeof IndicadoresRoute
+  '/login': typeof LoginRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/gestao': typeof GestaoRoute
   '/indicadores': typeof IndicadoresRoute
+  '/login': typeof LoginRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/gestao': typeof GestaoRoute
   '/indicadores': typeof IndicadoresRoute
+  '/login': typeof LoginRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/'
     | '/gestao'
     | '/indicadores'
+    | '/login'
     | '/caixas/economia'
     | '/caixas/retorno'
     | '/caixas/saldo'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/gestao'
     | '/indicadores'
+    | '/login'
     | '/caixas/economia'
     | '/caixas/retorno'
     | '/caixas/saldo'
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | '/'
     | '/gestao'
     | '/indicadores'
+    | '/login'
     | '/caixas/economia'
     | '/caixas/retorno'
     | '/caixas/saldo'
@@ -163,6 +175,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GestaoRoute: typeof GestaoRoute
   IndicadoresRoute: typeof IndicadoresRoute
+  LoginRoute: typeof LoginRoute
   CaixasEconomiaRoute: typeof CaixasEconomiaRoute
   CaixasRetornoRoute: typeof CaixasRetornoRoute
   CaixasSaldoRoute: typeof CaixasSaldoRoute
@@ -175,6 +188,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/indicadores': {
       id: '/indicadores'
       path: '/indicadores'
@@ -259,6 +279,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GestaoRoute: GestaoRoute,
   IndicadoresRoute: IndicadoresRoute,
+  LoginRoute: LoginRoute,
   CaixasEconomiaRoute: CaixasEconomiaRoute,
   CaixasRetornoRoute: CaixasRetornoRoute,
   CaixasSaldoRoute: CaixasSaldoRoute,

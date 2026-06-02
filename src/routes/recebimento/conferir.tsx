@@ -1,27 +1,83 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Save, CheckCircle2, Camera, Info, ArrowLeft, Check, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { NumberStepper } from "@/components/number-stepper";
-import { fornecedores, itensPedido } from "@/lib/mock";
-import { Link } from "@tanstack/react-router";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { usePedidosDia, usePedido } from "@/hooks/use-pedidos";
+import {
+  useConferencia,
+  useStartConferencia,
+  useSaveConferenciaItens,
+  useAddItemAvulso,
+  uploadConferenciaFoto,
+} from "@/hooks/use-conferencia";
+import { useProdutos } from "@/hooks/use-cadastros";
+import { useAuth } from "@/lib/auth";
+import { formatTime } from "@/lib/utils-date";
+
+type ConferirSearch = { pedidoId?: string };
 
 export const Route = createFileRoute("/recebimento/conferir")({
+  validateSearch: (search: Record<string, unknown>): ConferirSearch => ({
+    pedidoId: typeof search.pedidoId === "string" ? search.pedidoId : undefined,
+  }),
   component: Page,
   head: () => ({ meta: [{ title: "Conferir chegada · Campo Alegre" }] }),
 });
 
-function Page() {
-  const [fornecedorId, setFornecedorId] = useState<string | null>(null);
-  const f = fornecedores.find(x => x.id === fornecedorId);
+type LinhaItem = {
+  id: string;
+  produto: string;
+  unid: string;
+  pedido: number;
+  rateio: [string, number][];
+  recebido: number;
+  conferido: boolean;
+  qualidade: { ativo: boolean; qtd: number } | null;
+  foto_url: string | null;
+};
 
-  if (!f) {
+function Page() {
+  const { pedidoId: searchPedidoId } = Route.useSearch();
+  const navigate = useNavigate();
+  const [selectedPedidoId, setSelectedPedidoId] = useState<string | null>(searchPedidoId ?? null);
+
+  const { data: pedidos = [], isLoading: loadingPedidos } = usePedidosDia();
+  const pendentes = pedidos.filter((p) => p.status === "pendente");
+
+  useEffect(() => {
+    if (searchPedidoId) setSelectedPedidoId(searchPedidoId);
+  }, [searchPedidoId]);
+
+  const selectPedido = (id: string) => {
+    setSelectedPedidoId(id);
+    navigate({ to: "/recebimento/conferir", search: { pedidoId: id } });
+  };
+
+  if (!selectedPedidoId) {
     return (
       <div>
         <PageHeader
           title="Conferir chegada"
-          subtitle="Selecione o fornecedor que chegou — o pedido carrega na hora"
+          subtitle="Selecione o pedido pendente — a conferência inicia na hora"
           actions={
             <Link
               to="/recebimento"
@@ -38,66 +94,154 @@ function Page() {
             <strong>Relatório de Faltas</strong>.
           </span>
         </div>
+        {loadingPedidos && (
+          <p className="text-sm text-muted-foreground">Carregando pedidos…</p>
+        )}
+        {!loadingPedidos && pendentes.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nenhum pedido pendente hoje.</p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {fornecedores.map(fo => (
-            <button
-              key={fo.id}
-              onClick={() => setFornecedorId(fo.id)}
-              className="card-base p-4 text-left hover:border-primary hover:shadow-sm transition-all"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="chip chip-info">Chegou {fo.hora}</span>
-                {fo.itensFaltantes > 0 ? (
-                  <span className="chip chip-warn">{fo.itensFaltantes} faltam</span>
-                ) : (
-                  <span className="chip chip-ok">Tudo conferido</span>
-                )}
-              </div>
-              <div className="text-base font-bold text-navy">{fo.nome}</div>
-              <div className="text-xs text-muted-foreground mt-1">{fo.itensTotal} itens no pedido</div>
-            </button>
-          ))}
+          {pendentes.map((p) => {
+            const itensCount = (p as { itens_pedido?: unknown[] }).itens_pedido?.length ?? 0;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => selectPedido(p.id)}
+                className="card-base p-4 text-left hover:border-primary hover:shadow-sm transition-all"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="chip chip-info">Chegou {formatTime(p.hora_chegada)}</span>
+                  <span className="chip chip-warn">Pendente</span>
+                </div>
+                <div className="text-base font-bold text-navy">{p.fornecedores?.nome ?? p.codigo}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {p.codigo} · {itensCount} itens no pedido
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
     );
   }
 
-  return <ConferenciaItens key={f.id} fornecedor={f} onBack={() => setFornecedorId(null)} onTrocar={setFornecedorId} />;
+  return (
+    <ConferenciaItens
+      key={selectedPedidoId}
+      pedidoId={selectedPedidoId}
+      onBack={() => {
+        setSelectedPedidoId(null);
+        navigate({ to: "/recebimento/conferir", search: {} });
+      }}
+      onTrocar={selectPedido}
+    />
+  );
 }
 
-type LinhaItem = {
-  produto: string;
-  unid: string;
-  pedido: number;
-  rateio: any[];
-  recebido: number;
-  conferido: boolean; // marcado manualmente OU implicitamente quando recebido != 0
-  qualidade: { ativo: boolean; qtd: number } | null;
-};
+function mapToLinha(
+  ic: {
+    id: string;
+    quantidade_recebida: number;
+    conferido: boolean;
+    tem_problema_qualidade: boolean;
+    quantidade_qualidade: number;
+    foto_url: string | null;
+    itens_pedido: {
+      quantidade_pedida: number;
+      produtos: { nome: string; unidade: string } | null;
+      itens_pedido_rateio: { quantidade: number; destinatarios: { nome: string } | null }[];
+    } | null;
+  }
+): LinhaItem {
+  const ip = ic.itens_pedido;
+  return {
+    id: ic.id,
+    produto: ip?.produtos?.nome ?? "—",
+    unid: ip?.produtos?.unidade ?? "un",
+    pedido: Number(ip?.quantidade_pedida ?? 0),
+    rateio: (ip?.itens_pedido_rateio ?? []).map((r) => [
+      r.destinatarios?.nome ?? "?",
+      Number(r.quantidade),
+    ]),
+    recebido: Number(ic.quantidade_recebida),
+    conferido: ic.conferido,
+    qualidade: ic.tem_problema_qualidade
+      ? { ativo: true, qtd: Number(ic.quantidade_qualidade) || 1 }
+      : null,
+    foto_url: ic.foto_url,
+  };
+}
+
+function buildSavePayload(it: LinhaItem) {
+  const div = it.recebido - it.pedido;
+  let divergencia: string | null = null;
+  if (it.conferido) {
+    if (it.qualidade?.ativo) divergencia = "qualidade";
+    else if (div < 0) divergencia = "falta";
+    else if (div > 0) divergencia = "sobra";
+  }
+  return {
+    id: it.id,
+    quantidade_recebida: it.recebido,
+    conferido: it.conferido,
+    divergencia,
+    quantidade_divergencia: Math.abs(div),
+    tem_problema_qualidade: !!it.qualidade?.ativo,
+    quantidade_qualidade: it.qualidade?.qtd ?? 0,
+  };
+}
 
 function ConferenciaItens({
-  fornecedor,
+  pedidoId,
   onBack,
   onTrocar,
 }: {
-  fornecedor: (typeof fornecedores)[number];
+  pedidoId: string;
   onBack: () => void;
   onTrocar: (id: string) => void;
 }) {
-  const [itens, setItens] = useState<LinhaItem[]>(() =>
-    itensPedido.map(i => ({
-      produto: i.produto,
-      unid: i.unid,
-      pedido: i.pedido,
-      rateio: i.rateio.map(r => [...r]),
-      recebido: 0,
-      conferido: false,
-      qualidade: null,
-    }))
-  );
+  const { user, profile } = useAuth();
+  const { data: pedidos = [] } = usePedidosDia();
+  const { data: pedido } = usePedido(pedidoId);
+  const { data: conferencia, isLoading, error } = useConferencia(pedidoId);
+  const startMut = useStartConferencia();
+  const saveMut = useSaveConferenciaItens();
+  const addAvulso = useAddItemAvulso();
+  const { data: produtos = [] } = useProdutos();
+
+  const startedRef = useRef<string | null>(null);
+  const fotoRef = useRef<HTMLInputElement>(null);
+  const [fotoItemId, setFotoItemId] = useState<string | null>(null);
+  const [avulsoOpen, setAvulsoOpen] = useState(false);
+  const [avulsoProduto, setAvulsoProduto] = useState("");
+  const [avulsoQtd, setAvulsoQtd] = useState(1);
+
+  const [itens, setItens] = useState<LinhaItem[]>([]);
+
+  const pendentes = pedidos.filter((p) => p.status === "pendente");
+  const fornecedorNome = pedido?.fornecedores?.nome ?? pedidos.find((p) => p.id === pedidoId)?.fornecedores?.nome ?? "—";
+  const codigo = pedido?.codigo ?? pedidos.find((p) => p.id === pedidoId)?.codigo ?? "";
+  const horaChegada = pedido?.hora_chegada ?? pedidos.find((p) => p.id === pedidoId)?.hora_chegada;
+  const conferenteNome = profile?.nome ?? "—";
+
+  useEffect(() => {
+    if (!pedidoId || !user?.id) return;
+    if (startedRef.current === pedidoId) return;
+    startedRef.current = pedidoId;
+    startMut.mutate(
+      { pedidoId, conferenteId: user.id },
+      { onError: (e) => toast.error(e.message) }
+    );
+  }, [pedidoId, user?.id]);
+
+  useEffect(() => {
+    if (!conferencia?.itens_conferencia) return;
+    setItens(conferencia.itens_conferencia.map(mapToLinha));
+  }, [conferencia]);
 
   const update = (idx: number, v: number) => {
-    setItens(prev =>
+    setItens((prev) =>
       prev.map((it, i) =>
         i === idx ? { ...it, recebido: Math.max(0, v), conferido: true } : it
       )
@@ -105,13 +249,13 @@ function ConferenciaItens({
   };
 
   const conferirIgualPedido = (idx: number) => {
-    setItens(prev =>
+    setItens((prev) =>
       prev.map((it, i) => (i === idx ? { ...it, recebido: it.pedido, conferido: true } : it))
     );
   };
 
   const toggleQualidade = (idx: number) => {
-    setItens(prev =>
+    setItens((prev) =>
       prev.map((it, i) =>
         i !== idx
           ? it
@@ -122,8 +266,8 @@ function ConferenciaItens({
 
   const stats = useMemo(() => {
     const total = itens.length;
-    const conferidos = itens.filter(i => i.conferido).length;
-    const divergencias = itens.filter(i => i.conferido && i.recebido !== i.pedido).length;
+    const conferidos = itens.filter((i) => i.conferido).length;
+    const divergencias = itens.filter((i) => i.conferido && i.recebido !== i.pedido).length;
     const faltantes = total - conferidos;
     return {
       total,
@@ -136,9 +280,9 @@ function ConferenciaItens({
 
   const rateioResumo = useMemo(() => {
     const map: Record<string, { ped: number; rec: number }> = {};
-    itens.forEach(it => {
+    itens.forEach((it) => {
       const fator = it.pedido > 0 ? it.recebido / it.pedido : 0;
-      it.rateio.forEach(([d, q]: any) => {
+      it.rateio.forEach(([d, q]) => {
         if (!map[d]) map[d] = { ped: 0, rec: 0 };
         map[d].ped += Number(q);
         map[d].rec += Number(q) * fator;
@@ -147,58 +291,134 @@ function ConferenciaItens({
     return map;
   }, [itens]);
 
+  const salvar = async (status: "parcial" | "finalizada") => {
+    if (!conferencia?.id) {
+      toast.error("Conferência ainda não iniciada");
+      return;
+    }
+    try {
+      await saveMut.mutateAsync({
+        conferenciaId: conferencia.id,
+        pedidoId,
+        status,
+        itens: itens.map(buildSavePayload),
+      });
+      toast.success(
+        status === "finalizada" ? "Conferência finalizada" : "Parcial salva",
+        {
+          description:
+            status === "finalizada"
+              ? `${stats.conferidos} itens · ${stats.divergencias} divergências enviadas ao Relatório de Faltas.`
+              : `${stats.conferidos} itens guardados.`,
+        }
+      );
+      if (status === "finalizada") onBack();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+    }
+  };
+
   const finalizar = () => {
     if (stats.faltantes > 0) {
       toast.warning("Alguns itens ainda estão pendentes", {
         description: `${stats.faltantes} item(ns) sem conferência. Finalize mesmo assim?`,
         action: {
           label: "Finalizar mesmo assim",
-          onClick: () =>
-            toast.success("Conferência finalizada", {
-              description: `${stats.conferidos} confirmados · ${stats.divergencias} divergências enviadas ao Relatório de Faltas.`,
-            }),
+          onClick: () => salvar("finalizada"),
         },
       });
       return;
     }
-    toast.success("Conferência finalizada", {
-      description: `${stats.conferidos} itens · ${stats.divergencias} divergências enviadas ao Relatório de Faltas.`,
-    });
+    salvar("finalizada");
   };
+
+  const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !fotoItemId) return;
+    try {
+      await uploadConferenciaFoto(file, fotoItemId);
+      toast.success("Foto anexada");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar foto");
+    }
+  };
+
+  const submitAvulso = async () => {
+    if (!conferencia?.id || !avulsoProduto || avulsoQtd <= 0) {
+      toast.error("Selecione produto e quantidade");
+      return;
+    }
+    try {
+      await addAvulso.mutateAsync({
+        pedidoId,
+        conferenciaId: conferencia.id,
+        produtoId: avulsoProduto,
+        quantidade: avulsoQtd,
+      });
+      toast.success("Item avulso adicionado");
+      setAvulsoOpen(false);
+      setAvulsoProduto("");
+      setAvulsoQtd(1);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao adicionar item");
+    }
+  };
+
+  if (isLoading || startMut.isPending) {
+    return <p className="text-sm text-muted-foreground p-4">Carregando conferência…</p>;
+  }
+
+  if (error) {
+    return (
+      <p className="text-sm text-destructive p-4">
+        Erro ao carregar conferência: {error.message}
+      </p>
+    );
+  }
 
   return (
     <div>
+      <input
+        ref={fotoRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFoto}
+      />
+
       <PageHeader
-        title={fornecedor.nome}
-        subtitle={`Pedido PC-204${fornecedor.id.slice(-1)} · Chegou às ${fornecedor.hora} · Conferente: Rafael Martins`}
+        title={fornecedorNome}
+        subtitle={`Pedido ${codigo} · Chegou às ${formatTime(horaChegada)} · Conferente: ${conferenteNome}`}
         actions={
           <button
+            type="button"
             onClick={onBack}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-navy"
           >
-            <ArrowLeft size={14} /> Trocar fornecedor
+            <ArrowLeft size={14} /> Trocar pedido
           </button>
         }
       />
 
-      {/* Seletor rápido de fornecedor */}
       <div className="flex flex-wrap gap-2 mb-4">
-        {fornecedores.map(fo => (
+        {pendentes.map((p) => (
           <button
-            key={fo.id}
-            onClick={() => onTrocar(fo.id)}
+            key={p.id}
+            type="button"
+            onClick={() => onTrocar(p.id)}
             className={`px-3 h-8 rounded-md text-xs font-semibold transition-colors ${
-              fo.id === fornecedor.id
+              p.id === pedidoId
                 ? "bg-primary text-primary-foreground"
                 : "bg-card border border-border text-navy hover:bg-secondary"
             }`}
           >
-            {fo.nome}
+            {p.fornecedores?.nome ?? p.codigo}
           </button>
         ))}
       </div>
 
-      {/* Card do fornecedor: faltantes ao vivo */}
       <div
         className="card-base p-4 mb-4 flex items-center justify-between border-l-4"
         style={{
@@ -211,7 +431,7 @@ function ConferenciaItens({
         }}
       >
         <div>
-          <div className="text-sm font-bold text-navy">{fornecedor.nome}</div>
+          <div className="text-sm font-bold text-navy">{fornecedorNome}</div>
           <div className="text-xs text-muted-foreground mt-0.5">
             {stats.faltantes === 0
               ? "Todos os itens conferidos"
@@ -279,13 +499,13 @@ function ConferenciaItens({
               const div = it.recebido - it.pedido;
               const pendente = !it.conferido;
               return (
-                <tr key={it.produto} className="border-t border-border">
+                <tr key={it.id} className="border-t border-border">
                   <td className="px-4 py-3 font-semibold text-navy">{it.produto}</td>
                   <td className="px-4 py-3 text-muted-foreground">{it.unid}</td>
                   <td className="px-4 py-3 text-right text-ink">{it.pedido}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 flex-wrap">
-                      {it.rateio.map(([d, q]: any) => (
+                      {it.rateio.map(([d, q]) => (
                         <span key={d} className="chip chip-muted">
                           {d}·{q}
                         </span>
@@ -293,13 +513,15 @@ function ConferenciaItens({
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <NumberStepper value={it.recebido} onChange={v => update(idx, v)} />
+                    <NumberStepper value={it.recebido} onChange={(v) => update(idx, v)} />
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       {pendente && <span className="chip chip-muted">Pendente</span>}
                       {!pendente && div === 0 && <span className="chip chip-ok">OK</span>}
-                      {!pendente && div < 0 && <span className="chip chip-danger">Falta {Math.abs(div)}</span>}
+                      {!pendente && div < 0 && (
+                        <span className="chip chip-danger">Falta {Math.abs(div)}</span>
+                      )}
                       {!pendente && div > 0 && <span className="chip chip-info">Sobra {div}</span>}
                       {it.qualidade && (
                         <span
@@ -309,12 +531,14 @@ function ConferenciaItens({
                           Qualidade
                         </span>
                       )}
+                      {it.foto_url && <span className="chip chip-info">Foto</span>}
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
                       {pendente && (
                         <button
+                          type="button"
                           onClick={() => conferirIgualPedido(idx)}
                           className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
                           title="Marcar conferido com a quantidade pedida"
@@ -323,6 +547,7 @@ function ConferenciaItens({
                         </button>
                       )}
                       <button
+                        type="button"
                         onClick={() => toggleQualidade(idx)}
                         className={`h-7 w-7 rounded-md border flex items-center justify-center transition-colors ${
                           it.qualidade
@@ -334,9 +559,13 @@ function ConferenciaItens({
                         <AlertTriangle size={13} />
                       </button>
                       <button
+                        type="button"
                         className="h-7 w-7 rounded-md border border-border text-muted-foreground hover:text-navy hover:bg-secondary flex items-center justify-center"
                         title="Adicionar foto"
-                        onClick={() => toast.info("Câmera ainda mockada", { description: "Anexar foto entra na Fase 2 (mobile)." })}
+                        onClick={() => {
+                          setFotoItemId(it.id);
+                          fotoRef.current?.click();
+                        }}
                       >
                         <Camera size={13} />
                       </button>
@@ -351,28 +580,75 @@ function ConferenciaItens({
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button
-          onClick={() => toast.info("Item avulso", { description: "Abriria o formulário de inclusão." })}
+          type="button"
+          onClick={() => setAvulsoOpen(true)}
           className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
         >
           <Plus size={14} /> Item avulso
         </button>
         <button
-          onClick={() => toast.success("Parcial salva", { description: `${stats.conferidos} itens guardados.` })}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+          type="button"
+          onClick={() => salvar("parcial")}
+          disabled={saveMut.isPending}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
         >
           <Save size={14} /> Salvar parcial
         </button>
         <div className="flex-1" />
         <div className="text-xs text-muted-foreground">
-          Assinatura: <span className="font-semibold text-navy">Rafael Martins</span>
+          Assinatura: <span className="font-semibold text-navy">{conferenteNome}</span>
         </div>
         <button
+          type="button"
           onClick={finalizar}
-          className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition"
+          disabled={saveMut.isPending}
+          className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
         >
           <CheckCircle2 size={16} /> Finalizar conferência
         </button>
       </div>
+
+      <Dialog open={avulsoOpen} onOpenChange={setAvulsoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Item avulso</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Produto</Label>
+              <Select value={avulsoProduto} onValueChange={setAvulsoProduto}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {produtos.map((pr) => (
+                    <SelectItem key={pr.id} value={pr.id}>
+                      {pr.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Quantidade recebida</Label>
+              <Input
+                type="number"
+                min={1}
+                value={avulsoQtd}
+                onChange={(e) => setAvulsoQtd(Number(e.target.value) || 0)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAvulsoOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={submitAvulso} disabled={addAvulso.isPending}>
+              Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
