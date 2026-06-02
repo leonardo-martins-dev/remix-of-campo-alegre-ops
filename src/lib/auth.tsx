@@ -10,7 +10,6 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, type AccessiblePage, type Profile } from "./supabase";
 import { resolveIsAdmin, resolveProfile } from "./roles";
-import { isSuperAdmin } from "./super-admin";
 
 type AuthContextValue = {
   session: Session | null;
@@ -115,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasPageAccess = useCallback(
     (slug: string) => {
       if (slug === "gestao/usuarios") {
-        return isSuperAdmin(profile?.email ?? user?.email);
+        return resolveIsAdmin(profile, user);
       }
       if (resolveIsAdmin(profile, user)) return true;
       return pages.some((p) => p.slug === slug);

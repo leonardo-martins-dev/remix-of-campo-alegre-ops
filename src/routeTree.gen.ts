@@ -17,7 +17,7 @@ import { Route as RecebimentoIndexRouteImport } from './routes/recebimento/index
 import { Route as ExpedicaoIndexRouteImport } from './routes/expedicao/index'
 import { Route as RecebimentoFaltasRouteImport } from './routes/recebimento/faltas'
 import { Route as RecebimentoConferirRouteImport } from './routes/recebimento/conferir'
-import { Route as GestaoUsuariosRouteImport } from './routes/gestao/usuarios'
+import { Route as GestaoUsuariosRouteImport } from './routes/gestao.usuarios'
 import { Route as ExpedicaoTvRouteImport } from './routes/expedicao/tv'
 import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'

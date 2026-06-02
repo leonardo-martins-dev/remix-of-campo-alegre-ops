@@ -1,7 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/lib/auth";
-import { isSuperAdmin } from "@/lib/super-admin";
 import { CreateUserForm, UsersList } from "@/components/gestao/user-management";
 
 export const Route = createFileRoute("/gestao/usuarios")({
@@ -10,9 +9,9 @@ export const Route = createFileRoute("/gestao/usuarios")({
 });
 
 function Page() {
-  const { profile, user, refreshProfile } = useAuth();
+  const { isAdmin, refreshProfile } = useAuth();
 
-  if (!isSuperAdmin(profile?.email ?? user?.email)) {
+  if (!isAdmin) {
     return <Navigate to="/" />;
   }
 

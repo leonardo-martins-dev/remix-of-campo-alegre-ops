@@ -5,7 +5,6 @@ import {
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { getIcon, slugToPath } from "@/lib/pages";
-import { isSuperAdmin } from "@/lib/super-admin";
 import { initials } from "@/lib/utils-date";
 import { useGlobalSearch, useAlertas } from "@/hooks/use-dashboard";
 import {
@@ -18,7 +17,7 @@ import {
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
-  const { profile, user, isAdmin, pages, signOut } = useAuth();
+  const { profile, isAdmin, pages, signOut } = useAuth();
   const [open, setOpen] = useState(true);
   const [search, setSearch] = useState("");
   const { data: searchResults } = useGlobalSearch(search);
@@ -27,7 +26,6 @@ export function AppShell() {
   const isTv = pathname.startsWith("/expedicao/tv");
   const isMobile = pathname.startsWith("/caixas/retorno");
 
-  const isSuperAdminUser = isSuperAdmin(profile?.email ?? user?.email);
   const hasGestaoInSidebar = pages.some((p) => p.slug === "gestao");
 
   const groups = useMemo(() => {
@@ -85,7 +83,7 @@ export function AppShell() {
                 </div>
               </div>
             ))}
-            {(isAdmin && !hasGestaoInSidebar) || isSuperAdminUser ? (
+            {isAdmin && (
               <div className="px-3">
                 <div className="label-group px-3 mb-2">Administração</div>
                 <div className="space-y-0.5">
@@ -102,7 +100,7 @@ export function AppShell() {
                       <span>Configurações</span>
                     </Link>
                   )}
-                  {isSuperAdminUser && (
+                  {isAdmin && (
                     <Link
                       to="/gestao/usuarios"
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
@@ -117,7 +115,7 @@ export function AppShell() {
                   )}
                 </div>
               </div>
-            ) : null}
+            )}
           </nav>
           <div className="p-3 border-t border-sidebar-border">
             <div className="text-[10px] text-muted-foreground px-2">v1.0 · Supabase</div>
@@ -214,6 +212,11 @@ export function AppShell() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {isAdmin && (
+                  <DropdownMenuItem onClick={() => navigate({ to: "/gestao/usuarios" })}>
+                    <UserPlus size={14} className="mr-2" /> Criar Usuários
+                  </DropdownMenuItem>
+                )}
                 {isAdmin && (
                   <DropdownMenuItem onClick={() => navigate({ to: "/gestao" })}>
                     <Settings size={14} className="mr-2" /> Configurações

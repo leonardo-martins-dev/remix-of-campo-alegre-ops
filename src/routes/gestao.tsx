@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,13 @@ export const Route = createFileRoute("/gestao")({
 });
 
 function Page() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isChildRoute = pathname.startsWith("/gestao/") && pathname !== "/gestao";
   const { isAdmin } = useAuth();
+
+  if (isChildRoute) {
+    return <Outlet />;
+  }
 
   if (!isAdmin) {
     return (
