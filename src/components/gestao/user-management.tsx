@@ -31,6 +31,7 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"admin" | "user">("user");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -41,11 +42,12 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
     }
     setLoading(true);
     try {
-      await createUserViaEdge(nome.trim(), email.trim(), password);
+      await createUserViaEdge(nome.trim(), email.trim(), password, role);
       toast.success(`Usuário "${nome}" criado com sucesso`);
       setNome("");
       setEmail("");
       setPassword("");
+      setRole("user");
       onCreated?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao criar usuário");
@@ -58,7 +60,7 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
     <Card>
       <CardHeader>
         <CardTitle>Novo usuário</CardTitle>
-        <CardDescription>Preencha nome, email e senha. O perfil é criado automaticamente.</CardDescription>
+        <CardDescription>Preencha nome, email, senha e perfil de acesso.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
@@ -73,6 +75,18 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
           <div className="space-y-2">
             <Label htmlFor="password">Senha</Label>
             <Input id="password" type="password" placeholder="Mínimo 6 caracteres" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="role">Perfil</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as "admin" | "user")}>
+              <SelectTrigger id="role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">Operação</SelectItem>
+                <SelectItem value="admin">Administrador</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <Button type="submit" className="w-full sm:w-auto" disabled={loading}>
             {loading ? "Criando..." : "Criar usuário"}

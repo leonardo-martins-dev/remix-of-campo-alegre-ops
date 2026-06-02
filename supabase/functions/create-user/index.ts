@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { nome, email, password } = await req.json();
+    const { nome, email, password, role } = await req.json();
 
     if (!nome || !email || !password) {
       return new Response(
@@ -75,11 +75,13 @@ Deno.serve(async (req) => {
       );
     }
 
+    const userRole = role === "admin" ? "admin" : "user";
+
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      app_metadata: { role: "user", nome },
+      app_metadata: { role: userRole, nome },
       user_metadata: { full_name: nome },
     });
 
@@ -88,6 +90,13 @@ Deno.serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    if (data.user) {
+      await supabaseAdmin.from("profiles").upsert(
+        { id: data.user.id, nome, email, role: userRole },
+        { onConflict: "id" }
+      );
     }
 
     return new Response(JSON.stringify({ user: data.user }), {

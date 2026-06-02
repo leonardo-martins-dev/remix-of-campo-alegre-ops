@@ -76,7 +76,12 @@ export function useSetPermission() {
   });
 }
 
-export async function createUserViaEdge(nome: string, email: string, password: string) {
+export async function createUserViaEdge(
+  nome: string,
+  email: string,
+  password: string,
+  role: "admin" | "user" = "user"
+) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("Não autenticado");
 
@@ -86,7 +91,7 @@ export async function createUserViaEdge(nome: string, email: string, password: s
       "Content-Type": "application/json",
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ nome, email, password }),
+    body: JSON.stringify({ nome, email, password, role }),
   });
 
   const body = await res.json();
