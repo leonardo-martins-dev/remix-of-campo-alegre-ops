@@ -9,11 +9,14 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, type AccessiblePage, type Profile } from "./supabase";
+import { resolveIsAdmin, resolveProfile } from "./roles";
+import { isSuperAdmin } from "./super-admin";
 
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+  isAdmin: boolean;
   pages: AccessiblePage[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -24,14 +27,20 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function fetchProfile(userId: string): Promise<Profile | null> {
+async function fetchProfile(user: User): Promise<Profile | null> {
+  const { data: ensured } = await supabase.rpc("ensure_user_profile");
+  if (ensured) return ensured as Profile;
+
   const { data, error } = await supabase
     .from("profiles")
     .select("id, nome, email, role, avatar_url, ativo")
-    .eq("id", userId)
+    .eq("id", user.id)
     .single();
-  if (error) return null;
-  return data as Profile;
+  if (error) {
+    console.error("fetchProfile:", error.message);
+    return resolveProfile(null, user);
+  }
+  return resolveProfile(data as Profile, user);
 }
 
 async function fetchAccessiblePages(userId: string): Promise<AccessiblePage[]> {
@@ -51,10 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [pages, setPages] = useState<AccessiblePage[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadUserData = useCallback(async (userId: string) => {
+  const loadUserData = useCallback(async (user: User) => {
     const [p, pg] = await Promise.all([
-      fetchProfile(userId),
-      fetchAccessiblePages(userId),
+      fetchProfile(user),
+      fetchAccessiblePages(user.id),
     ]);
     setProfile(p);
     setPages(pg);
@@ -64,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       if (s?.user) {
-        loadUserData(s.user.id).finally(() => setLoading(false));
+        loadUserData(s.user).finally(() => setLoading(false));
       } else {
         setLoading(false);
       }
@@ -75,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       if (s?.user) {
-        loadUserData(s.user.id);
+        loadUserData(s.user);
       } else {
         setProfile(null);
         setPages([]);
@@ -97,22 +106,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (session?.user) await loadUserData(session.user.id);
+    if (session?.user) await loadUserData(session.user);
   }, [session, loadUserData]);
+
+  const user = session?.user ?? null;
+  const isAdmin = resolveIsAdmin(profile, user);
 
   const hasPageAccess = useCallback(
     (slug: string) => {
-      if (profile?.role === "admin") return true;
+      if (slug === "gestao/usuarios") {
+        return isSuperAdmin(profile?.email ?? user?.email);
+      }
+      if (resolveIsAdmin(profile, user)) return true;
       return pages.some((p) => p.slug === slug);
     },
-    [profile, pages]
+    [profile, user, pages]
   );
 
   const value = useMemo(
     () => ({
       session,
-      user: session?.user ?? null,
+      user,
       profile,
+      isAdmin,
       pages,
       loading,
       signIn,
@@ -120,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshProfile,
       hasPageAccess,
     }),
-    [session, profile, pages, loading, signIn, signOut, refreshProfile, hasPageAccess]
+    [session, user, profile, isAdmin, pages, loading, signIn, signOut, refreshProfile, hasPageAccess]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

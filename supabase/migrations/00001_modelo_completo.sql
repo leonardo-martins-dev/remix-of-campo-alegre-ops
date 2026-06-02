@@ -908,7 +908,9 @@ INSERT INTO auth.users (
   created_at,
   updated_at,
   confirmation_token,
-  recovery_token
+  recovery_token,
+  email_change_token_new,
+  email_change
 ) VALUES (
   gen_random_uuid(),
   '00000000-0000-0000-0000-000000000000',
@@ -921,6 +923,8 @@ INSERT INTO auth.users (
   'authenticated',
   now(),
   now(),
+  '',
+  '',
   '',
   ''
 );

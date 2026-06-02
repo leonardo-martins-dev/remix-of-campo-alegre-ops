@@ -17,6 +17,7 @@ import { Route as RecebimentoIndexRouteImport } from './routes/recebimento/index
 import { Route as ExpedicaoIndexRouteImport } from './routes/expedicao/index'
 import { Route as RecebimentoFaltasRouteImport } from './routes/recebimento/faltas'
 import { Route as RecebimentoConferirRouteImport } from './routes/recebimento/conferir'
+import { Route as GestaoUsuariosRouteImport } from './routes/gestao/usuarios'
 import { Route as ExpedicaoTvRouteImport } from './routes/expedicao/tv'
 import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
@@ -62,6 +63,11 @@ const RecebimentoConferirRoute = RecebimentoConferirRouteImport.update({
   path: '/recebimento/conferir',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GestaoUsuariosRoute = GestaoUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => GestaoRoute,
+} as any)
 const ExpedicaoTvRoute = ExpedicaoTvRouteImport.update({
   id: '/expedicao/tv',
   path: '/expedicao/tv',
@@ -85,13 +91,14 @@ const CaixasEconomiaRoute = CaixasEconomiaRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/gestao': typeof GestaoRoute
+  '/gestao': typeof GestaoRouteWithChildren
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
+  '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/expedicao/': typeof ExpedicaoIndexRoute
@@ -99,13 +106,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/gestao': typeof GestaoRoute
+  '/gestao': typeof GestaoRouteWithChildren
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
+  '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/expedicao': typeof ExpedicaoIndexRoute
@@ -114,13 +122,14 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/gestao': typeof GestaoRoute
+  '/gestao': typeof GestaoRouteWithChildren
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
+  '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/expedicao/': typeof ExpedicaoIndexRoute
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/expedicao/tv'
+    | '/gestao/usuarios'
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/expedicao/'
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/expedicao/tv'
+    | '/gestao/usuarios'
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/expedicao'
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/expedicao/tv'
+    | '/gestao/usuarios'
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/expedicao/'
@@ -173,7 +185,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  GestaoRoute: typeof GestaoRoute
+  GestaoRoute: typeof GestaoRouteWithChildren
   IndicadoresRoute: typeof IndicadoresRoute
   LoginRoute: typeof LoginRoute
   CaixasEconomiaRoute: typeof CaixasEconomiaRoute
@@ -244,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecebimentoConferirRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/gestao/usuarios': {
+      id: '/gestao/usuarios'
+      path: '/usuarios'
+      fullPath: '/gestao/usuarios'
+      preLoaderRoute: typeof GestaoUsuariosRouteImport
+      parentRoute: typeof GestaoRoute
+    }
     '/expedicao/tv': {
       id: '/expedicao/tv'
       path: '/expedicao/tv'
@@ -275,9 +294,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface GestaoRouteChildren {
+  GestaoUsuariosRoute: typeof GestaoUsuariosRoute
+}
+
+const GestaoRouteChildren: GestaoRouteChildren = {
+  GestaoUsuariosRoute: GestaoUsuariosRoute,
+}
+
+const GestaoRouteWithChildren =
+  GestaoRoute._addFileChildren(GestaoRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  GestaoRoute: GestaoRoute,
+  GestaoRoute: GestaoRouteWithChildren,
   IndicadoresRoute: IndicadoresRoute,
   LoginRoute: LoginRoute,
   CaixasEconomiaRoute: CaixasEconomiaRoute,

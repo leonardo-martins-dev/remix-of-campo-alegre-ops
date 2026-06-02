@@ -1,10 +1,11 @@
 import { Link, useNavigate, useRouterState, Outlet } from "@tanstack/react-router";
 import {
-  ChevronDown, Bell, Search, Sprout, LogOut, Settings,
+  ChevronDown, Bell, Search, Sprout, LogOut, Settings, UserPlus,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { getIcon, slugToPath } from "@/lib/pages";
+import { isSuperAdmin } from "@/lib/super-admin";
 import { initials } from "@/lib/utils-date";
 import { useGlobalSearch, useAlertas } from "@/hooks/use-dashboard";
 import {
@@ -17,7 +18,7 @@ import {
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
-  const { profile, pages, signOut } = useAuth();
+  const { profile, user, isAdmin, pages, signOut } = useAuth();
   const [open, setOpen] = useState(true);
   const [search, setSearch] = useState("");
   const { data: searchResults } = useGlobalSearch(search);
@@ -25,6 +26,9 @@ export function AppShell() {
 
   const isTv = pathname.startsWith("/expedicao/tv");
   const isMobile = pathname.startsWith("/caixas/retorno");
+
+  const isSuperAdminUser = isSuperAdmin(profile?.email ?? user?.email);
+  const hasGestaoInSidebar = pages.some((p) => p.slug === "gestao");
 
   const groups = useMemo(() => {
     const map = new Map<string, typeof pages>();
@@ -41,7 +45,7 @@ export function AppShell() {
 
   if (isTv) return <Outlet />;
 
-  const roleLabel = profile?.role === "admin" ? "Administrador" : "Operação";
+  const roleLabel = isAdmin ? "Administrador" : "Operação";
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -81,6 +85,39 @@ export function AppShell() {
                 </div>
               </div>
             ))}
+            {(isAdmin && !hasGestaoInSidebar) || isSuperAdminUser ? (
+              <div className="px-3">
+                <div className="label-group px-3 mb-2">Administração</div>
+                <div className="space-y-0.5">
+                  {isAdmin && !hasGestaoInSidebar && (
+                    <Link
+                      to="/gestao"
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        pathname === "/gestao"
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
+                          : "text-ink hover:bg-secondary"
+                      }`}
+                    >
+                      <Settings size={16} />
+                      <span>Configurações</span>
+                    </Link>
+                  )}
+                  {isSuperAdminUser && (
+                    <Link
+                      to="/gestao/usuarios"
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        pathname === "/gestao/usuarios"
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
+                          : "text-ink hover:bg-secondary"
+                      }`}
+                    >
+                      <UserPlus size={16} />
+                      <span>Criar Usuários</span>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </nav>
           <div className="p-3 border-t border-sidebar-border">
             <div className="text-[10px] text-muted-foreground px-2">v1.0 · Supabase</div>
@@ -177,7 +214,7 @@ export function AppShell() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {profile?.role === "admin" && (
+                {isAdmin && (
                   <DropdownMenuItem onClick={() => navigate({ to: "/gestao" })}>
                     <Settings size={14} className="mr-2" /> Configurações
                   </DropdownMenuItem>

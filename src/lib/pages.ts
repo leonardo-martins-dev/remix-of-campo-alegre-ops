@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Activity,
   Settings,
+  UserPlus,
   PackageCheck as ConferirIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ export const SLUG_TO_PATH: Record<string, string> = {
   "caixas/retorno": "/caixas/retorno",
   indicadores: "/indicadores",
   gestao: "/gestao",
+  "gestao/usuarios": "/gestao/usuarios",
 };
 
 export const ICON_MAP: Record<string, LucideIcon> = {
@@ -41,6 +43,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   Clock: Activity,
   Activity,
   Settings,
+  UserPlus,
   PackageCheckConferir: ConferirIcon,
 };
 
