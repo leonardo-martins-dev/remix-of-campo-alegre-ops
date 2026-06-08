@@ -131,15 +131,7 @@ export function useSaveConferenciaItens() {
       if (cErr) throw new Error(cErr.message);
 
       if (status === "finalizada") {
-        const hasDivergencia = itens.some((it) => it.divergencia != null);
-        const pedidoStatus = hasDivergencia ? "divergencia" : "conferido";
-
-        const { error: pErr } = await supabase
-          .from("pedidos_recebimento")
-          .update({ status: pedidoStatus, updated_at: new Date().toISOString() })
-          .eq("id", pedidoId);
-        if (pErr) throw new Error(pErr.message);
-
+        // Status do pedido é atualizado pelo trigger handle_conferencia_finalizada no banco.
         const { error: cicloErr } = await supabase.from("registros_ciclo").insert({
           pedido_id: pedidoId,
           hora_chegada_fornecedor: new Date().toISOString(),

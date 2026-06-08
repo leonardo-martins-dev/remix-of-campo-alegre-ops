@@ -86,15 +86,24 @@ function PhoneFrame() {
     P: saldoCliente.P - ret.P,
   };
 
+  const hasSaldoNegativo =
+    saldoCliente.G < 0 || saldoCliente.I < 0 || saldoCliente.P < 0;
+  const saldoResultanteNegativo =
+    saldoAtual.G < 0 || saldoAtual.I < 0 || saldoAtual.P < 0;
+  const totalRet = ret.G + ret.I + ret.P;
+
   async function confirmar() {
     if (!cliente || !user) return;
-    const total = ret.G + ret.I + ret.P;
-    if (total === 0) {
+    if (totalRet === 0) {
       toast.error("Informe ao menos uma caixa");
       return;
     }
     if (ret.G > saldoCliente.G || ret.I > saldoCliente.I || ret.P > saldoCliente.P) {
       toast.error("Retorno maior que o saldo disponível");
+      return;
+    }
+    if (saldoResultanteNegativo) {
+      toast.error("Retorno resultaria em saldo negativo");
       return;
     }
 
@@ -227,6 +236,15 @@ function PhoneFrame() {
               </div>
             )}
 
+            {hasSaldoNegativo && (
+              <div
+                className="mt-4 rounded-xl p-3 text-[11px]"
+                style={{ background: "rgba(239,68,68,0.15)", color: "#FCA5A5" }}
+              >
+                Saldo negativo detectado — verifique movimentações antes de registrar retorno.
+              </div>
+            )}
+
             <div className="space-y-3 mt-4">
               <Step tipo="G" label="Caixa Grande" color="var(--primary-dark)" />
               <Step tipo="I" label="Caixa Isopor" color="var(--info)" />
@@ -240,12 +258,13 @@ function PhoneFrame() {
             )}
 
             <button
+              type="button"
               onClick={confirmar}
-              disabled={registrar.isPending}
-              className="mt-4 w-full py-3 rounded-2xl text-base font-bold flex items-center justify-center gap-2"
+              disabled={registrar.isPending || saldoResultanteNegativo || (hasSaldoNegativo && totalRet > 0)}
+              className="mt-4 w-full py-3 rounded-2xl text-base font-bold flex items-center justify-center gap-2 disabled:opacity-40"
               style={{ background: "var(--primary)", color: "white" }}
             >
-              <Check size={18} /> Confirmar retorno · {ret.G + ret.I + ret.P} cx
+              <Check size={18} /> Confirmar retorno · {totalRet} cx
             </button>
           </div>
         </div>

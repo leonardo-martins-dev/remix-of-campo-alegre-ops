@@ -109,14 +109,18 @@ function CadastroTable({
   const { data = [], isLoading } = useData();
   const { insert, remove } = useCadastroMutations(table, ["cadastros", table]);
   const [nome, setNome] = useState("");
+  const [touched, setTouched] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const emptyLabel = table === "caminhoes" ? "Informe a placa" : "Informe um nome";
 
   const rowLabel = (row: CadastroRow) =>
     table === "caminhoes" ? row.placa ?? row.nome ?? "—" : row.nome ?? "—";
 
   const handleAdd = () => {
+    setTouched(true);
     if (!nome.trim()) {
-      toast.error("Informe um nome");
+      toast.error(emptyLabel);
       return;
     }
     insert.mutate(
@@ -124,6 +128,7 @@ function CadastroTable({
       {
         onSuccess: () => {
           setNome("");
+          setTouched(false);
           toast.success("Cadastrado");
         },
         onError: (e) => toast.error(e.message),
@@ -135,12 +140,20 @@ function CadastroTable({
     <Card>
       <CardHeader><CardTitle className="text-base">{label}</CardTitle></CardHeader>
       <CardContent>
-        <div className="flex gap-2 mb-3">
-          <Input placeholder={placeholder} value={nome} onChange={(e) => setNome(e.target.value)} />
-          <Button onClick={handleAdd} disabled={!nome.trim()}>
+        <div className="flex gap-2 mb-1">
+          <Input
+            placeholder={placeholder}
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          />
+          <Button type="button" onClick={handleAdd}>
             Adicionar
           </Button>
         </div>
+        {touched && !nome.trim() && (
+          <p className="text-xs text-destructive mb-2">{emptyLabel} para cadastrar</p>
+        )}
         {isLoading ? <p className="text-xs text-muted-foreground">Carregando...</p> : (
           <ul className="space-y-1 text-sm">
             {data.map((row) => (
@@ -195,36 +208,46 @@ function ProdutosTable() {
   const { data = [], isLoading } = useProdutos();
   const { insert, remove } = useCadastroMutations("produtos", ["cadastros", "produtos"]);
   const [nome, setNome] = useState("");
+  const [touched, setTouched] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const handleAdd = () => {
+    setTouched(true);
+    if (!nome.trim()) {
+      toast.error("Informe um nome");
+      return;
+    }
+    insert.mutate(
+      { nome: nome.trim(), unidade: "un" },
+      {
+        onSuccess: () => {
+          setNome("");
+          setTouched(false);
+          toast.success("Produto cadastrado");
+        },
+        onError: (e) => toast.error(e.message),
+      }
+    );
+  };
 
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">Produtos</CardTitle></CardHeader>
       <CardContent>
-        <div className="flex gap-2 mb-3">
-          <Input placeholder="Nome do produto" value={nome} onChange={(e) => setNome(e.target.value)} />
-          <Button
-            disabled={!nome.trim()}
-            onClick={() => {
-              if (!nome.trim()) {
-                toast.error("Informe um nome");
-                return;
-              }
-              insert.mutate(
-                { nome: nome.trim(), unidade: "un" },
-                {
-                  onSuccess: () => {
-                    setNome("");
-                    toast.success("Produto cadastrado");
-                  },
-                  onError: (e) => toast.error(e.message),
-                }
-              );
-            }}
-          >
+        <div className="flex gap-2 mb-1">
+          <Input
+            placeholder="Nome do produto"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          />
+          <Button type="button" onClick={handleAdd}>
             Adicionar
           </Button>
         </div>
+        {touched && !nome.trim() && (
+          <p className="text-xs text-destructive mb-2">Informe um nome para cadastrar</p>
+        )}
         {!isLoading && (
           <ul className="space-y-1 text-sm">
             {(data as { id: string; nome: string }[]).map((row) => (

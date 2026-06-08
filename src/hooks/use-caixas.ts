@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { validateRetornoQuantities } from "@/lib/offline-queue";
 import { todayISO } from "@/lib/utils-date";
 
 export function useSaldoCaixas() {
@@ -85,6 +86,25 @@ export function useRegistrarRetorno() {
       caixas_p: number;
       offline?: boolean;
     }) => {
+      const { data: saldoRows, error: saldoErr } = await supabase
+        .from("v_saldo_caixas_cliente")
+        .select("tipo_caixa, saldo")
+        .eq("cliente_id", payload.cliente_id);
+      if (saldoErr) throw saldoErr;
+
+      const saldo = { G: 0, I: 0, P: 0 };
+      (saldoRows ?? []).forEach((r: { tipo_caixa: string; saldo: number }) => {
+        if (r.tipo_caixa === "G") saldo.G = r.saldo ?? 0;
+        if (r.tipo_caixa === "I") saldo.I = r.saldo ?? 0;
+        if (r.tipo_caixa === "P") saldo.P = r.saldo ?? 0;
+      });
+
+      const validationErr = validateRetornoQuantities(
+        { caixas_g: payload.caixas_g, caixas_i: payload.caixas_i, caixas_p: payload.caixas_p },
+        saldo
+      );
+      if (validationErr) throw new Error(validationErr);
+
       const { error } = await supabase.from("retornos_caixa").insert({
         ...payload,
         data_retorno: todayISO(),

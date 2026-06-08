@@ -88,23 +88,41 @@ export function useAlertas() {
   return useQuery({
     queryKey: ["alertas"],
     queryFn: async () => {
-      const [{ data: configs }, { data: saldo }, { data: cargas }] = await Promise.all([
+      const [{ data: configs }, { data: saldo }, { data: cargas }, { data: tipos }] = await Promise.all([
         supabase.from("configuracoes").select("chave, valor").in("chave", ["aging_critico_dias", "aging_alerta_dias"]),
         supabase.from("v_saldo_caixas_cliente").select("*"),
         supabase.from("cargas").select("codigo, status, clientes(nome), hora_inicio").eq("status", "aguardando"),
+        supabase.from("tipos_caixa").select("id, custo_unitario"),
       ]);
 
       const critico = Number(configs?.find((c) => c.chave === "aging_critico_dias")?.valor ?? 10);
-      const alertas: { tone: "danger" | "warn" | "info"; title: string; desc: string }[] = [];
+      const custos: Record<string, number> = {};
+      (tipos ?? []).forEach((t: { id: string; custo_unitario: number }) => {
+        custos[t.id] = t.custo_unitario;
+      });
+
+      const danger: { tone: "danger" | "warn" | "info"; title: string; desc: string }[] = [];
+      const warn: { tone: "danger" | "warn" | "info"; title: string; desc: string }[] = [];
 
       const porCliente: Record<string, number> = {};
-      (saldo ?? []).forEach((r: { cliente: string; saldo: number }) => {
+      let totalCaixas = 0;
+      let capital = 0;
+
+      (saldo ?? []).forEach((r: { cliente: string; tipo_caixa: string; saldo: number }) => {
         porCliente[r.cliente] = (porCliente[r.cliente] ?? 0) + r.saldo;
+        totalCaixas += r.saldo ?? 0;
+        capital += (r.saldo ?? 0) * (custos[r.tipo_caixa] ?? 0);
       });
 
       Object.entries(porCliente).forEach(([cliente, total]) => {
-        if (total >= critico * 3) {
-          alertas.push({
+        if (total < 0) {
+          danger.push({
+            tone: "danger",
+            title: `${cliente} — saldo negativo (${total} cx)`,
+            desc: "Verifique movimentações e retornos deste cliente.",
+          });
+        } else if (total >= critico * 3) {
+          danger.push({
             tone: "danger",
             title: `${cliente} — ${total} caixas em aberto`,
             desc: "Saldo elevado. Priorize retorno ou cobrança.",
@@ -112,15 +130,31 @@ export function useAlertas() {
         }
       });
 
+      if (totalCaixas < 0) {
+        danger.push({
+          tone: "danger",
+          title: `Caixas em aberto negativas (${totalCaixas} cx)`,
+          desc: "Há inconsistência no saldo global de caixas.",
+        });
+      }
+
+      if (capital < 0) {
+        danger.push({
+          tone: "danger",
+          title: `Capital na rua negativo (R$ ${capital.toLocaleString("pt-BR", { maximumFractionDigits: 0 })})`,
+          desc: "O valor em caixas na rua está abaixo de zero.",
+        });
+      }
+
       (cargas ?? []).forEach((c: { codigo: string; clientes: { nome: string } | null }) => {
-        alertas.push({
+        warn.push({
           tone: "warn",
           title: `Carga ${c.codigo} aguardando`,
           desc: `${c.clientes?.nome ?? "Cliente"} na fila de carregamento.`,
         });
       });
 
-      return alertas.slice(0, 5);
+      return [...danger, ...warn].slice(0, 5);
     },
   });
 }
