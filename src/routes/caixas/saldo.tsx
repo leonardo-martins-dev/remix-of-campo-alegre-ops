@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { parseCustoValor, shouldSaveCusto } from "@/lib/custo-unitario";
 import { Box, RotateCcw, Clock, Users, FileSpreadsheet } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { KpiCard } from "@/components/kpi-card";
@@ -102,16 +104,28 @@ function Page() {
     return env ? (ret / env) * 100 : 0;
   }, [clientes]);
 
-  const handleCustoBlur = (tipo: TipoCaixa) => {
-    const raw = draftCustos[tipo.id];
-    const valor = raw !== undefined ? parseFloat(raw) : tipo.custo_unitario;
-    if (Number.isNaN(valor)) return;
-    updateTipo.mutate({ id: tipo.id, custo_unitario: valor });
-    setDraftCustos((prev) => {
-      const next = { ...prev };
-      delete next[tipo.id];
-      return next;
-    });
+  const handleCustoSave = async (tipo: TipoCaixa) => {
+    const valor = parseCustoValor(tipo, draftCustos);
+    if (valor === null) return;
+    if (!shouldSaveCusto(tipo, valor)) {
+      setDraftCustos((prev) => {
+        const next = { ...prev };
+        delete next[tipo.id];
+        return next;
+      });
+      return;
+    }
+    try {
+      await updateTipo.mutateAsync({ id: tipo.id, custo_unitario: valor });
+      toast.success("Custo salvo");
+      setDraftCustos((prev) => {
+        const next = { ...prev };
+        delete next[tipo.id];
+        return next;
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar custo");
+    }
   };
 
   const handleExport = () => {
@@ -188,7 +202,13 @@ function Page() {
                       onChange={(e) =>
                         setDraftCustos((prev) => ({ ...prev, [c.id]: e.target.value }))
                       }
-                      onBlur={() => handleCustoBlur(c)}
+                      onBlur={() => handleCustoSave(c)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleCustoSave(c);
+                        }
+                      }}
                       className="h-9 w-24 px-2 border border-border rounded-r-md text-sm font-bold text-navy focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                   </div>

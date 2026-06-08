@@ -9,6 +9,7 @@ import { usePerdaClientes, useSaldoCaixas, useCobrarCaixa } from "@/hooks/use-ca
 import { useTiposCaixa, useUpdateTipoCaixa, type TipoCaixa } from "@/hooks/use-tipos-caixa";
 import { useAuth } from "@/lib/auth";
 import { exportToExcel } from "@/lib/excel";
+import { parseCustoValor, shouldSaveCusto } from "@/lib/custo-unitario";
 
 export const Route = createFileRoute("/caixas/economia")({
   component: Page,
@@ -25,6 +26,8 @@ function Page() {
   const updateTipo = useUpdateTipoCaixa();
   const cobrar = useCobrarCaixa();
   const [draftCustos, setDraftCustos] = useState<Record<string, string>>({});
+  const [cobrandoId, setCobrandoId] = useState<string | null>(null);
+  const [cobradoIds, setCobradoIds] = useState<Set<string>>(new Set());
 
   const custoById = useMemo(() => {
     const m: Record<string, number> = {};
@@ -81,40 +84,58 @@ function Page() {
 
   const pior = [...dados].sort((a, b) => b.custoPerda - a.custoPerda)[0];
 
-  const handleCustoBlur = (tipo: TipoCaixa) => {
-    const raw = draftCustos[tipo.id];
-    const valor = raw !== undefined ? parseFloat(raw) : tipo.custo_unitario;
-    if (Number.isNaN(valor)) return;
-    updateTipo.mutate({ id: tipo.id, custo_unitario: valor });
-    setDraftCustos((prev) => {
-      const next = { ...prev };
-      delete next[tipo.id];
-      return next;
-    });
+  const handleCustoSave = async (tipo: TipoCaixa) => {
+    const valor = parseCustoValor(tipo, draftCustos);
+    if (valor === null) return;
+    if (!shouldSaveCusto(tipo, valor)) {
+      setDraftCustos((prev) => {
+        const next = { ...prev };
+        delete next[tipo.id];
+        return next;
+      });
+      return;
+    }
+    try {
+      await updateTipo.mutateAsync({ id: tipo.id, custo_unitario: valor });
+      toast.success("Custo salvo");
+      setDraftCustos((prev) => {
+        const next = { ...prev };
+        delete next[tipo.id];
+        return next;
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar custo");
+    }
   };
 
-  const handleCobrar = (c: (typeof dados)[0]) => {
+  const handleCobrar = async (c: (typeof dados)[0]) => {
     if (!user?.id) {
       toast.error("Faça login para registrar cobrança.");
       return;
     }
+    if (c.perdidas <= 0) {
+      toast.info("Cliente sem perda registrada");
+      return;
+    }
     const custo = custoById[c.tipoCx] ?? custoMedio;
-    cobrar.mutate(
-      {
+    setCobrandoId(c.cliente_id);
+    try {
+      await cobrar.mutateAsync({
         cliente_id: c.cliente_id,
         tipo_caixa: c.tipoCx,
         quantidade: Math.max(1, c.perdidas),
         custo_unitario: custo,
         created_by: user.id,
-      },
-      {
-        onSuccess: () =>
-          toast.success(`Cobrança registrada · ${c.cliente}`, {
-            description: `R$ ${(c.perdidas * custo).toFixed(2)} em caixas ${c.pior}.`,
-          }),
-        onError: () => toast.error("Não foi possível registrar a cobrança."),
-      }
-    );
+      });
+      setCobradoIds((prev) => new Set(prev).add(c.cliente_id));
+      toast.success(`Cobrança registrada · ${c.cliente}`, {
+        description: `R$ ${(c.perdidas * custo).toFixed(2)} em caixas ${c.pior}.`,
+      });
+    } catch {
+      toast.error("Não foi possível registrar a cobrança.");
+    } finally {
+      setCobrandoId(null);
+    }
   };
 
   const handleExport = () => {
@@ -182,7 +203,13 @@ function Page() {
                   onChange={(e) =>
                     setDraftCustos((prev) => ({ ...prev, [c.id]: e.target.value }))
                   }
-                  onBlur={() => handleCustoBlur(c)}
+                  onBlur={() => handleCustoSave(c)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleCustoSave(c);
+                    }
+                  }}
                   className="h-8 w-20 px-2 border border-border rounded-r text-xs font-bold text-navy focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
               </div>
@@ -290,10 +317,14 @@ function Page() {
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => handleCobrar(c)}
-                      disabled={cobrar.isPending}
+                      disabled={cobrandoId === c.cliente_id || cobradoIds.has(c.cliente_id)}
                       className="h-7 px-3 rounded-md bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary hover:text-primary-foreground active:scale-95 transition disabled:opacity-50"
                     >
-                      Cobrar
+                      {cobrandoId === c.cliente_id
+                        ? "Cobrando…"
+                        : cobradoIds.has(c.cliente_id)
+                          ? "Cobrado"
+                          : "Cobrar"}
                     </button>
                   </td>
                 </tr>

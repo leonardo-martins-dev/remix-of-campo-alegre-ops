@@ -7,7 +7,7 @@ import { Donut } from "@/components/charts";
 import { useClientes } from "@/hooks/use-cadastros";
 import { useSaldoCaixas, useRetornosDia, useRegistrarRetorno } from "@/hooks/use-caixas";
 import { useAuth } from "@/lib/auth";
-import { enqueueRetorno, getRetornoQueue, removeFromQueue } from "@/lib/offline-queue";
+import { enqueueRetorno, getRetornoQueue, removeFromQueue, validateRetornoQuantities } from "@/lib/offline-queue";
 import { supabase } from "@/lib/supabase";
 import { formatTime } from "@/lib/utils-date";
 
@@ -93,6 +93,10 @@ function PhoneFrame() {
       toast.error("Informe ao menos uma caixa");
       return;
     }
+    if (ret.G > saldoCliente.G || ret.I > saldoCliente.I || ret.P > saldoCliente.P) {
+      toast.error("Retorno maior que o saldo disponível");
+      return;
+    }
 
     const payload = {
       cliente_id: cliente.id,
@@ -103,6 +107,14 @@ function PhoneFrame() {
     };
 
     if (!navigator.onLine) {
+      const offlineErr = validateRetornoQuantities(
+        { caixas_g: ret.G, caixas_i: ret.I, caixas_p: ret.P },
+        saldoCliente
+      );
+      if (offlineErr) {
+        toast.error(offlineErr);
+        return;
+      }
       enqueueRetorno(payload);
       toast.success("Retorno salvo offline", { description: "Sincroniza ao recuperar sinal." });
       setRet({ G: 0, I: 0, P: 0 });
@@ -124,7 +136,10 @@ function PhoneFrame() {
         <div>
           <div className="text-xs uppercase tracking-wider opacity-60">{label}</div>
           <div className="text-[11px] opacity-50 mt-0.5">
-            Saldo após retorno: <span className="font-bold">{saldoAtual[tipo]}</span>
+            Saldo após retorno:{" "}
+            <span className={`font-bold ${saldoAtual[tipo] < 0 ? "text-red-400" : ""}`}>
+              {saldoAtual[tipo]}
+            </span>
           </div>
         </div>
         <span className="h-8 w-8 rounded-lg flex items-center justify-center text-sm font-bold" style={{ background: color, color: "white" }}>
@@ -133,6 +148,8 @@ function PhoneFrame() {
       </div>
       <div className="flex items-center justify-between">
         <button
+          type="button"
+          aria-label={`Diminuir ${label}`}
           onClick={() => setRet((r) => ({ ...r, [tipo]: Math.max(0, r[tipo] - 1) }))}
           className="h-12 w-12 rounded-2xl bg-white/10 active:bg-white/20 flex items-center justify-center"
         >
@@ -140,8 +157,16 @@ function PhoneFrame() {
         </button>
         <span className="text-5xl font-bold tabular-nums">{ret[tipo]}</span>
         <button
-          onClick={() => setRet((r) => ({ ...r, [tipo]: r[tipo] + 1 }))}
-          className="h-12 w-12 rounded-2xl flex items-center justify-center"
+          type="button"
+          aria-label={`Aumentar ${label}`}
+          disabled={ret[tipo] >= saldoCliente[tipo]}
+          onClick={() =>
+            setRet((r) => ({
+              ...r,
+              [tipo]: Math.min(saldoCliente[tipo], r[tipo] + 1),
+            }))
+          }
+          className="h-12 w-12 rounded-2xl flex items-center justify-center disabled:opacity-40"
           style={{ background: "var(--primary)" }}
         >
           <Plus size={18} />

@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { validateRateio } from "./rateio";
 
 export type ExcelPedidoRow = {
   codigo: string;
@@ -68,9 +69,20 @@ export function buildPedidosFromExcel(
     }
   }
 
-  return [...byCodigo.values()].map((p) => ({
+  const pedidos = [...byCodigo.values()].map((p) => ({
     codigo: p.codigo,
     fornecedor_id: p.fornecedor_id,
     itens: [...p.itens.values()],
   }));
+
+  for (const ped of pedidos) {
+    for (const item of ped.itens) {
+      const v = validateRateio(item.quantidade, item.rateio);
+      if (!v.ok) {
+        throw new Error(`Pedido ${ped.codigo}: ${v.error}`);
+      }
+    }
+  }
+
+  return pedidos;
 }

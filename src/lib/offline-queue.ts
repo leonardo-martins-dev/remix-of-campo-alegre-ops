@@ -19,6 +19,16 @@ export function getRetornoQueue(): RetornoQueueItem[] {
   }
 }
 
+export function validateRetornoQuantities(
+  ret: { caixas_g: number; caixas_i: number; caixas_p: number },
+  saldo: { G: number; I: number; P: number }
+): string | null {
+  if (ret.caixas_g > saldo.G || ret.caixas_i > saldo.I || ret.caixas_p > saldo.P) {
+    return "Retorno maior que o saldo disponível";
+  }
+  return null;
+}
+
 export function enqueueRetorno(item: Omit<RetornoQueueItem, "id" | "created_at">) {
   const queue = getRetornoQueue();
   queue.push({ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() });

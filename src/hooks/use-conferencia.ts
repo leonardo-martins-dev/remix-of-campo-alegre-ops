@@ -1,5 +1,7 @@
+import type { User } from "@supabase/supabase-js";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { ensureUserProfile } from "@/lib/ensure-profile";
 
 export function useConferencia(pedidoId: string | null) {
   return useQuery({
@@ -29,7 +31,17 @@ export function useConferencia(pedidoId: string | null) {
 export function useStartConferencia() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ pedidoId, conferenteId }: { pedidoId: string; conferenteId: string }) => {
+    mutationFn: async ({
+      pedidoId,
+      conferenteId,
+      user,
+    }: {
+      pedidoId: string;
+      conferenteId: string;
+      user: User;
+    }) => {
+      await ensureUserProfile(user);
+
       const { data: existing } = await supabase
         .from("conferencias")
         .select("id")
@@ -50,7 +62,10 @@ export function useStartConferencia() {
         .insert({ pedido_id: pedidoId, conferente_id: conferenteId, status: "em_andamento" })
         .select()
         .single();
-      if (cErr) throw cErr;
+      if (cErr) {
+        if (cErr.code === "23503") throw new Error("Perfil do usuário não encontrado. Faça logout e login novamente.");
+        throw cErr;
+      }
 
       const itens = pedido?.itens_pedido ?? [];
       if (itens.length) {
@@ -106,28 +121,39 @@ export function useSaveConferenciaItens() {
             updated_at: new Date().toISOString(),
           })
           .eq("id", it.id);
-        if (error) throw error;
+        if (error) throw new Error(error.message);
       }
 
       const { error: cErr } = await supabase
         .from("conferencias")
         .update({ status, ...(status === "finalizada" ? { finalizada_em: new Date().toISOString() } : {}) })
         .eq("id", conferenciaId);
-      if (cErr) throw cErr;
+      if (cErr) throw new Error(cErr.message);
 
       if (status === "finalizada") {
-        await supabase.from("registros_ciclo").insert({
+        const hasDivergencia = itens.some((it) => it.divergencia != null);
+        const pedidoStatus = hasDivergencia ? "divergencia" : "conferido";
+
+        const { error: pErr } = await supabase
+          .from("pedidos_recebimento")
+          .update({ status: pedidoStatus, updated_at: new Date().toISOString() })
+          .eq("id", pedidoId);
+        if (pErr) throw new Error(pErr.message);
+
+        const { error: cicloErr } = await supabase.from("registros_ciclo").insert({
           pedido_id: pedidoId,
           hora_chegada_fornecedor: new Date().toISOString(),
           hora_conferencia_ok: new Date().toISOString(),
           data_registro: new Date().toISOString().slice(0, 10),
         });
+        if (cicloErr) console.warn("registros_ciclo:", cicloErr.message);
       }
     },
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["conferencia", v.pedidoId] });
       qc.invalidateQueries({ queryKey: ["pedidos"] });
       qc.invalidateQueries({ queryKey: ["faltas"] });
+      qc.invalidateQueries({ queryKey: ["fill-rate"] });
     },
   });
 }

@@ -7,6 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/auth";
 import {
   useFornecedores,
@@ -83,6 +93,8 @@ function CadastrosPanel() {
   );
 }
 
+type CadastroRow = { id: string; nome?: string; placa?: string };
+
 function CadastroTable({
   label,
   table,
@@ -92,11 +104,32 @@ function CadastroTable({
   label: string;
   table: string;
   placeholder: string;
-  useData: () => { data?: { id: string; nome: string }[]; isLoading: boolean };
+  useData: () => { data?: CadastroRow[]; isLoading: boolean };
 }) {
   const { data = [], isLoading } = useData();
   const { insert, remove } = useCadastroMutations(table, ["cadastros", table]);
   const [nome, setNome] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const rowLabel = (row: CadastroRow) =>
+    table === "caminhoes" ? row.placa ?? row.nome ?? "—" : row.nome ?? "—";
+
+  const handleAdd = () => {
+    if (!nome.trim()) {
+      toast.error("Informe um nome");
+      return;
+    }
+    insert.mutate(
+      table === "caminhoes" ? { placa: nome.trim().toUpperCase() } : { nome: nome.trim() },
+      {
+        onSuccess: () => {
+          setNome("");
+          toast.success("Cadastrado");
+        },
+        onError: (e) => toast.error(e.message),
+      }
+    );
+  };
 
   return (
     <Card>
@@ -104,18 +137,7 @@ function CadastroTable({
       <CardContent>
         <div className="flex gap-2 mb-3">
           <Input placeholder={placeholder} value={nome} onChange={(e) => setNome(e.target.value)} />
-          <Button
-            onClick={() => {
-              if (!nome.trim()) return;
-              insert.mutate(
-                table === "caminhoes" ? { placa: nome.trim().toUpperCase() } : { nome: nome.trim() },
-                {
-                  onSuccess: () => { setNome(""); toast.success("Cadastrado"); },
-                  onError: (e) => toast.error(e.message),
-                }
-              );
-            }}
-          >
+          <Button onClick={handleAdd} disabled={!nome.trim()}>
             Adicionar
           </Button>
         </div>
@@ -123,14 +145,47 @@ function CadastroTable({
           <ul className="space-y-1 text-sm">
             {data.map((row) => (
               <li key={row.id} className="flex justify-between items-center py-1 border-b border-border">
-                <span>{row.nome}</span>
-                <Button variant="ghost" size="sm" className="text-destructive h-7" onClick={() => remove.mutate(row.id, { onSuccess: () => toast.success("Removido") })}>
+                <span>{rowLabel(row)}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive h-7"
+                  onClick={() => setDeleteId(row.id)}
+                >
                   Excluir
                 </Button>
               </li>
             ))}
           </ul>
         )}
+        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir registro?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (!deleteId) return;
+                  remove.mutate(deleteId, {
+                    onSuccess: () => {
+                      toast.success("Removido");
+                      setDeleteId(null);
+                    },
+                    onError: (e) => toast.error(e.message),
+                  });
+                }}
+              >
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
@@ -140,6 +195,7 @@ function ProdutosTable() {
   const { data = [], isLoading } = useProdutos();
   const { insert, remove } = useCadastroMutations("produtos", ["cadastros", "produtos"]);
   const [nome, setNome] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   return (
     <Card>
@@ -148,11 +204,22 @@ function ProdutosTable() {
         <div className="flex gap-2 mb-3">
           <Input placeholder="Nome do produto" value={nome} onChange={(e) => setNome(e.target.value)} />
           <Button
+            disabled={!nome.trim()}
             onClick={() => {
-              if (!nome.trim()) return;
-              insert.mutate({ nome: nome.trim(), unidade: "un" }, {
-                onSuccess: () => { setNome(""); toast.success("Produto cadastrado"); },
-              });
+              if (!nome.trim()) {
+                toast.error("Informe um nome");
+                return;
+              }
+              insert.mutate(
+                { nome: nome.trim(), unidade: "un" },
+                {
+                  onSuccess: () => {
+                    setNome("");
+                    toast.success("Produto cadastrado");
+                  },
+                  onError: (e) => toast.error(e.message),
+                }
+              );
             }}
           >
             Adicionar
@@ -163,11 +230,44 @@ function ProdutosTable() {
             {(data as { id: string; nome: string }[]).map((row) => (
               <li key={row.id} className="flex justify-between py-1 border-b border-border">
                 <span>{row.nome}</span>
-                <Button variant="ghost" size="sm" className="text-destructive h-7" onClick={() => remove.mutate(row.id)}>Excluir</Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive h-7"
+                  onClick={() => setDeleteId(row.id)}
+                >
+                  Excluir
+                </Button>
               </li>
             ))}
           </ul>
         )}
+        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
+              <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (!deleteId) return;
+                  remove.mutate(deleteId, {
+                    onSuccess: () => {
+                      toast.success("Removido");
+                      setDeleteId(null);
+                    },
+                    onError: (e) => toast.error(e.message),
+                  });
+                }}
+              >
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );

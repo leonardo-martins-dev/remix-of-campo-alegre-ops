@@ -104,11 +104,11 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
 
 export function UsersList() {
   const { data: users = [], isLoading } = useProfiles();
-  const { data: allPages = [] } = useAllPages();
+  const { data: allPages = [], isLoading: loadingPages, isError: pagesError } = useAllPages();
   const updateProfile = useUpdateProfile();
   const setPermission = useSetPermission();
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const { data: perms = [] } = useUserPermissions(selectedUser);
+  const { data: perms = [], isLoading: loadingPerms } = useUserPermissions(selectedUser);
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Carregando usuários...</p>;
@@ -147,32 +147,53 @@ export function UsersList() {
                 <Button variant="outline" size="sm" onClick={() => updateProfile.mutate({ id: u.id, ativo: !u.ativo })}>
                   {u.ativo ? "Desativar" : "Ativar"}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setSelectedUser(selectedUser === u.id ? null : u.id)}>
-                  Permissões
+                <Button
+                  variant={selectedUser === u.id ? "secondary" : "ghost"}
+                  size="sm"
+                  aria-expanded={selectedUser === u.id}
+                  onClick={() => setSelectedUser(selectedUser === u.id ? null : u.id)}
+                >
+                  {selectedUser === u.id ? "Fechar permissões" : "Permissões"}
                 </Button>
               </div>
             </div>
             {selectedUser === u.id && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-border">
-                {allPages.map((p: { id: string; slug: string; nome: string }) => {
-                  const perm = perms.find((x: { page_id: string }) => x.page_id === p.id);
-                  const checked = u.role === "admin" || perm?.can_access === true;
-                  return (
-                    <label key={p.id} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={checked}
-                        disabled={u.role === "admin"}
-                        onCheckedChange={(v) =>
-                          setPermission.mutate(
-                            { userId: u.id, pageId: p.id, canAccess: !!v },
-                            { onSuccess: () => toast.success("Permissão atualizada") }
-                          )
-                        }
-                      />
-                      {p.nome}
-                    </label>
-                  );
-                })}
+              <div className="rounded-lg bg-secondary/40 p-3 pt-2 border-t border-border space-y-2">
+                {u.role === "admin" ? (
+                  <p className="text-sm text-muted-foreground">
+                    Administradores têm acesso a todas as páginas do sistema.
+                  </p>
+                ) : loadingPages || loadingPerms ? (
+                  <p className="text-sm text-muted-foreground">Carregando páginas…</p>
+                ) : pagesError ? (
+                  <p className="text-sm text-destructive">Erro ao carregar páginas. Tente recarregar.</p>
+                ) : allPages.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma página cadastrada.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {allPages.map((p: { id: string; slug: string; nome: string }) => {
+                      const perm = perms.find((x: { page_id: string }) => x.page_id === p.id);
+                      const checked = perm?.can_access === true;
+                      return (
+                        <label key={p.id} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(v) =>
+                              setPermission.mutate(
+                                { userId: u.id, pageId: p.id, canAccess: !!v },
+                                {
+                                  onSuccess: () => toast.success("Permissão atualizada"),
+                                  onError: (e) => toast.error(e.message),
+                                }
+                              )
+                            }
+                          />
+                          {p.nome}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

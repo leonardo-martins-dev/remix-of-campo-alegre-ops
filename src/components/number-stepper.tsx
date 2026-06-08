@@ -18,6 +18,7 @@ export function NumberStepper({ value, onChange, min = 0, step = 1, size = "md",
     <div className="inline-flex items-center justify-center gap-1.5">
       <button
         type="button"
+        aria-label="Diminuir"
         onClick={() => onChange(clamp(value - step))}
         className={`${h} rounded-md border border-border hover:bg-secondary flex items-center justify-center text-navy`}
       >
@@ -32,6 +33,7 @@ export function NumberStepper({ value, onChange, min = 0, step = 1, size = "md",
       />
       <button
         type="button"
+        aria-label="Aumentar"
         onClick={() => onChange(clamp(value + step))}
         className={`${h} rounded-md border border-border hover:bg-secondary flex items-center justify-center text-navy`}
       >

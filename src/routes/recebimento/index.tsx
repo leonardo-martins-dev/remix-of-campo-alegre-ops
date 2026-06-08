@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { StatStrip } from "@/components/stat-strip";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -23,10 +24,12 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
   usePedidosDia,
+  usePedidosRealtime,
   useCreatePedidoManual,
   useImportPedidos,
   useFillRate,
 } from "@/hooks/use-pedidos";
+import { sumRateio, rateioRestante, validateRateio } from "@/lib/rateio";
 import { useFornecedores, useProdutos, useDestinatarios } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
 import { parsePedidosExcel, buildPedidosFromExcel } from "@/lib/excel";
@@ -95,6 +98,7 @@ function Page() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { user } = useAuth();
+  usePedidosRealtime();
   const { data: pedidos = [], isLoading, error } = usePedidosDia();
   const { data: fillRateData = [] } = useFillRate();
   const { data: fornecedores = [] } = useFornecedores();
@@ -182,6 +186,13 @@ function Page() {
       toast.error("Adicione ao menos um item válido");
       return;
     }
+    for (const item of itens) {
+      const v = validateRateio(item.quantidade, item.rateio);
+      if (!v.ok) {
+        toast.error(v.error);
+        return;
+      }
+    }
     try {
       await createManual.mutateAsync({
         codigo: codigo.trim(),
@@ -196,6 +207,13 @@ function Page() {
       toast.error(err instanceof Error ? err.message : "Erro ao lançar pedido");
     }
   };
+
+  const manualFormValid = useMemo(() => {
+    if (!fornecedorId || !codigo.trim()) return false;
+    const itens = manualItens.filter((i) => i.produto_id && i.quantidade > 0);
+    if (!itens.length) return false;
+    return itens.every((i) => validateRateio(i.quantidade, i.rateio).ok);
+  }, [fornecedorId, codigo, manualItens]);
 
   return (
     <div>
@@ -342,7 +360,13 @@ function Page() {
         </table>
       </div>
 
-      <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+      <Dialog
+        open={manualOpen}
+        onOpenChange={(open) => {
+          setManualOpen(open);
+          if (!open) resetManualForm();
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Lançar pedido manual</DialogTitle>
@@ -351,11 +375,11 @@ function Page() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Fornecedor</Label>
-                <Select value={fornecedorId} onValueChange={setFornecedorId}>
+                <Select value={fornecedorId || undefined} onValueChange={setFornecedorId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione…" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
                     {fornecedores.map((f) => (
                       <SelectItem key={f.id} value={f.id}>
                         {f.nome}
@@ -378,7 +402,7 @@ function Page() {
                     <div className="flex-1 space-y-1">
                       <Label className="text-xs">Produto</Label>
                       <Select
-                        value={item.produto_id}
+                        value={item.produto_id || undefined}
                         onValueChange={(v) =>
                           setManualItens((prev) =>
                             prev.map((it, i) => (i === idx ? { ...it, produto_id: v } : it))
@@ -388,7 +412,7 @@ function Page() {
                         <SelectTrigger>
                           <SelectValue placeholder="Produto…" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
                           {produtos.map((pr) => (
                             <SelectItem key={pr.id} value={pr.id}>
                               {pr.nome}
@@ -403,13 +427,25 @@ function Page() {
                         type="number"
                         min={1}
                         value={item.quantidade}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const qtd = Number(e.target.value) || 0;
                           setManualItens((prev) =>
-                            prev.map((it, i) =>
-                              i === idx ? { ...it, quantidade: Number(e.target.value) || 0 } : it
-                            )
-                          )
-                        }
+                            prev.map((it, i) => {
+                              if (i !== idx) return it;
+                              let rateio = it.rateio;
+                              if (sumRateio(rateio) > qtd) {
+                                let remaining = qtd;
+                                rateio = rateio.map((r) => {
+                                  if (!r.destinatario_id || r.quantidade <= 0) return r;
+                                  const q = Math.min(r.quantidade, remaining);
+                                  remaining -= q;
+                                  return { ...r, quantidade: q };
+                                });
+                              }
+                              return { ...it, quantidade: qtd, rateio };
+                            })
+                          );
+                        }}
                       />
                     </div>
                     {manualItens.length > 1 && (
@@ -424,11 +460,22 @@ function Page() {
                     )}
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Rateio por destinatário</Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Rateio por destinatário</Label>
+                      {(() => {
+                        const sum = sumRateio(item.rateio);
+                        const ok = sum === item.quantidade || (sum === 0 && item.rateio.every((r) => !r.destinatario_id));
+                        return (
+                          <span className={`text-[10px] font-semibold ${ok ? "text-[var(--success)]" : "text-destructive"}`}>
+                            Rateado: {sum} / {item.quantidade}
+                          </span>
+                        );
+                      })()}
+                    </div>
                     {item.rateio.map((r, ri) => (
                       <div key={ri} className="flex gap-2">
                         <Select
-                          value={r.destinatario_id}
+                          value={r.destinatario_id || undefined}
                           onValueChange={(v) =>
                             setManualItens((prev) =>
                               prev.map((it, i) =>
@@ -447,7 +494,7 @@ function Page() {
                           <SelectTrigger className="flex-1">
                             <SelectValue placeholder="Destinatário…" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
                             {destinatarios.map((d) => (
                               <SelectItem key={d.id} value={d.id}>
                                 {d.nome}
@@ -458,24 +505,25 @@ function Page() {
                         <Input
                           type="number"
                           min={0}
+                          max={rateioRestante(item.quantidade, item.rateio, ri)}
                           className="w-24"
                           value={r.quantidade || ""}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const max = rateioRestante(item.quantidade, item.rateio, ri);
+                            const q = Math.min(Number(e.target.value) || 0, max);
                             setManualItens((prev) =>
                               prev.map((it, i) =>
                                 i === idx
                                   ? {
                                       ...it,
                                       rateio: it.rateio.map((rr, j) =>
-                                        j === ri
-                                          ? { ...rr, quantidade: Number(e.target.value) || 0 }
-                                          : rr
+                                        j === ri ? { ...rr, quantidade: q } : rr
                                       ),
                                     }
                                   : it
                               )
-                            )
-                          }
+                            );
+                          }}
                         />
                       </div>
                     ))}
@@ -521,10 +569,12 @@ function Page() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setManualOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={submitManual} disabled={createManual.isPending}>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancelar
+              </Button>
+            </DialogClose>
+            <Button type="button" onClick={submitManual} disabled={createManual.isPending || !manualFormValid}>
               {createManual.isPending ? "Salvando…" : "Lançar pedido"}
             </Button>
           </DialogFooter>

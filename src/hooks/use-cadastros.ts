@@ -97,6 +97,13 @@ export function useCadastroMutations(table: string, queryKey: readonly string[])
 
   const insert = useMutation({
     mutationFn: async (row: Record<string, unknown>) => {
+      const nome = typeof row.nome === "string" ? row.nome.trim() : "";
+      const placa = typeof row.placa === "string" ? row.placa.trim() : "";
+      if (table === "caminhoes") {
+        if (!placa) throw new Error("Informe a placa do caminhão");
+      } else if ("nome" in row && !nome) {
+        throw new Error("Informe um nome");
+      }
       const { data, error } = await supabase.from(table).insert(row).select().single();
       if (error) throw error;
       return data;

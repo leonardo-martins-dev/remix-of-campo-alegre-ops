@@ -21,11 +21,15 @@ export function useUpdateTipoCaixa() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, custo_unitario }: { id: "G" | "I" | "P"; custo_unitario: number }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("tipos_caixa")
         .update({ custo_unitario, updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .eq("id", id)
+        .select()
+        .single();
       if (error) throw error;
+      if (!data) throw new Error("Nenhum registro atualizado");
+      return data as TipoCaixa;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tipos-caixa"] }),
   });

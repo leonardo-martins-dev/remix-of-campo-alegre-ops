@@ -1,6 +1,36 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { validateRateio } from "@/lib/rateio";
 import { todayISO } from "@/lib/utils-date";
+
+function assertItensRateio(
+  itens: { produto_id: string; quantidade: number; rateio: { destinatario_id: string; quantidade: number }[] }[]
+) {
+  for (const item of itens) {
+    const v = validateRateio(item.quantidade, item.rateio);
+    if (!v.ok) throw new Error(v.error);
+  }
+}
+
+export function usePedidosRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel("pedidos-recebimento-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pedidos_recebimento" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["pedidos"] });
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
+}
 
 export type PedidoRow = {
   id: string;
@@ -66,6 +96,8 @@ export function useCreatePedidoManual() {
       itens: { produto_id: string; quantidade: number; rateio: { destinatario_id: string; quantidade: number }[] }[];
       created_by: string;
     }) => {
+      assertItensRateio(payload.itens);
+
       const { data: pedido, error: pErr } = await supabase
         .from("pedidos_recebimento")
         .insert({
@@ -114,6 +146,8 @@ export function useImportPedidos() {
       }[]
     ) => {
       for (const p of pedidos) {
+        assertItensRateio(p.itens);
+
         const { data: pedido, error: pErr } = await supabase
           .from("pedidos_recebimento")
           .insert({

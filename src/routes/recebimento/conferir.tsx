@@ -56,23 +56,16 @@ type LinhaItem = {
 };
 
 function Page() {
-  const { pedidoId: searchPedidoId } = Route.useSearch();
-  const navigate = useNavigate();
-  const [selectedPedidoId, setSelectedPedidoId] = useState<string | null>(searchPedidoId ?? null);
+  const { pedidoId } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
 
   const { data: pedidos = [], isLoading: loadingPedidos } = usePedidosDia();
   const pendentes = pedidos.filter((p) => p.status === "pendente");
 
-  useEffect(() => {
-    if (searchPedidoId) setSelectedPedidoId(searchPedidoId);
-  }, [searchPedidoId]);
+  const clearPedido = () => navigate({ search: {} });
+  const selectPedido = (id: string) => navigate({ search: { pedidoId: id } });
 
-  const selectPedido = (id: string) => {
-    setSelectedPedidoId(id);
-    navigate({ to: "/recebimento/conferir", search: { pedidoId: id } });
-  };
-
-  if (!selectedPedidoId) {
+  if (!pedidoId) {
     return (
       <div>
         <PageHeader
@@ -104,11 +97,11 @@ function Page() {
           {pendentes.map((p) => {
             const itensCount = (p as { itens_pedido?: unknown[] }).itens_pedido?.length ?? 0;
             return (
-              <button
+              <Link
                 key={p.id}
-                type="button"
-                onClick={() => selectPedido(p.id)}
-                className="card-base p-4 text-left hover:border-primary hover:shadow-sm transition-all"
+                to="/recebimento/conferir"
+                search={{ pedidoId: p.id }}
+                className="card-base p-4 text-left hover:border-primary hover:shadow-sm transition-all block"
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="chip chip-info">Chegou {formatTime(p.hora_chegada)}</span>
@@ -118,7 +111,7 @@ function Page() {
                 <div className="text-xs text-muted-foreground mt-1">
                   {p.codigo} · {itensCount} itens no pedido
                 </div>
-              </button>
+              </Link>
             );
           })}
         </div>
@@ -128,12 +121,10 @@ function Page() {
 
   return (
     <ConferenciaItens
-      key={selectedPedidoId}
-      pedidoId={selectedPedidoId}
-      onBack={() => {
-        setSelectedPedidoId(null);
-        navigate({ to: "/recebimento/conferir", search: {} });
-      }}
+      key={pedidoId}
+      pedidoId={pedidoId}
+      onBack={clearPedido}
+      onFinished={() => navigate({ to: "/recebimento" })}
       onTrocar={selectPedido}
     />
   );
@@ -195,10 +186,12 @@ function buildSavePayload(it: LinhaItem) {
 function ConferenciaItens({
   pedidoId,
   onBack,
+  onFinished,
   onTrocar,
 }: {
   pedidoId: string;
   onBack: () => void;
+  onFinished: () => void;
   onTrocar: (id: string) => void;
 }) {
   const { user, profile } = useAuth();
@@ -230,10 +223,10 @@ function ConferenciaItens({
     if (startedRef.current === pedidoId) return;
     startedRef.current = pedidoId;
     startMut.mutate(
-      { pedidoId, conferenteId: user.id },
+      { pedidoId, conferenteId: user.id, user },
       { onError: (e) => toast.error(e.message) }
     );
-  }, [pedidoId, user?.id]);
+  }, [pedidoId, user]);
 
   useEffect(() => {
     if (!conferencia?.itens_conferencia) return;
@@ -312,9 +305,10 @@ function ConferenciaItens({
               : `${stats.conferidos} itens guardados.`,
         }
       );
-      if (status === "finalizada") onBack();
+      if (status === "finalizada") onFinished();
+      else onBack();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar conferência");
     }
   };
 

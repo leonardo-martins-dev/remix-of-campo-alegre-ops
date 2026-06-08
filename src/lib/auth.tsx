@@ -9,7 +9,8 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, type AccessiblePage, type Profile } from "./supabase";
-import { resolveIsAdmin, resolveProfile } from "./roles";
+import { ensureUserProfile } from "./ensure-profile";
+import { resolveIsAdmin } from "./roles";
 
 type AuthContextValue = {
   session: Session | null;
@@ -27,19 +28,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function fetchProfile(user: User): Promise<Profile | null> {
-  const { data: ensured } = await supabase.rpc("ensure_user_profile");
-  if (ensured) return ensured as Profile;
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, nome, email, role, avatar_url, ativo")
-    .eq("id", user.id)
-    .single();
-  if (error) {
-    console.error("fetchProfile:", error.message);
-    return resolveProfile(null, user);
-  }
-  return resolveProfile(data as Profile, user);
+  return ensureUserProfile(user);
 }
 
 async function fetchAccessiblePages(userId: string): Promise<AccessiblePage[]> {
