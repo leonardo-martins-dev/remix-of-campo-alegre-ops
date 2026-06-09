@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,14 +20,13 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogClose,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   useProfiles,
   useUpdateProfile,
@@ -36,6 +36,7 @@ import {
   createUserViaEdge,
 } from "@/hooks/use-users";
 import { isSuperAdmin, SUPER_ADMIN_EMAIL } from "@/lib/super-admin";
+import { cn } from "@/lib/utils";
 
 type UserRow = { id: string; nome: string; email: string; role: string; ativo: boolean };
 
@@ -113,14 +114,14 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
   );
 }
 
-function PermissionsDialog({
+function PermissionsSheet({
   user,
   open,
-  onOpenChange,
+  onClose,
 }: {
   user: UserRow | null;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
 }) {
   const { data: allPages = [], isLoading: loadingPages, isError: pagesError } = useAllPages();
   const setPermission = useSetPermission();
@@ -134,74 +135,76 @@ function PermissionsDialog({
     if (pagesError) {
       toast.error("Erro ao carregar páginas");
     }
-  }, [open]);
+  }, [open, loadingPages, loadingPerms, pagesError]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Permissões — {user?.nome ?? ""}</DialogTitle>
-          <DialogDescription>
+    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Permissões — {user?.nome ?? ""}</SheetTitle>
+          <SheetDescription>
             Defina quais páginas o usuário pode acessar.
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        {user?.role === "admin" ? (
-          <p className="text-sm text-muted-foreground py-2">
-            Administradores têm acesso a todas as páginas do sistema.
-          </p>
-        ) : loadingPages || loadingPerms ? (
-          <p className="text-sm text-muted-foreground py-4">Carregando páginas…</p>
-        ) : pagesError ? (
-          <p className="text-sm text-destructive py-4">
-            Erro ao carregar páginas. Tente recarregar a página.
-          </p>
-        ) : allPages.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">Nenhuma página cadastrada.</p>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
-            {allPages.map((p: { id: string; slug: string; nome: string }) => {
-              const perm = perms.find((x: { page_id: string }) => x.page_id === p.id);
-              const checked = perm?.can_access === true;
-              return (
-                <label key={p.id} className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={checked}
-                    onCheckedChange={(v) =>
-                      setPermission.mutate(
-                        { userId: user!.id, pageId: p.id, canAccess: !!v },
-                        {
-                          onSuccess: () => toast.success("Permissão atualizada"),
-                          onError: (e) => toast.error(e.message),
-                        }
-                      )
-                    }
-                  />
-                  {p.nome}
-                </label>
-              );
-            })}
-          </div>
-        )}
+        <div className="py-4">
+          {user?.role === "admin" ? (
+            <p className="text-sm text-muted-foreground">
+              Administradores têm acesso a todas as páginas do sistema.
+            </p>
+          ) : loadingPages || loadingPerms ? (
+            <p className="text-sm text-muted-foreground">Carregando páginas…</p>
+          ) : pagesError ? (
+            <p className="text-sm text-destructive">
+              Erro ao carregar páginas. Tente recarregar a página.
+            </p>
+          ) : allPages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma página cadastrada.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              {allPages.map((p: { id: string; slug: string; nome: string }) => {
+                const perm = perms.find((x: { page_id: string }) => x.page_id === p.id);
+                const checked = perm?.can_access === true;
+                return (
+                  <label key={p.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) =>
+                        setPermission.mutate(
+                          { userId: user!.id, pageId: p.id, canAccess: !!v },
+                          {
+                            onSuccess: () => toast.success("Permissão atualizada"),
+                            onError: (e) => toast.error(e.message),
+                          }
+                        )
+                      }
+                    />
+                    {p.nome}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="outline">
-              Fechar
-            </Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <SheetFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Fechar
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 
-export function UsersList() {
+export function UsersList({ permUserId }: { permUserId?: string }) {
+  const navigate = useNavigate({ from: "/gestao/usuarios" });
   const { data: users = [], isLoading } = useProfiles();
   const updateProfile = useUpdateProfile();
-  const [permsUserId, setPermsUserId] = useState<string | null>(null);
 
-  const permsUser = users.find((u: UserRow) => u.id === permsUserId) ?? null;
+  const permsUser = users.find((u: UserRow) => u.id === permUserId) ?? null;
+
+  const closePermissions = () => navigate({ search: {} });
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Carregando usuários...</p>;
@@ -246,15 +249,15 @@ export function UsersList() {
                   >
                     {u.ativo ? "Desativar" : "Ativar"}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    aria-expanded={permsUserId === u.id}
-                    onClick={() => setPermsUserId(u.id)}
+                  <Link
+                    to="/gestao/usuarios"
+                    search={{ permUserId: u.id }}
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                    aria-expanded={permUserId === u.id}
+                    onClick={() => toast.info(`Abrindo permissões de ${u.nome}`)}
                   >
                     Permissões
-                  </Button>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -262,10 +265,10 @@ export function UsersList() {
         </CardContent>
       </Card>
 
-      <PermissionsDialog
+      <PermissionsSheet
         user={permsUser}
-        open={!!permsUserId}
-        onOpenChange={(open) => !open && setPermsUserId(null)}
+        open={!!permUserId}
+        onClose={closePermissions}
       />
     </>
   );

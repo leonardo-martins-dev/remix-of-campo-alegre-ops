@@ -117,7 +117,10 @@ function CadastroTable({
   const rowLabel = (row: CadastroRow) =>
     table === "caminhoes" ? row.placa ?? row.nome ?? "—" : row.nome ?? "—";
 
-  const handleAdd = () => {
+  const showError = touched && !nome.trim();
+
+  const handleAdd = (e?: React.FormEvent) => {
+    e?.preventDefault();
     setTouched(true);
     if (!nome.trim()) {
       toast.error(emptyLabel);
@@ -140,20 +143,26 @@ function CadastroTable({
     <Card>
       <CardHeader><CardTitle className="text-base">{label}</CardTitle></CardHeader>
       <CardContent>
-        <div className="flex gap-2 mb-1">
-          <Input
-            placeholder={placeholder}
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          />
-          <Button type="button" onClick={handleAdd}>
-            Adicionar
-          </Button>
-        </div>
-        {touched && !nome.trim() && (
-          <p className="text-xs text-destructive mb-2">{emptyLabel} para cadastrar</p>
-        )}
+        <form onSubmit={handleAdd} className="mb-1">
+          <div className="flex gap-2">
+            <Input
+              placeholder={placeholder}
+              value={nome}
+              aria-invalid={showError}
+              className={showError ? "border-destructive focus-visible:ring-destructive" : ""}
+              onChange={(e) => {
+                setNome(e.target.value);
+                if (e.target.value.trim()) setTouched(false);
+              }}
+            />
+            <Button type="submit">Adicionar</Button>
+          </div>
+          {showError && (
+            <p className="text-xs text-destructive mt-1.5" role="alert">
+              {emptyLabel} para cadastrar
+            </p>
+          )}
+        </form>
         {isLoading ? <p className="text-xs text-muted-foreground">Carregando...</p> : (
           <ul className="space-y-1 text-sm">
             {data.map((row) => (
@@ -211,7 +220,10 @@ function ProdutosTable() {
   const [touched, setTouched] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const handleAdd = () => {
+  const showError = touched && !nome.trim();
+
+  const handleAdd = (e?: React.FormEvent) => {
+    e?.preventDefault();
     setTouched(true);
     if (!nome.trim()) {
       toast.error("Informe um nome");
@@ -234,20 +246,26 @@ function ProdutosTable() {
     <Card>
       <CardHeader><CardTitle className="text-base">Produtos</CardTitle></CardHeader>
       <CardContent>
-        <div className="flex gap-2 mb-1">
-          <Input
-            placeholder="Nome do produto"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          />
-          <Button type="button" onClick={handleAdd}>
-            Adicionar
-          </Button>
-        </div>
-        {touched && !nome.trim() && (
-          <p className="text-xs text-destructive mb-2">Informe um nome para cadastrar</p>
-        )}
+        <form onSubmit={handleAdd} className="mb-1">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Nome do produto"
+              value={nome}
+              aria-invalid={showError}
+              className={showError ? "border-destructive focus-visible:ring-destructive" : ""}
+              onChange={(e) => {
+                setNome(e.target.value);
+                if (e.target.value.trim()) setTouched(false);
+              }}
+            />
+            <Button type="submit">Adicionar</Button>
+          </div>
+          {showError && (
+            <p className="text-xs text-destructive mt-1.5" role="alert">
+              Informe um nome para cadastrar
+            </p>
+          )}
+        </form>
         {!isLoading && (
           <ul className="space-y-1 text-sm">
             {(data as { id: string; nome: string }[]).map((row) => (
