@@ -12,7 +12,10 @@ AS $$
     SELECT 1
     FROM public.profiles
     WHERE id = COALESCE(p_user_id, auth.uid())
-      AND role = 'admin'::public.user_role
+      AND role IN (
+        'admin'::public.user_role,
+        'super_admin'::public.user_role
+      )
   );
 $$;
 

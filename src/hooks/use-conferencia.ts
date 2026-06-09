@@ -124,11 +124,22 @@ export function useSaveConferenciaItens() {
         if (error) throw new Error(error.message);
       }
 
-      const { error: cErr } = await supabase
-        .from("conferencias")
-        .update({ status, ...(status === "finalizada" ? { finalizada_em: new Date().toISOString() } : {}) })
-        .eq("id", conferenciaId);
-      if (cErr) throw new Error(cErr.message);
+      const { error: rpcErr } = await supabase.rpc("update_conferencia_status", {
+        p_conferencia_id: conferenciaId,
+        p_pedido_id: pedidoId,
+        p_status: status,
+      });
+      if (rpcErr) {
+        if (rpcErr.code === "PGRST202") {
+          const { error: cErr } = await supabase
+            .from("conferencias")
+            .update({ status })
+            .eq("id", conferenciaId);
+          if (cErr) throw new Error(cErr.message);
+        } else {
+          throw new Error(rpcErr.message);
+        }
+      }
 
       if (status === "finalizada") {
         // Status do pedido é atualizado pelo trigger handle_conferencia_finalizada no banco.

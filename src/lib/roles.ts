@@ -6,7 +6,7 @@ export function resolveIsAdmin(
   profile: Profile | null,
   user: User | null | undefined
 ): boolean {
-  if (profile?.role === "admin") return true;
+  if (profile?.role === "admin" || (profile?.role as string) === "super_admin") return true;
   if (isSuperAdmin(profile?.email ?? user?.email)) return true;
   return user?.app_metadata?.role === "admin";
 }

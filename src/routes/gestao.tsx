@@ -149,7 +149,8 @@ function CadastroTable({
               placeholder={placeholder}
               value={nome}
               aria-invalid={showError}
-              className={showError ? "border-destructive focus-visible:ring-destructive" : ""}
+              aria-describedby={showError ? `${table}-nome-error` : undefined}
+              className={showError ? "border-destructive ring-2 ring-destructive/30 focus-visible:ring-destructive" : ""}
               onChange={(e) => {
                 setNome(e.target.value);
                 if (e.target.value.trim()) setTouched(false);
@@ -158,7 +159,7 @@ function CadastroTable({
             <Button type="submit">Adicionar</Button>
           </div>
           {showError && (
-            <p className="text-xs text-destructive mt-1.5" role="alert">
+            <p id={`${table}-nome-error`} className="text-sm font-medium text-destructive mt-2" role="alert">
               {emptyLabel} para cadastrar
             </p>
           )}
@@ -252,7 +253,8 @@ function ProdutosTable() {
               placeholder="Nome do produto"
               value={nome}
               aria-invalid={showError}
-              className={showError ? "border-destructive focus-visible:ring-destructive" : ""}
+              aria-describedby={showError ? "produto-nome-error" : undefined}
+              className={showError ? "border-destructive ring-2 ring-destructive/30 focus-visible:ring-destructive" : ""}
               onChange={(e) => {
                 setNome(e.target.value);
                 if (e.target.value.trim()) setTouched(false);
@@ -261,7 +263,7 @@ function ProdutosTable() {
             <Button type="submit">Adicionar</Button>
           </div>
           {showError && (
-            <p className="text-xs text-destructive mt-1.5" role="alert">
+            <p id="produto-nome-error" className="text-sm font-medium text-destructive mt-2" role="alert">
               Informe um nome para cadastrar
             </p>
           )}

@@ -1,45 +1,542 @@
--- ============================================================
--- CAMPO ALEGRE OPS — MODELO DE DADOS COMPLETO
--- Packing house de hortifruti: recebimento, expedição,
--- gestão de caixas, indicadores e controle de acesso.
---
--- ATENÇÃO: banco NOVO / vazio apenas.
--- Se aparecer "type user_role already exists", o schema já existe —
--- NÃO re-execute este arquivo. Use 00003 → 00008 e verificar_banco.sql.
--- ============================================================
+﻿-- REPARO IDEMPOTENTE: schema Campo Alegre (tabelas faltando, enums ja existem)
+-- Rode ESTE arquivo antes de 00003-00008
 
--- ============================================================
--- 1. ENUMS
--- ============================================================
+DO $$ BEGIN CREATE TYPE public.user_role AS ENUM ('admin', 'user'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.status_pedido AS ENUM ('pendente', 'conferido', 'divergencia'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.origem_pedido AS ENUM ('wisetec', 'manual', 'excel'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.status_conferencia AS ENUM ('em_andamento', 'parcial', 'finalizada'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.status_carga AS ENUM ('aguardando', 'carregando', 'concluida', 'cancelada'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.status_romaneio AS ENUM ('pendente', 'ok', 'corrigido'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.tipo_caixa_enum AS ENUM ('G', 'I', 'P'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.tipo_divergencia AS ENUM ('falta', 'sobra', 'qualidade'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.tipo_movimentacao AS ENUM ('envio', 'retorno', 'perda', 'ajuste'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.unidade_medida AS ENUM ('mc', 'kg', 'un', 'cx', 'pct'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.status_cobranca AS ENUM ('pendente', 'cobrado', 'pago', 'cancelado'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-CREATE TYPE public.user_role AS ENUM ('admin', 'user');
+-- Garante valores faltantes em enums ja existentes (ex: user_role sem 'user')
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'user_role' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'user_role' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'admin'
+  ) THEN
+    ALTER TYPE public.user_role ADD VALUE 'admin';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'user_role' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'user_role' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'user'
+  ) THEN
+    ALTER TYPE public.user_role ADD VALUE 'user';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_pedido' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_pedido' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'pendente'
+  ) THEN
+    ALTER TYPE public.status_pedido ADD VALUE 'pendente';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_pedido' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_pedido' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'conferido'
+  ) THEN
+    ALTER TYPE public.status_pedido ADD VALUE 'conferido';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_pedido' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_pedido' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'divergencia'
+  ) THEN
+    ALTER TYPE public.status_pedido ADD VALUE 'divergencia';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'origem_pedido' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'origem_pedido' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'wisetec'
+  ) THEN
+    ALTER TYPE public.origem_pedido ADD VALUE 'wisetec';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'origem_pedido' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'origem_pedido' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'manual'
+  ) THEN
+    ALTER TYPE public.origem_pedido ADD VALUE 'manual';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'origem_pedido' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'origem_pedido' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'excel'
+  ) THEN
+    ALTER TYPE public.origem_pedido ADD VALUE 'excel';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_conferencia' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_conferencia' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'em_andamento'
+  ) THEN
+    ALTER TYPE public.status_conferencia ADD VALUE 'em_andamento';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_conferencia' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_conferencia' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'parcial'
+  ) THEN
+    ALTER TYPE public.status_conferencia ADD VALUE 'parcial';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_conferencia' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_conferencia' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'finalizada'
+  ) THEN
+    ALTER TYPE public.status_conferencia ADD VALUE 'finalizada';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_carga' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_carga' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'aguardando'
+  ) THEN
+    ALTER TYPE public.status_carga ADD VALUE 'aguardando';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_carga' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_carga' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'carregando'
+  ) THEN
+    ALTER TYPE public.status_carga ADD VALUE 'carregando';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_carga' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_carga' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'concluida'
+  ) THEN
+    ALTER TYPE public.status_carga ADD VALUE 'concluida';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_carga' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_carga' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'cancelada'
+  ) THEN
+    ALTER TYPE public.status_carga ADD VALUE 'cancelada';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_romaneio' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_romaneio' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'pendente'
+  ) THEN
+    ALTER TYPE public.status_romaneio ADD VALUE 'pendente';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_romaneio' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_romaneio' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'ok'
+  ) THEN
+    ALTER TYPE public.status_romaneio ADD VALUE 'ok';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_romaneio' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_romaneio' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'corrigido'
+  ) THEN
+    ALTER TYPE public.status_romaneio ADD VALUE 'corrigido';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'tipo_caixa_enum' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'tipo_caixa_enum' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'G'
+  ) THEN
+    ALTER TYPE public.tipo_caixa_enum ADD VALUE 'G';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'tipo_caixa_enum' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'tipo_caixa_enum' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'I'
+  ) THEN
+    ALTER TYPE public.tipo_caixa_enum ADD VALUE 'I';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'tipo_caixa_enum' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'tipo_caixa_enum' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'P'
+  ) THEN
+    ALTER TYPE public.tipo_caixa_enum ADD VALUE 'P';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'tipo_divergencia' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'tipo_divergencia' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'falta'
+  ) THEN
+    ALTER TYPE public.tipo_divergencia ADD VALUE 'falta';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'tipo_divergencia' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'tipo_divergencia' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'sobra'
+  ) THEN
+    ALTER TYPE public.tipo_divergencia ADD VALUE 'sobra';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'tipo_divergencia' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'tipo_divergencia' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'qualidade'
+  ) THEN
+    ALTER TYPE public.tipo_divergencia ADD VALUE 'qualidade';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'tipo_movimentacao' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'tipo_movimentacao' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'envio'
+  ) THEN
+    ALTER TYPE public.tipo_movimentacao ADD VALUE 'envio';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'tipo_movimentacao' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'tipo_movimentacao' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'retorno'
+  ) THEN
+    ALTER TYPE public.tipo_movimentacao ADD VALUE 'retorno';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'tipo_movimentacao' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'tipo_movimentacao' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'perda'
+  ) THEN
+    ALTER TYPE public.tipo_movimentacao ADD VALUE 'perda';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'tipo_movimentacao' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'tipo_movimentacao' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'ajuste'
+  ) THEN
+    ALTER TYPE public.tipo_movimentacao ADD VALUE 'ajuste';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'unidade_medida' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'unidade_medida' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'mc'
+  ) THEN
+    ALTER TYPE public.unidade_medida ADD VALUE 'mc';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'unidade_medida' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'unidade_medida' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'kg'
+  ) THEN
+    ALTER TYPE public.unidade_medida ADD VALUE 'kg';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'unidade_medida' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'unidade_medida' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'un'
+  ) THEN
+    ALTER TYPE public.unidade_medida ADD VALUE 'un';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'unidade_medida' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'unidade_medida' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'cx'
+  ) THEN
+    ALTER TYPE public.unidade_medida ADD VALUE 'cx';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'unidade_medida' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'unidade_medida' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'pct'
+  ) THEN
+    ALTER TYPE public.unidade_medida ADD VALUE 'pct';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_cobranca' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_cobranca' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'pendente'
+  ) THEN
+    ALTER TYPE public.status_cobranca ADD VALUE 'pendente';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_cobranca' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_cobranca' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'cobrado'
+  ) THEN
+    ALTER TYPE public.status_cobranca ADD VALUE 'cobrado';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_cobranca' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_cobranca' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'pago'
+  ) THEN
+    ALTER TYPE public.status_cobranca ADD VALUE 'pago';
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_type t
+    WHERE t.typname = 'status_cobranca' AND t.typnamespace = 'public'::regnamespace
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON e.enumtypid = t.oid
+    WHERE t.typname = 'status_cobranca' AND t.typnamespace = 'public'::regnamespace
+      AND e.enumlabel = 'cancelado'
+  ) THEN
+    ALTER TYPE public.status_cobranca ADD VALUE 'cancelado';
+  END IF;
+END $$;
 
-CREATE TYPE public.status_pedido AS ENUM ('pendente', 'conferido', 'divergencia');
-
-CREATE TYPE public.origem_pedido AS ENUM ('wisetec', 'manual', 'excel');
-
-CREATE TYPE public.status_conferencia AS ENUM ('em_andamento', 'parcial', 'finalizada');
-
-CREATE TYPE public.status_carga AS ENUM ('aguardando', 'carregando', 'concluida', 'cancelada');
-
-CREATE TYPE public.status_romaneio AS ENUM ('pendente', 'ok', 'corrigido');
-
-CREATE TYPE public.tipo_caixa_enum AS ENUM ('G', 'I', 'P');
-
-CREATE TYPE public.tipo_divergencia AS ENUM ('falta', 'sobra', 'qualidade');
-
-CREATE TYPE public.tipo_movimentacao AS ENUM ('envio', 'retorno', 'perda', 'ajuste');
-
-CREATE TYPE public.unidade_medida AS ENUM ('mc', 'kg', 'un', 'cx', 'pct');
-
-CREATE TYPE public.status_cobranca AS ENUM ('pendente', 'cobrado', 'pago', 'cancelado');
-
-
--- ============================================================
 -- 2. CONTROLE DE ACESSO
 -- ============================================================
 
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id          UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   nome        TEXT NOT NULL,
   email       TEXT NOT NULL,
@@ -50,9 +547,9 @@ CREATE TABLE public.profiles (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX idx_profiles_email ON public.profiles (email);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles (email);
 
-CREATE TABLE public.pages (
+CREATE TABLE IF NOT EXISTS public.pages (
   id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   slug  TEXT NOT NULL,
   nome  TEXT NOT NULL,
@@ -64,7 +561,7 @@ CREATE TABLE public.pages (
   CONSTRAINT uq_pages_slug UNIQUE (slug)
 );
 
-CREATE TABLE public.user_page_permissions (
+CREATE TABLE IF NOT EXISTS public.user_page_permissions (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   page_id    UUID NOT NULL REFERENCES public.pages(id) ON DELETE CASCADE,
@@ -74,14 +571,14 @@ CREATE TABLE public.user_page_permissions (
   CONSTRAINT uq_user_page UNIQUE (user_id, page_id)
 );
 
-CREATE INDEX idx_user_permissions_user ON public.user_page_permissions (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON public.user_page_permissions (user_id);
 
 
 -- ============================================================
 -- 3. DADOS MESTRES
 -- ============================================================
 
-CREATE TABLE public.destinatarios (
+CREATE TABLE IF NOT EXISTS public.destinatarios (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome       TEXT NOT NULL,
   ativo      BOOLEAN NOT NULL DEFAULT TRUE,
@@ -90,7 +587,7 @@ CREATE TABLE public.destinatarios (
   CONSTRAINT uq_destinatario_nome UNIQUE (nome)
 );
 
-CREATE TABLE public.familias_produto (
+CREATE TABLE IF NOT EXISTS public.familias_produto (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome       TEXT NOT NULL,
   ordem      INT NOT NULL DEFAULT 0,
@@ -99,7 +596,7 @@ CREATE TABLE public.familias_produto (
   CONSTRAINT uq_familia_nome UNIQUE (nome)
 );
 
-CREATE TABLE public.produtos (
+CREATE TABLE IF NOT EXISTS public.produtos (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome       TEXT NOT NULL,
   unidade    public.unidade_medida NOT NULL DEFAULT 'un',
@@ -109,9 +606,9 @@ CREATE TABLE public.produtos (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_produtos_familia ON public.produtos (familia_id);
+CREATE INDEX IF NOT EXISTS idx_produtos_familia ON public.produtos (familia_id);
 
-CREATE TABLE public.fornecedores (
+CREATE TABLE IF NOT EXISTS public.fornecedores (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome       TEXT NOT NULL,
   contato    TEXT,
@@ -122,7 +619,7 @@ CREATE TABLE public.fornecedores (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE public.tipos_caixa (
+CREATE TABLE IF NOT EXISTS public.tipos_caixa (
   id              public.tipo_caixa_enum PRIMARY KEY,
   nome            TEXT NOT NULL,
   custo_unitario  NUMERIC(10,2) NOT NULL,
@@ -130,7 +627,7 @@ CREATE TABLE public.tipos_caixa (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE public.clientes (
+CREATE TABLE IF NOT EXISTS public.clientes (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome       TEXT NOT NULL,
   contato    TEXT,
@@ -142,7 +639,7 @@ CREATE TABLE public.clientes (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE public.motoristas (
+CREATE TABLE IF NOT EXISTS public.motoristas (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome       TEXT NOT NULL,
   telefone   TEXT,
@@ -151,7 +648,7 @@ CREATE TABLE public.motoristas (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE public.caminhoes (
+CREATE TABLE IF NOT EXISTS public.caminhoes (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   placa            TEXT NOT NULL,
   modelo           TEXT,
@@ -162,7 +659,7 @@ CREATE TABLE public.caminhoes (
   CONSTRAINT uq_caminhao_placa UNIQUE (placa)
 );
 
-CREATE TABLE public.rotas (
+CREATE TABLE IF NOT EXISTS public.rotas (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome       TEXT NOT NULL,
   descricao  TEXT,
@@ -175,7 +672,7 @@ CREATE TABLE public.rotas (
 -- 4. RECEBIMENTO
 -- ============================================================
 
-CREATE TABLE public.pedidos_recebimento (
+CREATE TABLE IF NOT EXISTS public.pedidos_recebimento (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   codigo          TEXT NOT NULL,
   fornecedor_id   UUID NOT NULL REFERENCES public.fornecedores(id),
@@ -191,11 +688,11 @@ CREATE TABLE public.pedidos_recebimento (
   CONSTRAINT uq_pedido_codigo UNIQUE (codigo)
 );
 
-CREATE INDEX idx_pedidos_fornecedor ON public.pedidos_recebimento (fornecedor_id);
-CREATE INDEX idx_pedidos_data ON public.pedidos_recebimento (data_pedido);
-CREATE INDEX idx_pedidos_status ON public.pedidos_recebimento (status);
+CREATE INDEX IF NOT EXISTS idx_pedidos_fornecedor ON public.pedidos_recebimento (fornecedor_id);
+CREATE INDEX IF NOT EXISTS idx_pedidos_data ON public.pedidos_recebimento (data_pedido);
+CREATE INDEX IF NOT EXISTS idx_pedidos_status ON public.pedidos_recebimento (status);
 
-CREATE TABLE public.itens_pedido (
+CREATE TABLE IF NOT EXISTS public.itens_pedido (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   pedido_id         UUID NOT NULL REFERENCES public.pedidos_recebimento(id) ON DELETE CASCADE,
   produto_id        UUID NOT NULL REFERENCES public.produtos(id),
@@ -203,9 +700,9 @@ CREATE TABLE public.itens_pedido (
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_itens_pedido_pedido ON public.itens_pedido (pedido_id);
+CREATE INDEX IF NOT EXISTS idx_itens_pedido_pedido ON public.itens_pedido (pedido_id);
 
-CREATE TABLE public.itens_pedido_rateio (
+CREATE TABLE IF NOT EXISTS public.itens_pedido_rateio (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   item_pedido_id  UUID NOT NULL REFERENCES public.itens_pedido(id) ON DELETE CASCADE,
   destinatario_id UUID NOT NULL REFERENCES public.destinatarios(id),
@@ -214,9 +711,9 @@ CREATE TABLE public.itens_pedido_rateio (
   CONSTRAINT uq_rateio_item_dest UNIQUE (item_pedido_id, destinatario_id)
 );
 
-CREATE INDEX idx_rateio_item ON public.itens_pedido_rateio (item_pedido_id);
+CREATE INDEX IF NOT EXISTS idx_rateio_item ON public.itens_pedido_rateio (item_pedido_id);
 
-CREATE TABLE public.conferencias (
+CREATE TABLE IF NOT EXISTS public.conferencias (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   pedido_id      UUID NOT NULL REFERENCES public.pedidos_recebimento(id),
   conferente_id  UUID NOT NULL REFERENCES public.profiles(id),
@@ -227,9 +724,9 @@ CREATE TABLE public.conferencias (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_conferencias_pedido ON public.conferencias (pedido_id);
+CREATE INDEX IF NOT EXISTS idx_conferencias_pedido ON public.conferencias (pedido_id);
 
-CREATE TABLE public.itens_conferencia (
+CREATE TABLE IF NOT EXISTS public.itens_conferencia (
   id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conferencia_id         UUID NOT NULL REFERENCES public.conferencias(id) ON DELETE CASCADE,
   item_pedido_id         UUID NOT NULL REFERENCES public.itens_pedido(id),
@@ -247,14 +744,14 @@ CREATE TABLE public.itens_conferencia (
   CONSTRAINT uq_conf_item UNIQUE (conferencia_id, item_pedido_id)
 );
 
-CREATE INDEX idx_itens_conf_conferencia ON public.itens_conferencia (conferencia_id);
+CREATE INDEX IF NOT EXISTS idx_itens_conf_conferencia ON public.itens_conferencia (conferencia_id);
 
 
 -- ============================================================
 -- 5. EXPEDIÇÃO
 -- ============================================================
 
-CREATE TABLE public.cargas (
+CREATE TABLE IF NOT EXISTS public.cargas (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   codigo        TEXT NOT NULL,
   cliente_id    UUID NOT NULL REFERENCES public.clientes(id),
@@ -274,11 +771,11 @@ CREATE TABLE public.cargas (
   CONSTRAINT uq_carga_codigo UNIQUE (codigo)
 );
 
-CREATE INDEX idx_cargas_cliente ON public.cargas (cliente_id);
-CREATE INDEX idx_cargas_data ON public.cargas (data_carga);
-CREATE INDEX idx_cargas_status ON public.cargas (status);
+CREATE INDEX IF NOT EXISTS idx_cargas_cliente ON public.cargas (cliente_id);
+CREATE INDEX IF NOT EXISTS idx_cargas_data ON public.cargas (data_carga);
+CREATE INDEX IF NOT EXISTS idx_cargas_status ON public.cargas (status);
 
-CREATE TABLE public.romaneio_itens (
+CREATE TABLE IF NOT EXISTS public.romaneio_itens (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   carga_id            UUID NOT NULL REFERENCES public.cargas(id) ON DELETE CASCADE,
   produto_id          UUID NOT NULL REFERENCES public.produtos(id),
@@ -292,9 +789,9 @@ CREATE TABLE public.romaneio_itens (
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_romaneio_carga ON public.romaneio_itens (carga_id);
+CREATE INDEX IF NOT EXISTS idx_romaneio_carga ON public.romaneio_itens (carga_id);
 
-CREATE TABLE public.carga_caixas_resumo (
+CREATE TABLE IF NOT EXISTS public.carga_caixas_resumo (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   carga_id    UUID NOT NULL REFERENCES public.cargas(id) ON DELETE CASCADE,
   sugerido_g  INT NOT NULL DEFAULT 0,
@@ -313,7 +810,7 @@ CREATE TABLE public.carga_caixas_resumo (
 -- 6. GESTÃO DE CAIXAS
 -- ============================================================
 
-CREATE TABLE public.retornos_caixa (
+CREATE TABLE IF NOT EXISTS public.retornos_caixa (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   cliente_id      UUID NOT NULL REFERENCES public.clientes(id),
   motorista_id    UUID REFERENCES public.motoristas(id),
@@ -327,10 +824,10 @@ CREATE TABLE public.retornos_caixa (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_retornos_cliente ON public.retornos_caixa (cliente_id);
-CREATE INDEX idx_retornos_data ON public.retornos_caixa (data_retorno);
+CREATE INDEX IF NOT EXISTS idx_retornos_cliente ON public.retornos_caixa (cliente_id);
+CREATE INDEX IF NOT EXISTS idx_retornos_data ON public.retornos_caixa (data_retorno);
 
-CREATE TABLE public.movimentacoes_caixa (
+CREATE TABLE IF NOT EXISTS public.movimentacoes_caixa (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   cliente_id      UUID NOT NULL REFERENCES public.clientes(id),
   tipo            public.tipo_movimentacao NOT NULL,
@@ -344,13 +841,13 @@ CREATE TABLE public.movimentacoes_caixa (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_mov_cliente ON public.movimentacoes_caixa (cliente_id);
-CREATE INDEX idx_mov_tipo ON public.movimentacoes_caixa (tipo);
-CREATE INDEX idx_mov_data ON public.movimentacoes_caixa (data_movimento);
-CREATE INDEX idx_mov_carga ON public.movimentacoes_caixa (carga_id) WHERE carga_id IS NOT NULL;
-CREATE INDEX idx_mov_retorno ON public.movimentacoes_caixa (retorno_id) WHERE retorno_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_mov_cliente ON public.movimentacoes_caixa (cliente_id);
+CREATE INDEX IF NOT EXISTS idx_mov_tipo ON public.movimentacoes_caixa (tipo);
+CREATE INDEX IF NOT EXISTS idx_mov_data ON public.movimentacoes_caixa (data_movimento);
+CREATE INDEX IF NOT EXISTS idx_mov_carga ON public.movimentacoes_caixa (carga_id) WHERE carga_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_mov_retorno ON public.movimentacoes_caixa (retorno_id) WHERE retorno_id IS NOT NULL;
 
-CREATE TABLE public.cobrancas_caixa (
+CREATE TABLE IF NOT EXISTS public.cobrancas_caixa (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   cliente_id      UUID NOT NULL REFERENCES public.clientes(id),
   tipo_caixa      public.tipo_caixa_enum NOT NULL,
@@ -364,15 +861,15 @@ CREATE TABLE public.cobrancas_caixa (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_cobrancas_cliente ON public.cobrancas_caixa (cliente_id);
-CREATE INDEX idx_cobrancas_status ON public.cobrancas_caixa (status);
+CREATE INDEX IF NOT EXISTS idx_cobrancas_cliente ON public.cobrancas_caixa (cliente_id);
+CREATE INDEX IF NOT EXISTS idx_cobrancas_status ON public.cobrancas_caixa (status);
 
 
 -- ============================================================
 -- 7. INDICADORES / CICLO OPERACIONAL
 -- ============================================================
 
-CREATE TABLE public.registros_ciclo (
+CREATE TABLE IF NOT EXISTS public.registros_ciclo (
   id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   pedido_id               UUID REFERENCES public.pedidos_recebimento(id),
   carga_id                UUID REFERENCES public.cargas(id),
@@ -385,16 +882,16 @@ CREATE TABLE public.registros_ciclo (
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_ciclo_data ON public.registros_ciclo (data_registro);
-CREATE INDEX idx_ciclo_pedido ON public.registros_ciclo (pedido_id) WHERE pedido_id IS NOT NULL;
-CREATE INDEX idx_ciclo_carga ON public.registros_ciclo (carga_id) WHERE carga_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_ciclo_data ON public.registros_ciclo (data_registro);
+CREATE INDEX IF NOT EXISTS idx_ciclo_pedido ON public.registros_ciclo (pedido_id) WHERE pedido_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_ciclo_carga ON public.registros_ciclo (carga_id) WHERE carga_id IS NOT NULL;
 
 
 -- ============================================================
 -- 8. CONFIGURAÇÕES E AUDITORIA
 -- ============================================================
 
-CREATE TABLE public.configuracoes (
+CREATE TABLE IF NOT EXISTS public.configuracoes (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   chave      TEXT NOT NULL,
   valor      JSONB NOT NULL,
@@ -405,7 +902,7 @@ CREATE TABLE public.configuracoes (
   CONSTRAINT uq_config_chave UNIQUE (chave)
 );
 
-CREATE TABLE public.audit_log (
+CREATE TABLE IF NOT EXISTS public.audit_log (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id          UUID REFERENCES public.profiles(id),
   tabela           TEXT NOT NULL,
@@ -416,9 +913,9 @@ CREATE TABLE public.audit_log (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_audit_user ON public.audit_log (user_id);
-CREATE INDEX idx_audit_tabela ON public.audit_log (tabela);
-CREATE INDEX idx_audit_created ON public.audit_log (created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON public.audit_log (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_tabela ON public.audit_log (tabela);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON public.audit_log (created_at);
 
 
 -- ============================================================
@@ -584,15 +1081,32 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = ''
+SET search_path = public
 AS $$
+DECLARE
+  resolved_role public.user_role := 'user';
+  meta_role text := NEW.raw_app_meta_data->>'role';
 BEGIN
+  IF lower(NEW.email) = 'admin@noponto.io' OR meta_role IN ('admin', 'super_admin') THEN
+    resolved_role := 'admin';
+  ELSIF meta_role IS NOT NULL THEN
+    BEGIN
+      resolved_role := meta_role::public.user_role;
+      IF resolved_role::text NOT IN ('admin', 'user') THEN
+        resolved_role := 'user';
+      END IF;
+    EXCEPTION
+      WHEN invalid_text_representation THEN
+        resolved_role := 'user';
+    END;
+  END IF;
+
   INSERT INTO public.profiles (id, nome, email, role)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_app_meta_data->>'nome', NEW.raw_user_meta_data->>'full_name', 'Novo Usuário'),
+    COALESCE(NEW.raw_app_meta_data->>'nome', NEW.raw_user_meta_data->>'full_name', 'Novo Usuario'),
     NEW.email,
-    COALESCE((NEW.raw_app_meta_data->>'role')::public.user_role, 'user')
+    resolved_role
   );
   RETURN NEW;
 END;
@@ -773,31 +1287,37 @@ ALTER TABLE public.configuracoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: usuarios veem seu proprio perfil; admins veem todos
+DROP POLICY IF EXISTS profiles_select ON public.profiles;
 CREATE POLICY profiles_select ON public.profiles FOR SELECT USING (
   auth.uid() = id
   OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
 );
 
+DROP POLICY IF EXISTS profiles_update ON public.profiles;
 CREATE POLICY profiles_update ON public.profiles FOR UPDATE USING (
   auth.uid() = id
   OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
 );
 
 -- Pages: todos os autenticados podem ver paginas ativas
+DROP POLICY IF EXISTS pages_select ON public.pages;
 CREATE POLICY pages_select ON public.pages FOR SELECT
   TO authenticated
   USING (ativo = TRUE);
 
+DROP POLICY IF EXISTS pages_admin_all ON public.pages;
 CREATE POLICY pages_admin_all ON public.pages FOR ALL USING (
   (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
 );
 
 -- Permissoes: usuarios veem suas proprias; admins gerenciam todas
+DROP POLICY IF EXISTS perms_select ON public.user_page_permissions;
 CREATE POLICY perms_select ON public.user_page_permissions FOR SELECT USING (
   user_id = auth.uid()
   OR (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
 );
 
+DROP POLICY IF EXISTS perms_admin_all ON public.user_page_permissions;
 CREATE POLICY perms_admin_all ON public.user_page_permissions FOR ALL USING (
   (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
 );
@@ -819,18 +1339,22 @@ BEGIN
     'registros_ciclo', 'configuracoes'
   ])
   LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', tbl || '_select_auth', tbl);
     EXECUTE format(
       'CREATE POLICY %I ON public.%I FOR SELECT TO authenticated USING (TRUE)',
       tbl || '_select_auth', tbl
     );
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', tbl || '_insert_auth', tbl);
     EXECUTE format(
       'CREATE POLICY %I ON public.%I FOR INSERT TO authenticated WITH CHECK (TRUE)',
       tbl || '_insert_auth', tbl
     );
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', tbl || '_update_auth', tbl);
     EXECUTE format(
       'CREATE POLICY %I ON public.%I FOR UPDATE TO authenticated USING (TRUE)',
       tbl || '_update_auth', tbl
     );
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', tbl || '_delete_admin', tbl);
     EXECUTE format(
       'CREATE POLICY %I ON public.%I FOR DELETE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = ''admin'')',
       tbl || '_delete_admin', tbl
@@ -839,116 +1363,62 @@ BEGIN
 END $$;
 
 -- Audit log: admins leem; sistema insere
+DROP POLICY IF EXISTS audit_select_admin ON public.audit_log;
 CREATE POLICY audit_select_admin ON public.audit_log FOR SELECT USING (
   (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
 );
 
+DROP POLICY IF EXISTS audit_insert ON public.audit_log;
 CREATE POLICY audit_insert ON public.audit_log FOR INSERT
   TO authenticated
   WITH CHECK (TRUE);
 
 
 -- ============================================================
--- 13. SEED: PÁGINAS DO SISTEMA
--- ============================================================
 
+-- Seeds (idempotentes)
 INSERT INTO public.pages (slug, nome, grupo, icone, ordem) VALUES
-  ('dashboard',           'Dashboard',              'Navegação',   'LayoutDashboard', 1),
-  ('recebimento',         'Conferência',            'Recebimento', 'ClipboardCheck',  2),
-  ('recebimento/conferir','Conferir Chegada',       'Recebimento', 'PackageCheck',    3),
-  ('recebimento/faltas',  'Relatório de Faltas',    'Recebimento', 'AlertTriangle',   4),
-  ('expedicao',           'Painel de Carga',        'Expedição',   'Truck',           5),
-  ('expedicao/tv',        'Modo TV',                'Expedição',   'Monitor',         6),
-  ('caixas/saldo',        'Saldo por Cliente',      'Caixas',      'Package',         7),
-  ('caixas/economia',     'Custo & Perda',          'Caixas',      'TrendingDown',    8),
-  ('caixas/retorno',      'Registro de Retorno',    'Caixas',      'RotateCcw',       9),
-  ('indicadores',         'Tempos & Ciclo',         'Indicadores', 'Clock',           10),
-  ('gestao',              'Configurações',          'Gestão',      'Settings',        11);
+  ('dashboard', 'Dashboard', 'Navegacao', 'LayoutDashboard', 1),
+  ('recebimento', 'Conferencia', 'Recebimento', 'ClipboardCheck', 2),
+  ('recebimento/conferir', 'Conferir Chegada', 'Recebimento', 'PackageCheck', 3),
+  ('recebimento/faltas', 'Relatorio de Faltas', 'Recebimento', 'AlertTriangle', 4),
+  ('expedicao', 'Painel de Carga', 'Expedicao', 'Truck', 5),
+  ('expedicao/tv', 'Modo TV', 'Expedicao', 'Monitor', 6),
+  ('caixas/saldo', 'Saldo por Cliente', 'Caixas', 'Package', 7),
+  ('caixas/economia', 'Custo & Perda', 'Caixas', 'TrendingDown', 8),
+  ('caixas/retorno', 'Registro de Retorno', 'Caixas', 'RotateCcw', 9),
+  ('indicadores', 'Tempos & Ciclo', 'Indicadores', 'Clock', 10),
+  ('gestao', 'Configuracoes', 'Gestao', 'Settings', 11)
+ON CONFLICT (slug) DO NOTHING;
 
--- Seed: tipos de caixa com custos iniciais
 INSERT INTO public.tipos_caixa (id, nome, custo_unitario) VALUES
-  ('G', 'Grande',   38.00),
-  ('I', 'Isopor',   22.00),
-  ('P', 'Plástica', 18.00);
+  ('G', 'Grande', 38.00), ('I', 'Isopor', 22.00), ('P', 'Plastica', 18.00)
+ON CONFLICT (id) DO NOTHING;
 
--- Seed: familias de produto
 INSERT INTO public.familias_produto (nome, ordem) VALUES
-  ('Folhas',       1),
-  ('Frutos',       2),
-  ('Raízes',       3),
-  ('Refrigerados', 4);
+  ('Folhas', 1), ('Frutos', 2), ('Raizes', 3), ('Refrigerados', 4)
+ON CONFLICT (nome) DO NOTHING;
 
--- Seed: destinatarios iniciais
 INSERT INTO public.destinatarios (nome) VALUES
-  ('Campo Alegre'),
-  ('Anderson'),
-  ('Parceiro Sul');
+  ('Campo Alegre'), ('Anderson'), ('Parceiro Sul')
+ON CONFLICT (nome) DO NOTHING;
 
--- Seed: configuracoes iniciais
 INSERT INTO public.configuracoes (chave, valor, descricao) VALUES
   ('impacto_falta_por_unidade', '4.50', 'Valor em R$ usado para calcular impacto financeiro de faltas'),
   ('benchmark_taxa_perda', '2.0', 'Taxa de perda benchmark (%) para calculo de economia potencial'),
   ('aging_alerta_dias', '6', 'Dias de aging para disparar alerta amarelo'),
   ('aging_critico_dias', '10', 'Dias de aging para disparar alerta vermelho'),
-  ('auto_rotate_tv_segundos', '20', 'Intervalo de rotação automática no modo TV');
+  ('auto_rotate_tv_segundos', '20', 'Intervalo de rotacao automatica no modo TV')
+ON CONFLICT (chave) DO NOTHING;
 
+-- Profile do admin (auth.users ja deve existir; nao recria usuario)
+INSERT INTO public.profiles (id, nome, email, role)
+SELECT u.id, 'Administrador', u.email, 'admin'::public.user_role
+FROM auth.users u WHERE lower(u.email) = 'admin@noponto.io'
+ON CONFLICT (id) DO UPDATE SET role = 'admin'::public.user_role, updated_at = now();
 
--- ============================================================
--- 14. SEED: ADMIN USER
--- ============================================================
-
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-INSERT INTO auth.users (
-  id,
-  instance_id,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  aud,
-  role,
-  created_at,
-  updated_at,
-  confirmation_token,
-  recovery_token,
-  email_change_token_new,
-  email_change
-) VALUES (
-  gen_random_uuid(),
-  '00000000-0000-0000-0000-000000000000',
-  'admin@noponto.io',
-  crypt('21143294lL', gen_salt('bf')),
-  now(),
-  jsonb_build_object('provider', 'email', 'providers', ARRAY['email'], 'role', 'admin', 'nome', 'Administrador'),
-  jsonb_build_object('full_name', 'Administrador'),
-  'authenticated',
-  'authenticated',
-  now(),
-  now(),
-  '',
-  '',
-  '',
-  ''
-);
-
-INSERT INTO auth.identities (
-  id,
-  user_id,
-  identity_data,
-  provider,
-  provider_id,
-  last_sign_in_at,
-  created_at,
-  updated_at
-) VALUES (
-  (SELECT id FROM auth.users WHERE email = 'admin@noponto.io'),
-  (SELECT id FROM auth.users WHERE email = 'admin@noponto.io'),
-  jsonb_build_object('sub', (SELECT id::text FROM auth.users WHERE email = 'admin@noponto.io'), 'email', 'admin@noponto.io'),
-  'email',
-  (SELECT id::text FROM auth.users WHERE email = 'admin@noponto.io'),
-  now(),
-  now(),
-  now()
-);
+-- Verificacao
+SELECT EXISTS (
+  SELECT 1 FROM information_schema.tables
+  WHERE table_schema = 'public' AND table_name = 'profiles'
+) AS profiles_criada;

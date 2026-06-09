@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +35,6 @@ import {
   createUserViaEdge,
 } from "@/hooks/use-users";
 import { isSuperAdmin, SUPER_ADMIN_EMAIL } from "@/lib/super-admin";
-import { cn } from "@/lib/utils";
 
 type UserRow = { id: string; nome: string; email: string; role: string; ativo: boolean };
 
@@ -139,7 +137,7 @@ function PermissionsSheet({
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto z-[100]">
         <SheetHeader>
           <SheetTitle>Permissões — {user?.nome ?? ""}</SheetTitle>
           <SheetDescription>
@@ -197,14 +195,17 @@ function PermissionsSheet({
   );
 }
 
-export function UsersList({ permUserId }: { permUserId?: string }) {
-  const navigate = useNavigate({ from: "/gestao/usuarios" });
+export function UsersList() {
   const { data: users = [], isLoading } = useProfiles();
   const updateProfile = useUpdateProfile();
+  const [openUserId, setOpenUserId] = useState<string | null>(null);
 
-  const permsUser = users.find((u: UserRow) => u.id === permUserId) ?? null;
+  const openUser = users.find((u: UserRow) => u.id === openUserId) ?? null;
 
-  const closePermissions = () => navigate({ search: {} });
+  const openPermissions = (u: UserRow) => {
+    setOpenUserId(u.id);
+    toast.info(`Abrindo permissões de ${u.nome}`);
+  };
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Carregando usuários...</p>;
@@ -249,15 +250,14 @@ export function UsersList({ permUserId }: { permUserId?: string }) {
                   >
                     {u.ativo ? "Desativar" : "Ativar"}
                   </Button>
-                  <Link
-                    to="/gestao/usuarios"
-                    search={{ permUserId: u.id }}
-                    className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                    aria-expanded={permUserId === u.id}
-                    onClick={() => toast.info(`Abrindo permissões de ${u.nome}`)}
+                  <button
+                    type="button"
+                    aria-expanded={openUserId === u.id}
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                    onClick={() => openPermissions(u)}
                   >
                     Permissões
-                  </Link>
+                  </button>
                 </div>
               </div>
             </div>
@@ -266,9 +266,9 @@ export function UsersList({ permUserId }: { permUserId?: string }) {
       </Card>
 
       <PermissionsSheet
-        user={permsUser}
-        open={!!permUserId}
-        onClose={closePermissions}
+        user={openUser}
+        open={!!openUserId}
+        onClose={() => setOpenUserId(null)}
       />
     </>
   );

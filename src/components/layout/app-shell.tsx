@@ -118,7 +118,7 @@ export function AppShell() {
             )}
           </nav>
           <div className="p-3 border-t border-sidebar-border">
-            <div className="text-[10px] text-muted-foreground px-2">v1.0 · Supabase</div>
+            <div className="text-[10px] text-muted-foreground px-2">v1.1.0-qa · Supabase</div>
           </div>
         </aside>
       )}
