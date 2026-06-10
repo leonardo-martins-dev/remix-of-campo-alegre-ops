@@ -1,15 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Minus, WifiOff, Check, ChevronDown, Smartphone } from "lucide-react";
+import { Plus, Minus, WifiOff, Check, ChevronDown, Smartphone, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Donut } from "@/components/charts";
 import { useClientes } from "@/hooks/use-cadastros";
-import { useSaldoCaixas, useRetornosDia, useRegistrarRetorno } from "@/hooks/use-caixas";
+import { useSaldoCaixas, useRetornosDia, useRegistrarRetorno, useRetornoRanking } from "@/hooks/use-caixas";
+import { useMotoristas } from "@/hooks/use-cadastros";
+import { BarRow } from "@/components/charts";
+import { StatStrip } from "@/components/stat-strip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { enqueueRetorno, getRetornoQueue, removeFromQueue, validateRetornoQuantities } from "@/lib/offline-queue";
 import { supabase } from "@/lib/supabase";
-import { formatTime } from "@/lib/utils-date";
+import { formatTime, todayBRT } from "@/lib/utils-date";
 
 export const Route = createFileRoute("/caixas/retorno")({
   component: Page,
@@ -17,13 +27,36 @@ export const Route = createFileRoute("/caixas/retorno")({
 });
 
 function Page() {
+  const [view, setView] = useState<"painel" | "campo">("painel");
   return (
-    <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto">
-      <div>
-        <PageHeader title="Registro de Retorno" subtitle="App do motorista — uso direto no caminhão" />
-        <PhoneFrame />
-      </div>
-      <DesktopPanel />
+    <div className="p-6 max-w-6xl mx-auto">
+      <PageHeader
+        title="Registro de Retorno"
+        subtitle="Ranking e indicadores dos motoristas · modo campo para registro rápido"
+        actions={
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => setView("painel")}
+              className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "painel" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+            >
+              Painel / Ranking
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("campo")}
+              className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "campo" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+            >
+              Modo campo
+            </button>
+          </div>
+        }
+      />
+      {view === "painel" ? <RankingPanel /> : (
+        <div className="max-w-sm mx-auto">
+          <PhoneFrame />
+        </div>
+      )}
     </div>
   );
 }
@@ -31,8 +64,10 @@ function Page() {
 function PhoneFrame() {
   const { data: clientes = [] } = useClientes();
   const { data: saldo = [] } = useSaldoCaixas();
-  const { user } = useAuth();
+  const { data: motoristas = [] } = useMotoristas();
+  const { user, profile, isAdmin } = useAuth();
   const registrar = useRegistrarRetorno();
+  const [motoristaId, setMotoristaId] = useState<string>("");
   const [clienteIdx, setClienteIdx] = useState(0);
   const [open, setOpen] = useState(false);
   const [ret, setRet] = useState({ G: 0, I: 0, P: 0 });
@@ -62,7 +97,7 @@ function PhoneFrame() {
           caixas_i: item.caixas_i,
           caixas_p: item.caixas_p,
           offline: true,
-          data_retorno: new Date().toISOString().slice(0, 10),
+          data_retorno: todayBRT(),
           sincronizado_em: new Date().toISOString(),
         });
         removeFromQueue(item.id);
@@ -107,9 +142,15 @@ function PhoneFrame() {
       return;
     }
 
+    const resolvedMotorista =
+      motoristaId ||
+      (profile as { motorista_id?: string } | null)?.motorista_id ||
+      undefined;
+
     const payload = {
       cliente_id: cliente.id,
       registrado_por: user.id,
+      motorista_id: resolvedMotorista,
       caixas_g: ret.G,
       caixas_i: ret.I,
       caixas_p: ret.P,
@@ -251,6 +292,22 @@ function PhoneFrame() {
               <Step tipo="P" label="Caixa Plástica" color="var(--brand-green)" />
             </div>
 
+            {(isAdmin || !(profile as { motorista_id?: string } | null)?.motorista_id) && (
+              <div className="mt-3">
+                <label className="text-[10px] uppercase opacity-60">Motorista</label>
+                <Select value={motoristaId} onValueChange={setMotoristaId}>
+                  <SelectTrigger className="mt-1 bg-white/10 border-white/20 text-white h-9">
+                    <SelectValue placeholder="Selecione o motorista" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {motoristas.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {offline && (
               <div className="mt-4 rounded-xl p-3 flex items-center gap-2 text-[11px]" style={{ background: "rgba(240,169,43,0.12)", color: "#F0C97A" }}>
                 <WifiOff size={14} /> Funciona offline · sincroniza ao recuperar sinal
@@ -273,6 +330,47 @@ function PhoneFrame() {
   );
 }
 
+function RankingPanel() {
+  const { data: ranking = [], isLoading } = useRetornoRanking("week");
+  const { data: retornos = [] } = useRetornosDia();
+  const top = ranking[0];
+  const totalCaixas = ranking.reduce((a, r) => a + r.total_caixas, 0);
+
+  return (
+    <div className="space-y-6">
+      <StatStrip
+        items={[
+          { label: "Motoristas ativos", value: isLoading ? "…" : String(ranking.length) },
+          { label: "Caixas retornadas (7d)", value: isLoading ? "…" : String(totalCaixas) },
+          { label: "Líder", value: top?.motorista ?? "—", tone: "ok" },
+          { label: "Retornos hoje", value: String(retornos.length) },
+        ]}
+      />
+
+      <div className="card-base p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Trophy size={18} className="text-warning" />
+          <h3 className="text-sm font-bold text-navy">Ranking de motoristas (7 dias)</h3>
+        </div>
+        {ranking.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nenhum retorno com motorista identificado no período.</p>
+        )}
+        {ranking.map((r, i) => (
+          <BarRow
+            key={r.motorista_id ?? r.motorista}
+            label={`${i + 1}. ${r.motorista}`}
+            value={r.total_caixas}
+            max={top?.total_caixas ?? 1}
+            suffix={`${r.total_caixas} cx · ${r.total_retornos} retornos`}
+          />
+        ))}
+      </div>
+
+      <DesktopPanel />
+    </div>
+  );
+}
+
 function DesktopPanel() {
   const { data: retornos = [] } = useRetornosDia();
   const totG = retornos.reduce((a, r) => a + (r.caixas_g ?? 0), 0);
@@ -281,7 +379,7 @@ function DesktopPanel() {
 
   return (
     <div>
-      <PageHeader title="Retornos de hoje" subtitle="Painel do desktop · sincroniza com os apps dos motoristas" />
+      <h3 className="text-sm font-bold text-navy mb-3">Retornos de hoje</h3>
       <div className="card-base p-5 mb-4">
         <div className="flex items-center gap-6">
           <Donut
@@ -308,6 +406,7 @@ function DesktopPanel() {
           <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
               <th className="text-left px-4 py-2">Hora</th>
+              <th className="text-left px-4 py-2">Motorista</th>
               <th className="text-left px-4 py-2">Loja</th>
               <th className="text-right px-4 py-2">G</th>
               <th className="text-right px-4 py-2">I</th>
@@ -323,9 +422,12 @@ function DesktopPanel() {
               caixas_i: number;
               caixas_p: number;
               clientes: { nome: string } | null;
+              motoristas: { nome: string } | null;
+              profiles: { nome: string } | null;
             }) => (
               <tr key={r.id} className="border-t border-border">
                 <td className="px-4 py-2.5 font-mono text-muted-foreground">{formatTime(r.created_at)}</td>
+                <td className="px-4 py-2.5 text-ink">{r.motoristas?.nome ?? r.profiles?.nome ?? "—"}</td>
                 <td className="px-4 py-2.5 font-semibold text-navy">{r.clientes?.nome ?? "—"}</td>
                 <td className="px-4 py-2.5 text-right">{r.caixas_g}</td>
                 <td className="px-4 py-2.5 text-right">{r.caixas_i}</td>

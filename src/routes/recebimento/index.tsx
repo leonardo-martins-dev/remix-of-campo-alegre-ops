@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { FileSpreadsheet, Plus, ChevronRight, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { StatStrip } from "@/components/stat-strip";
@@ -28,10 +28,12 @@ import {
   useCreatePedidoManual,
   useImportPedidos,
   useFillRate,
+  useUpdatePedidoAdmin,
 } from "@/hooks/use-pedidos";
 import { sumRateio, rateioRestante, validateRateio } from "@/lib/rateio";
 import { useFornecedores, useProdutos, useDestinatarios } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
+import { resolveIsAdmin } from "@/lib/roles";
 import { parsePedidosExcel, buildPedidosFromExcel } from "@/lib/excel";
 import { formatTime } from "@/lib/utils-date";
 
@@ -70,9 +72,44 @@ type ManualItem = {
 
 const statusChip = (s: string) => {
   if (s === "conferido") return <span className="chip chip-ok">Conferido</span>;
+  if (s === "aguardando_liberacao") return <span className="chip chip-warn">Aguardando liberação</span>;
   if (s === "divergencia") return <span className="chip chip-danger">Com divergência</span>;
   return <span className="chip chip-warn">Pendente</span>;
 };
+
+function pedidoActionLink(p: PedidoDia) {
+  if (p.status === "pendente") {
+    return (
+      <Link
+        to="/recebimento/conferir"
+        search={{ pedidoId: p.id }}
+        className="inline-flex items-center gap-1 text-primary-dark text-xs font-semibold hover:underline"
+      >
+        Conferir <ChevronRight size={12} />
+      </Link>
+    );
+  }
+  if (p.status === "aguardando_liberacao" || p.status === "divergencia") {
+    return (
+      <Link
+        to="/recebimento/conferir"
+        search={{ pedidoId: p.id }}
+        className="inline-flex items-center gap-1 text-warning text-xs font-semibold hover:underline"
+      >
+        Ver <ChevronRight size={12} />
+      </Link>
+    );
+  }
+  return (
+    <Link
+      to="/recebimento/conferir"
+      search={{ pedidoId: p.id }}
+      className="inline-flex items-center gap-1 text-muted-foreground text-xs font-semibold hover:underline"
+    >
+      Ver <ChevronRight size={12} />
+    </Link>
+  );
+}
 
 function getRateioChips(p: PedidoDia): [string, number][] {
   const map = new Map<string, number>();
@@ -93,11 +130,13 @@ function origemLabel(o: string) {
 }
 
 function Page() {
-  const [tab, setTab] = useState<"todos" | "pendente" | "conferido" | "divergencia">("todos");
+  const [tab, setTab] = useState<"todos" | "pendente" | "conferido" | "divergencia" | "aguardando_liberacao">("todos");
   const [manualOpen, setManualOpen] = useState(false);
+  const [editPedido, setEditPedido] = useState<PedidoDia | null>(null);
+  const [editCodigo, setEditCodigo] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const { user } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   usePedidosRealtime();
   const { data: pedidos = [], isLoading, error } = usePedidosDia();
   const { data: fillRateData = [] } = useFillRate();
@@ -106,6 +145,8 @@ function Page() {
   const { data: destinatarios = [] } = useDestinatarios();
   const createManual = useCreatePedidoManual();
   const importPedidos = useImportPedidos();
+  const updatePedido = useUpdatePedidoAdmin();
+  const canAdmin = isAdmin || resolveIsAdmin(profile, user);
 
   const [fornecedorId, setFornecedorId] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -121,7 +162,9 @@ function Page() {
     const itensPendentes = typedPedidos
       .filter((p) => p.status === "pendente")
       .reduce((a, p) => a + (p.itens_pedido?.length ?? 0), 0);
-    const divergencias = typedPedidos.filter((p) => p.status === "divergencia").length;
+    const divergencias = typedPedidos.filter(
+      (p) => p.status === "divergencia" || p.status === "aguardando_liberacao"
+    ).length;
     const fillAvg =
       fillRateData.length > 0
         ? fillRateData.reduce((a, f) => a + (Number(f.fill_rate) || 0), 0) / fillRateData.length
@@ -229,6 +272,14 @@ function Page() {
               className="hidden"
               onChange={handleExcel}
             />
+            {canAdmin && (
+              <Link
+                to="/recebimento/liberacoes"
+                className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-warning/40 bg-warning/10 text-sm font-semibold text-navy hover:bg-warning/20"
+              >
+                <ShieldAlert size={14} /> Liberações
+              </Link>
+            )}
             <button
               type="button"
               disabled={importPedidos.isPending}
@@ -282,6 +333,7 @@ function Page() {
               ["todos", "Todos"],
               ["pendente", "A conferir"],
               ["conferido", "Conferidos"],
+              ["aguardando_liberacao", "Aguard. liberação"],
               ["divergencia", "Com divergência"],
             ] as const
           ).map(([k, l]) => (
@@ -346,13 +398,21 @@ function Page() {
                 <td className="px-4 py-3 text-ink">{formatTime(p.hora_chegada)}</td>
                 <td className="px-4 py-3">{statusChip(p.status)}</td>
                 <td className="px-4 py-3 text-right">
-                  <Link
-                    to="/recebimento/conferir"
-                    search={{ pedidoId: p.id }}
-                    className="inline-flex items-center gap-1 text-primary-dark text-xs font-semibold hover:underline"
-                  >
-                    Conferir <ChevronRight size={12} />
-                  </Link>
+                  <div className="flex items-center justify-end gap-2">
+                    {pedidoActionLink(p)}
+                    {canAdmin && p.status === "conferido" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditPedido(p);
+                          setEditCodigo(p.codigo);
+                        }}
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-navy"
+                      >
+                        <Pencil size={12} /> Editar
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -576,6 +636,42 @@ function Page() {
             </DialogClose>
             <Button type="button" onClick={submitManual} disabled={createManual.isPending || !manualFormValid}>
               {createManual.isPending ? "Salvando…" : "Lançar pedido"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editPedido} onOpenChange={(o) => !o && setEditPedido(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar pedido (admin)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Label>Código do pedido</Label>
+            <Input value={editCodigo} onChange={(e) => setEditCodigo(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button
+              type="button"
+              disabled={updatePedido.isPending || !editPedido || !editCodigo.trim()}
+              onClick={async () => {
+                if (!editPedido) return;
+                try {
+                  await updatePedido.mutateAsync({
+                    pedidoId: editPedido.id,
+                    codigo: editCodigo.trim(),
+                  });
+                  toast.success("Pedido atualizado");
+                  setEditPedido(null);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Erro ao atualizar");
+                }
+              }}
+            >
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>

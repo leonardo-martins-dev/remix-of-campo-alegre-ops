@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { validateRetornoQuantities } from "@/lib/offline-queue";
-import { todayISO } from "@/lib/utils-date";
+import { dateRangeBRT, todayBRT } from "@/lib/utils-date";
 
 export function useSaldoCaixas() {
   return useQuery({
@@ -25,17 +25,70 @@ export function usePerdaClientes() {
   });
 }
 
-export function useRetornosDia(date = todayISO()) {
+export function useRetornosDia(date = todayBRT()) {
   return useQuery({
     queryKey: ["retornos", date],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("retornos_caixa")
-        .select("*, clientes(nome)")
+        .select("*, clientes(nome), motoristas(nome), profiles:registrado_por(nome, email)")
         .eq("data_retorno", date)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
+    },
+  });
+}
+
+export function useRetornoRanking(period: "today" | "week" | "month" = "week") {
+  const { from, to } = dateRangeBRT(period);
+  return useQuery({
+    queryKey: ["retorno-ranking", period],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("v_retorno_ranking_motorista")
+        .select("*")
+        .gte("data_retorno", from)
+        .lte("data_retorno", to)
+        .order("total_caixas", { ascending: false });
+      if (error) throw error;
+
+      const byMotorista = new Map<
+        string,
+        {
+          motorista_id: string | null;
+          motorista: string;
+          total_retornos: number;
+          total_g: number;
+          total_i: number;
+          total_p: number;
+          total_caixas: number;
+          lojas_atendidas: number;
+        }
+      >();
+
+      for (const row of data ?? []) {
+        const key = row.motorista_id ?? "sem-motorista";
+        const cur = byMotorista.get(key) ?? {
+          motorista_id: row.motorista_id,
+          motorista: row.motorista ?? "Não identificado",
+          total_retornos: 0,
+          total_g: 0,
+          total_i: 0,
+          total_p: 0,
+          total_caixas: 0,
+          lojas_atendidas: 0,
+        };
+        cur.total_retornos += Number(row.total_retornos ?? 0);
+        cur.total_g += Number(row.total_g ?? 0);
+        cur.total_i += Number(row.total_i ?? 0);
+        cur.total_p += Number(row.total_p ?? 0);
+        cur.total_caixas += Number(row.total_caixas ?? 0);
+        cur.lojas_atendidas += Number(row.lojas_atendidas ?? 0);
+        byMotorista.set(key, cur);
+      }
+
+      return [...byMotorista.values()].sort((a, b) => b.total_caixas - a.total_caixas);
     },
   });
 }
@@ -107,14 +160,14 @@ export function useRegistrarRetorno() {
 
       const { error } = await supabase.from("retornos_caixa").insert({
         ...payload,
-        data_retorno: todayISO(),
+        data_retorno: todayBRT(),
         sincronizado_em: new Date().toISOString(),
       });
       if (error) throw error;
 
       await supabase.from("registros_ciclo").insert({
         hora_retorno_caixas: new Date().toISOString(),
-        data_registro: todayISO(),
+        data_registro: todayBRT(),
       });
     },
     onSuccess: () => {
@@ -137,7 +190,7 @@ export function useCobrarCaixa() {
       const { error } = await supabase.from("cobrancas_caixa").insert({
         ...payload,
         status: "pendente",
-        data_cobranca: todayISO(),
+        data_cobranca: todayBRT(),
       });
       if (error) throw error;
     },
@@ -157,7 +210,7 @@ export function useRegistrarPerda() {
       const { error } = await supabase.from("movimentacoes_caixa").insert({
         ...payload,
         tipo: "perda",
-        data_movimento: todayISO(),
+        data_movimento: todayBRT(),
       });
       if (error) throw error;
     },

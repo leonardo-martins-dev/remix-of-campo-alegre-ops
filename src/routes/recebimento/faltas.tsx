@@ -1,12 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { FileSpreadsheet } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { KpiCard } from "@/components/kpi-card";
 import { BarRow } from "@/components/charts";
 import { Percent, TrendingDown, AlertTriangle, DollarSign } from "lucide-react";
-import { useFaltas, useFillRate, useConfigValor } from "@/hooks/use-pedidos";
+import { useFaltas, useConfigValor } from "@/hooks/use-pedidos";
+import { useFornecedores } from "@/hooks/use-cadastros";
 import { exportToExcel } from "@/lib/excel";
+import { todayBRT } from "@/lib/utils-date";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/recebimento/faltas")({
   component: Page,
@@ -24,14 +33,24 @@ type FaltaRow = {
     produtos: { nome: string; unidade: string } | null;
     pedidos_recebimento: {
       codigo: string;
-      fornecedores: { nome: string } | null;
+      fornecedor_id: string;
+      fornecedores: { id: string; nome: string } | null;
     } | null;
   } | null;
 };
 
 function Page() {
-  const { data: faltas = [], isLoading, error } = useFaltas();
-  const { data: fillRate = [] } = useFillRate();
+  const [fornecedorId, setFornecedorId] = useState<string>("all");
+  const [period, setPeriod] = useState<"today" | "week" | "month">("week");
+  const [divergencia, setDivergencia] = useState<"falta" | "sobra" | "qualidade" | "all">("falta");
+  const [modo, setModo] = useState<"itens" | "resumo">("itens");
+
+  const { data: fornecedores = [] } = useFornecedores();
+  const { data: faltas = [], isLoading, error } = useFaltas({
+    fornecedorId: fornecedorId === "all" ? null : fornecedorId,
+    period,
+    divergencia,
+  });
   const { data: valorUnitario = 4.5 } = useConfigValor("impacto_falta_por_unidade", 4.5);
 
   const faltasComImpacto = useMemo(() => {
@@ -45,6 +64,7 @@ function Page() {
         produto: f.itens_pedido?.produtos?.nome ?? "—",
         unid: f.itens_pedido?.produtos?.unidade ?? "un",
         fornecedor: f.itens_pedido?.pedidos_recebimento?.fornecedores?.nome ?? "—",
+        fornecedor_id: f.itens_pedido?.pedidos_recebimento?.fornecedor_id,
         codigo: f.itens_pedido?.pedidos_recebimento?.codigo ?? "—",
         pedido,
         recebido,
@@ -55,20 +75,25 @@ function Page() {
     });
   }, [faltas, valorUnitario]);
 
+  const resumoFiltrado = useMemo(() => {
+    const map = new Map<string, { fornecedor: string; itens: number; qty: number; impacto: number }>();
+    for (const f of faltasComImpacto) {
+      const key = f.fornecedor_id ?? f.fornecedor;
+      const cur = map.get(key) ?? { fornecedor: f.fornecedor, itens: 0, qty: 0, impacto: 0 };
+      cur.itens += 1;
+      cur.qty += f.falta;
+      cur.impacto += f.impacto;
+      map.set(key, cur);
+    }
+    return [...map.values()].sort((a, b) => b.impacto - a.impacto);
+  }, [faltasComImpacto]);
+
   const impactoTotal = faltasComImpacto.reduce((a, i) => a + i.impacto, 0);
-
-  const fillAvg =
-    fillRate.length > 0
-      ? fillRate.reduce((a, f) => a + (Number(f.fill_rate) || 0), 0) / fillRate.length
-      : 0;
-
-  const piorFornecedor = fillRate.length
-    ? [...fillRate].sort((a, b) => (Number(a.fill_rate) || 0) - (Number(b.fill_rate) || 0))[0]
-    : null;
+  const piorFornecedor = resumoFiltrado[0] ?? null;
 
   const exportExcel = () => {
     exportToExcel(
-      `faltas-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      `faltas-${todayBRT()}.xlsx`,
       "Faltas",
       faltasComImpacto.map((i) => ({
         Pedido: i.codigo,
@@ -87,7 +112,7 @@ function Page() {
     <div>
       <PageHeader
         title="Relatório de Faltas por Fornecedor"
-        subtitle="Divergências do dia · base para cobrança e ajuste contratual"
+        subtitle="Divergências no período (fuso Brasília) · base para cobrança e ajuste contratual"
         actions={
           <button
             type="button"
@@ -99,6 +124,57 @@ function Page() {
           </button>
         }
       />
+
+      <div className="flex flex-wrap gap-3 mb-4">
+        <Select value={fornecedorId} onValueChange={setFornecedorId}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Fornecedor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos fornecedores</SelectItem>
+            {fornecedores.map((f) => (
+              <SelectItem key={f.id} value={f.id}>
+                {f.nome}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="today">Hoje</SelectItem>
+            <SelectItem value="week">7 dias</SelectItem>
+            <SelectItem value="month">30 dias</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={divergencia} onValueChange={(v) => setDivergencia(v as typeof divergencia)}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="falta">Faltas</SelectItem>
+            <SelectItem value="sobra">Sobras</SelectItem>
+            <SelectItem value="qualidade">Qualidade</SelectItem>
+            <SelectItem value="all">Todas</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex gap-1">
+          {(["itens", "resumo"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setModo(m)}
+              className={`px-3 h-9 rounded-md text-xs font-semibold ${
+                modo === m ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              {m === "itens" ? "Por item" : "Por fornecedor"}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
@@ -113,129 +189,92 @@ function Page() {
           icon={AlertTriangle}
         />
         <KpiCard
-          label="Fill rate geral"
-          value={isLoading ? "…" : `${fillAvg.toFixed(1)}%`}
-          icon={Percent}
+          label="Impacto total"
+          value={isLoading ? "…" : `R$ ${impactoTotal.toFixed(2)}`}
+          icon={DollarSign}
         />
         <KpiCard
-          label="Pior fornecedor"
-          value={piorFornecedor?.fornecedor ?? "—"}
+          label="Pior fornecedor (período)"
+          value={isLoading ? "…" : piorFornecedor?.fornecedor ?? "—"}
           icon={TrendingDown}
         />
         <KpiCard
-          label="Impacto estimado"
-          value={
-            isLoading
-              ? "…"
-              : `R$ ${impactoTotal.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`
-          }
-          icon={DollarSign}
+          label="Fornecedores c/ falta"
+          value={isLoading ? "…" : String(resumoFiltrado.length)}
+          icon={Percent}
         />
       </div>
 
-      <div className="card-base mb-5 overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="text-sm font-bold text-navy">Recebido × Pedido — Itens com falta</h3>
-        </div>
-        <table className="w-full text-sm">
-          <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
-            <tr>
-              <th className="text-left px-4 py-3">Produto</th>
-              <th className="text-left px-4 py-3">Fornecedor</th>
-              <th className="text-right px-4 py-3">Pedido</th>
-              <th className="text-right px-4 py-3">Recebido</th>
-              <th className="text-right px-4 py-3">Falta</th>
-              <th className="text-left px-4 py-3">Tipo</th>
-              <th className="text-right px-4 py-3">Impacto R$</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
+      {modo === "resumo" ? (
+        <div className="card-base overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                  Carregando…
-                </td>
+                <th className="text-left px-4 py-3">Fornecedor</th>
+                <th className="text-right px-4 py-3">Itens</th>
+                <th className="text-right px-4 py-3">Qtd divergência</th>
+                <th className="text-right px-4 py-3">Impacto R$</th>
               </tr>
-            )}
-            {!isLoading && faltasComImpacto.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                  Nenhuma falta registrada
-                </td>
-              </tr>
-            )}
-            {faltasComImpacto.map((i) => (
-              <tr key={i.id} className="border-t border-border">
-                <td className="px-4 py-3 font-semibold text-navy">{i.produto}</td>
-                <td className="px-4 py-3 text-ink">{i.fornecedor}</td>
-                <td className="px-4 py-3 text-right">
-                  {i.pedido} {i.unid}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {i.recebido} {i.unid}
-                </td>
-                <td className="px-4 py-3 text-right font-bold" style={{ color: "var(--danger)" }}>
-                  {i.falta}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`chip ${i.tipo === "qualidade" ? "chip-warn" : "chip-danger"}`}
-                  >
-                    {i.tipo}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right font-bold text-navy">
-                  R$ {i.impacto.toFixed(2)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card-base p-5">
-        <h3 className="text-sm font-bold text-navy mb-4">Confiabilidade por Fornecedor</h3>
-        <table className="w-full text-sm">
-          <thead className="text-xs text-muted-foreground uppercase tracking-wider">
-            <tr>
-              <th className="text-left py-2">Fornecedor</th>
-              <th className="text-left py-2 w-1/3">Fill rate acumulado</th>
-              <th className="text-right py-2">Itens</th>
-            </tr>
-          </thead>
-          <tbody>
-            {fillRate.length === 0 && (
-              <tr>
-                <td colSpan={3} className="py-4 text-center text-muted-foreground">
-                  Sem dados de fill rate
-                </td>
-              </tr>
-            )}
-            {fillRate.map((f) => {
-              const rate = Number(f.fill_rate) || 0;
-              return (
-                <tr key={f.fornecedor_id} className="border-t border-border">
-                  <td className="py-3 font-semibold text-navy">{f.fornecedor}</td>
-                  <td className="py-3 pr-6">
-                    <BarRow
-                      label=""
-                      value={rate}
-                      max={100}
-                      suffix="%"
-                      color={
-                        rate >= 95 ? "var(--success)" : rate >= 90 ? "var(--warning)" : "var(--danger)"
-                      }
-                    />
-                  </td>
-                  <td className="py-3 text-right text-muted-foreground tabular-nums">
-                    {f.itens_completos}/{f.total_itens}
-                  </td>
+            </thead>
+            <tbody>
+              {resumoFiltrado.map((r) => (
+                <tr key={r.fornecedor} className="border-t border-border">
+                  <td className="px-4 py-3 font-semibold text-navy">{r.fornecedor}</td>
+                  <td className="px-4 py-3 text-right">{r.itens}</td>
+                  <td className="px-4 py-3 text-right">{r.qty.toFixed(1)}</td>
+                  <td className="px-4 py-3 text-right font-bold">R$ {r.impacto.toFixed(2)}</td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="card-base overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
+              <tr>
+                <th className="text-left px-4 py-3">Pedido</th>
+                <th className="text-left px-4 py-3">Fornecedor</th>
+                <th className="text-left px-4 py-3">Produto</th>
+                <th className="text-right px-4 py-3">Pedido</th>
+                <th className="text-right px-4 py-3">Recebido</th>
+                <th className="text-right px-4 py-3">Divergência</th>
+                <th className="text-right px-4 py-3">Impacto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {faltasComImpacto.map((i) => (
+                <tr key={i.id} className="border-t border-border">
+                  <td className="px-4 py-3">{i.codigo}</td>
+                  <td className="px-4 py-3 font-semibold text-navy">{i.fornecedor}</td>
+                  <td className="px-4 py-3">{i.produto}</td>
+                  <td className="px-4 py-3 text-right">{i.pedido}</td>
+                  <td className="px-4 py-3 text-right">{i.recebido}</td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="chip chip-danger text-xs">{i.tipo} · {i.falta}</span>
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold">R$ {i.impacto.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modo === "itens" && !isLoading && faltasComImpacto.length > 0 && (
+        <div className="mt-6 card-base p-4">
+          <h3 className="text-sm font-bold text-navy mb-3">Ranking de impacto por fornecedor</h3>
+          {resumoFiltrado.slice(0, 5).map((r) => (
+            <BarRow
+              key={r.fornecedor}
+              label={r.fornecedor}
+              value={r.impacto}
+              max={piorFornecedor?.impacto ?? 1}
+              suffix={`R$ ${r.impacto.toFixed(0)}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

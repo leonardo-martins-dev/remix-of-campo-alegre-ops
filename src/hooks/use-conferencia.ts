@@ -2,6 +2,7 @@ import type { User } from "@supabase/supabase-js";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { ensureUserProfile } from "@/lib/ensure-profile";
+import { nowISO, todayBRT } from "@/lib/utils-date";
 
 export function useConferencia(pedidoId: string | null) {
   return useQuery({
@@ -42,6 +43,17 @@ export function useStartConferencia() {
     }) => {
       await ensureUserProfile(user);
 
+      const { data: finalized } = await supabase
+        .from("conferencias")
+        .select("id, status")
+        .eq("pedido_id", pedidoId)
+        .eq("status", "finalizada")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (finalized) return finalized;
+
       const { data: existing } = await supabase
         .from("conferencias")
         .select("id")
@@ -53,9 +65,13 @@ export function useStartConferencia() {
 
       const { data: pedido } = await supabase
         .from("pedidos_recebimento")
-        .select("itens_pedido(id)")
+        .select("status, itens_pedido(id)")
         .eq("id", pedidoId)
         .single();
+
+      if (pedido?.status && pedido.status !== "pendente") {
+        throw new Error("Pedido já conferido. Apenas administradores podem reabrir edição.");
+      }
 
       const { data: conf, error: cErr } = await supabase
         .from("conferencias")
@@ -142,14 +158,18 @@ export function useSaveConferenciaItens() {
       }
 
       if (status === "finalizada") {
-        // Status do pedido é atualizado pelo trigger handle_conferencia_finalizada no banco.
         const { error: cicloErr } = await supabase.from("registros_ciclo").insert({
           pedido_id: pedidoId,
-          hora_chegada_fornecedor: new Date().toISOString(),
-          hora_conferencia_ok: new Date().toISOString(),
-          data_registro: new Date().toISOString().slice(0, 10),
+          hora_chegada_fornecedor: nowISO(),
+          hora_conferencia_ok: nowISO(),
+          data_registro: todayBRT(),
         });
         if (cicloErr) console.warn("registros_ciclo:", cicloErr.message);
+
+        const { error: genErr } = await supabase.rpc("gerar_cargas_pos_conferencia", {
+          p_pedido_id: pedidoId,
+        });
+        if (genErr && genErr.code !== "PGRST202") console.warn("gerar_cargas:", genErr.message);
       }
     },
     onSuccess: (_d, v) => {

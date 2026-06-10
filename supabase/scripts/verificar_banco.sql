@@ -24,9 +24,23 @@ WHERE n.nspname = 'public'
   )
 ORDER BY p.proname;
 
+-- Funções v2 (plano pós-QA v4)
+SELECT 'funcao' AS tipo, p.proname AS nome, 'ok' AS status
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname IN (
+    'today_brt',
+    'liberar_pedido_divergencia',
+    'gerar_cargas_pos_conferencia',
+    'resolve_cliente_destinatario'
+  )
+ORDER BY p.proname;
+
 -- O que aplicar (referência):
 -- ensure_user_profile ausente     → 00003_fix_admin_profile.sql
 -- is_admin ausente                → 00004_fix_rls_recursion.sql
 -- check_rateio_quantidade ausente → 00005_validate_rateio.sql
 -- check_retorno_saldo ausente     → 00006_validate_retorno_saldo.sql
--- update_conferencia_status ausente → 00007 + 00008 (ou só 00008, que substitui o trigger)
+-- update_conferencia_status ausente → 00008 (substitui 00007)
+-- Plano v2: 00009 → 00013 em sequência

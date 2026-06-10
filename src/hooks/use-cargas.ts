@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { todayISO } from "@/lib/utils-date";
+import { todayBRT } from "@/lib/utils-date";
 
-export function useCargasDia(date = todayISO()) {
+export function useCargasDia(date = todayBRT()) {
   return useQuery({
     queryKey: ["cargas", date],
     queryFn: async () => {
@@ -114,7 +114,7 @@ export function useFinalizarCarga() {
         carga_id: cargaId,
         hora_inicio_carga: now,
         hora_saida_caminhao: now,
-        data_registro: todayISO(),
+        data_registro: todayBRT(),
       });
     },
     onSuccess: () => {
@@ -140,7 +140,7 @@ export function useCreateCarga() {
       const { itens, ...cargaFields } = payload;
       const { data: carga, error } = await supabase
         .from("cargas")
-        .insert({ ...cargaFields, data_carga: todayISO(), status: "aguardando" })
+        .insert({ ...cargaFields, data_carga: todayBRT(), status: "aguardando" })
         .select()
         .single();
       if (error) throw error;
@@ -154,6 +154,50 @@ export function useCreateCarga() {
 
       await supabase.from("carga_caixas_resumo").insert({ carga_id: carga.id });
       return carga;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cargas"] }),
+  });
+}
+
+export function useImportCargasExcel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      cargas: {
+        codigo: string;
+        cliente_id: string;
+        motorista_id?: string;
+        created_by: string;
+        itens: {
+          produto_id: string;
+          quantidade_romaneio: number;
+          caixas_g: number;
+          caixas_i: number;
+          caixas_p: number;
+        }[];
+      }[]
+    ) => {
+      for (const c of cargas) {
+        const { itens, ...fields } = c;
+        const { data: carga, error } = await supabase
+          .from("cargas")
+          .insert({
+            ...fields,
+            data_carga: todayBRT(),
+            status: "aguardando",
+            origem: "excel",
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        if (itens.length) {
+          const { error: rErr } = await supabase.from("romaneio_itens").insert(
+            itens.map((it) => ({ carga_id: carga.id, ...it, quantidade_real: 0, status: "pendente" }))
+          );
+          if (rErr) throw rErr;
+        }
+        await supabase.from("carga_caixas_resumo").insert({ carga_id: carga.id });
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cargas"] }),
   });

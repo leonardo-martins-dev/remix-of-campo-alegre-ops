@@ -21,6 +21,7 @@ export type Profile = {
   role: "admin" | "user";
   avatar_url: string | null;
   ativo: boolean;
+  motorista_id?: string | null;
 };
 
 export type AccessiblePage = {

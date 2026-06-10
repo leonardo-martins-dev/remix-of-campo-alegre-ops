@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { Truck, Clock, CheckCircle2, Tv } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Truck, Clock, CheckCircle2, Tv, FileSpreadsheet, Download, Play } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { StatStrip } from "@/components/stat-strip";
@@ -12,7 +12,28 @@ import {
   useUpdateRomaneioItem,
   useUpdateCargaResumo,
   useFinalizarCarga,
+  useIniciarCarga,
+  useImportCargasExcel,
 } from "@/hooks/use-cargas";
+import { useClientes, useProdutos, useMotoristas } from "@/hooks/use-cadastros";
+import { useAuth } from "@/lib/auth";
+import { buildCargasFromExcel, parseExpedicaoExcel } from "@/lib/excel-expedicao";
+import { useWiseCarregamentos, useImportWiseCarregamento } from "@/hooks/use-wise-import";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatTime } from "@/lib/utils-date";
 
 export const Route = createFileRoute("/expedicao/")({
@@ -69,11 +90,23 @@ function computeStatus(romaneio: number, real: number): RomaneioItemView["status
 }
 
 function Page() {
+  const { user } = useAuth();
+  const fileRef = useRef<HTMLInputElement>(null);
   const { data: cargas = [], isLoading: loadingCargas } = useCargasDia();
+  const { data: clientes = [] } = useClientes();
+  const { data: produtos = [] } = useProdutos();
+  const { data: motoristas = [] } = useMotoristas();
+  const importExcel = useImportCargasExcel();
+  const wiseFetch = useWiseCarregamentos();
+  const importWise = useImportWiseCarregamento();
+  const iniciar = useIniciarCarga();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"todas" | "carregando" | "aguardando" | "concluida">("todas");
   const [realTouched, setRealTouched] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [wiseOpen, setWiseOpen] = useState(false);
+  const [wiseList, setWiseList] = useState<{ id: string; codigo: string; cliente: string; itens: { produto: string; quantidade: number }[] }[]>([]);
+  const [wiseSelected, setWiseSelected] = useState<string>("");
 
   const activeId = useMemo(() => {
     if (selectedId && cargas.some((c) => c.id === selectedId)) return selectedId;
@@ -185,6 +218,72 @@ function Page() {
     );
   };
 
+  const nameMaps = useMemo(
+    () => ({
+      clienteByName: new Map(clientes.map((c) => [c.nome.trim(), c.id])),
+      produtoByName: new Map(produtos.map((p) => [p.nome.trim(), p.id])),
+      motoristaByName: new Map(motoristas.map((m) => [m.nome.trim(), m.id])),
+    }),
+    [clientes, produtos, motoristas]
+  );
+
+  const handleExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !user?.id) return;
+    try {
+      const rows = parseExpedicaoExcel(await file.arrayBuffer());
+      const built = buildCargasFromExcel(rows, nameMaps);
+      if (!built.length) {
+        toast.error("Nenhuma carga válida na planilha");
+        return;
+      }
+      await importExcel.mutateAsync(built.map((c) => ({ ...c, created_by: user.id })));
+      toast.success(`${built.length} carga(s) importada(s)`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao importar");
+    }
+  };
+
+  const openWiseImport = async () => {
+    try {
+      const list = await wiseFetch.mutateAsync();
+      setWiseList(list);
+      setWiseSelected(list[0]?.id ?? "");
+      setWiseOpen(true);
+      if (!list.length) toast.info("Nenhum carregamento Wise para hoje (modo stub)");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao consultar Wise");
+    }
+  };
+
+  const importHeaderActions = (
+    <>
+      <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcel} />
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+      >
+        <FileSpreadsheet size={14} /> Importar Excel
+      </button>
+      <button
+        type="button"
+        onClick={openWiseImport}
+        disabled={wiseFetch.isPending}
+        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+      >
+        <Download size={14} /> Importar Wise
+      </button>
+      <Link
+        to="/expedicao/tv"
+        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+      >
+        <Tv size={14} /> Modo TV
+      </Link>
+    </>
+  );
+
   if (loadingCargas) {
     return <Loading message="Carregando cargas do dia..." />;
   }
@@ -192,8 +291,29 @@ function Page() {
   if (!cargas.length) {
     return (
       <div>
-        <PageHeader title="Painel de Carga" subtitle="Abastecimento e conferência por loja" />
-        <p className="text-sm text-muted-foreground text-center py-12">Nenhuma carga programada para hoje.</p>
+        <PageHeader
+          title="Painel de Carga"
+          subtitle="Abastecimento e conferência por loja"
+          actions={importHeaderActions}
+        />
+        <p className="text-sm text-muted-foreground text-center py-8">
+          Nenhuma carga programada para hoje. Importe pedidos do supermercado ou aguarde conferência de recebimento.
+        </p>
+        <WiseDialog
+          open={wiseOpen}
+          onOpenChange={setWiseOpen}
+          list={wiseList}
+          selected={wiseSelected}
+          onSelect={setWiseSelected}
+          onImport={async () => {
+            const car = wiseList.find((c) => c.id === wiseSelected);
+            if (!car || !user?.id) return;
+            await importWise.mutateAsync({ carregamento: car, created_by: user.id, maps: nameMaps });
+            toast.success("Carregamento Wise importado");
+            setWiseOpen(false);
+          }}
+          loading={importWise.isPending}
+        />
       </div>
     );
   }
@@ -216,15 +336,38 @@ function Page() {
       <PageHeader
         title="Painel de Carga"
         subtitle="Abastecimento e conferência por loja"
-        actions={
-          <Link
-            to="/expedicao/tv"
-            className="inline-flex items-center gap-2 h-9 px-3 rounded-lg bg-navy text-white text-sm font-semibold hover:opacity-90"
-          >
-            <Tv size={14} /> Abrir Modo TV
-          </Link>
-        }
+        actions={importHeaderActions}
       />
+
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <Select value={activeId ?? ""} onValueChange={setSelectedId}>
+          <SelectTrigger className="w-[280px]">
+            <SelectValue placeholder="Selecionar carregamento" />
+          </SelectTrigger>
+          <SelectContent>
+            {cargas.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.codigo} · {(c.clientes as { nome: string } | null)?.nome ?? "—"} ({c.status})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {detail?.status === "aguardando" && activeId && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={iniciar.isPending}
+            onClick={() =>
+              iniciar.mutate(activeId, {
+                onSuccess: () => toast.success("Carregamento iniciado"),
+                onError: () => toast.error("Erro ao iniciar carregamento"),
+              })
+            }
+          >
+            <Play size={14} className="mr-1" /> Iniciar carregamento
+          </Button>
+        )}
+      </div>
 
       <StatStrip
         items={[
@@ -491,7 +634,75 @@ function Page() {
           })}
         </div>
       </div>
+
+      <WiseDialog
+        open={wiseOpen}
+        onOpenChange={setWiseOpen}
+        list={wiseList}
+        selected={wiseSelected}
+        onSelect={setWiseSelected}
+        onImport={async () => {
+          const car = wiseList.find((c) => c.id === wiseSelected);
+          if (!car || !user?.id) return;
+          await importWise.mutateAsync({ carregamento: car, created_by: user.id, maps: nameMaps });
+          toast.success("Carregamento Wise importado");
+          setWiseOpen(false);
+        }}
+        loading={importWise.isPending}
+      />
     </div>
+  );
+}
+
+function WiseDialog({
+  open,
+  onOpenChange,
+  list,
+  selected,
+  onSelect,
+  onImport,
+  loading,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  list: { id: string; codigo: string; cliente: string }[];
+  selected: string;
+  onSelect: (id: string) => void;
+  onImport: () => void;
+  loading: boolean;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Importar carregamento Wise</DialogTitle>
+        </DialogHeader>
+        {list.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhum carregamento disponível para hoje.</p>
+        ) : (
+          <Select value={selected} onValueChange={onSelect}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione o carregamento" />
+            </SelectTrigger>
+            <SelectContent>
+              {list.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.codigo} · {c.cliente}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button disabled={!selected || loading} onClick={onImport}>
+            Importar selecionado
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

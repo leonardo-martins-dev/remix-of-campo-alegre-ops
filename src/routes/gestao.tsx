@@ -29,6 +29,8 @@ import {
   useConfiguracoes,
   useCadastroMutations,
   useUpdateConfiguracao,
+  useDestinatarioClienteMap,
+  useSaveDestinatarioClienteMap,
 } from "@/hooks/use-cadastros";
 
 export const Route = createFileRoute("/gestao")({
@@ -89,7 +91,81 @@ function CadastrosPanel() {
         <CadastroTable key={table} label={label} table={table} placeholder={placeholder} useData={hook} />
       ))}
       <ProdutosTable />
+      <MapeamentoExpedicao />
     </div>
+  );
+}
+
+function MapeamentoExpedicao() {
+  const { data: destinatarios = [] } = useDestinatarios();
+  const { data: clientes = [] } = useClientes();
+  const { data: map = [] } = useDestinatarioClienteMap();
+  const save = useSaveDestinatarioClienteMap();
+  const [destId, setDestId] = useState("");
+  const [cliId, setCliId] = useState("");
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Mapeamento Destinatário → Cliente (expedição)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Vincule destinatários do rateio (recebimento) aos clientes do painel de carga.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <select
+            className="h-9 rounded-md border border-border px-2 text-sm"
+            value={destId}
+            onChange={(e) => setDestId(e.target.value)}
+          >
+            <option value="">Destinatário…</option>
+            {destinatarios.map((d) => (
+              <option key={d.id} value={d.id}>{d.nome}</option>
+            ))}
+          </select>
+          <select
+            className="h-9 rounded-md border border-border px-2 text-sm"
+            value={cliId}
+            onChange={(e) => setCliId(e.target.value)}
+          >
+            <option value="">Cliente…</option>
+            {clientes.map((c) => (
+              <option key={c.id} value={c.id}>{c.nome}</option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!destId || !cliId || save.isPending}
+            onClick={async () => {
+              try {
+                await save.mutateAsync({ destinatario_id: destId, cliente_id: cliId });
+                toast.success("Mapeamento salvo");
+                setDestId("");
+                setCliId("");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+              }
+            }}
+          >
+            Vincular
+          </Button>
+        </div>
+        <ul className="text-sm space-y-1">
+          {map.map((m: {
+            id: string;
+            destinatarios: { nome: string } | null;
+            clientes: { nome: string } | null;
+          }) => (
+            <li key={m.id} className="flex justify-between border-t border-border py-1">
+              <span>{m.destinatarios?.nome}</span>
+              <span className="text-muted-foreground">→ {m.clientes?.nome}</span>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }
 

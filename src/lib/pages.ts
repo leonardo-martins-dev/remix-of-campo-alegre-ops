@@ -19,6 +19,7 @@ export const SLUG_TO_PATH: Record<string, string> = {
   recebimento: "/recebimento",
   "recebimento/conferir": "/recebimento/conferir",
   "recebimento/faltas": "/recebimento/faltas",
+  "recebimento/liberacoes": "/recebimento/liberacoes",
   expedicao: "/expedicao",
   "expedicao/tv": "/expedicao/tv",
   "caixas/saldo": "/caixas/saldo",

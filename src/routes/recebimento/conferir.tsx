@@ -217,6 +217,9 @@ function ConferenciaItens({
   const codigo = pedido?.codigo ?? pedidos.find((p) => p.id === pedidoId)?.codigo ?? "";
   const horaChegada = pedido?.hora_chegada ?? pedidos.find((p) => p.id === pedidoId)?.hora_chegada;
   const conferenteNome = profile?.nome ?? "—";
+  const readOnly = conferencia?.status === "finalizada";
+  const pedidoStatus = pedido?.status ?? pedidos.find((p) => p.id === pedidoId)?.status;
+  const aguardandoLiberacao = pedidoStatus === "aguardando_liberacao" || pedidoStatus === "divergencia";
 
   useEffect(() => {
     if (!pedidoId || !user?.id) return;
@@ -234,6 +237,7 @@ function ConferenciaItens({
   }, [conferencia]);
 
   const update = (idx: number, v: number) => {
+    if (readOnly) return;
     setItens((prev) =>
       prev.map((it, i) =>
         i === idx ? { ...it, recebido: Math.max(0, v), conferido: true } : it
@@ -242,12 +246,14 @@ function ConferenciaItens({
   };
 
   const conferirIgualPedido = (idx: number) => {
+    if (readOnly) return;
     setItens((prev) =>
       prev.map((it, i) => (i === idx ? { ...it, recebido: it.pedido, conferido: true } : it))
     );
   };
 
   const toggleQualidade = (idx: number) => {
+    if (readOnly) return;
     setItens((prev) =>
       prev.map((it, i) =>
         i !== idx
@@ -285,6 +291,7 @@ function ConferenciaItens({
   }, [itens]);
 
   const salvar = async (status: "parcial" | "finalizada") => {
+    if (readOnly) return;
     if (!conferencia?.id) {
       toast.error("Conferência ainda não iniciada");
       return;
@@ -391,11 +398,21 @@ function ConferenciaItens({
             onClick={onBack}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-navy"
           >
-            <ArrowLeft size={14} /> Trocar pedido
+            <ArrowLeft size={14} /> {readOnly ? "Voltar" : "Trocar pedido"}
           </button>
         }
       />
 
+      {readOnly && (
+        <div className="bg-secondary border border-border rounded-lg p-3 mb-4 text-sm text-muted-foreground">
+          <strong className="text-navy">Conferência encerrada.</strong>{" "}
+          {aguardandoLiberacao
+            ? "Pedido com divergência aguarda liberação do administrador para expedição."
+            : "Visualização somente leitura."}
+        </div>
+      )}
+
+      {!readOnly && (
       <div className="flex flex-wrap gap-2 mb-4">
         {pendentes.map((p) => (
           <button
@@ -412,6 +429,7 @@ function ConferenciaItens({
           </button>
         ))}
       </div>
+      )}
 
       <div
         className="card-base p-4 mb-4 flex items-center justify-between border-l-4"
@@ -507,7 +525,11 @@ function ConferenciaItens({
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <NumberStepper value={it.recebido} onChange={(v) => update(idx, v)} />
+                    {readOnly ? (
+                      <span className="font-semibold tabular-nums">{it.recebido}</span>
+                    ) : (
+                      <NumberStepper value={it.recebido} onChange={(v) => update(idx, v)} />
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -530,7 +552,7 @@ function ConferenciaItens({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
-                      {pendente && (
+                      {!readOnly && pendente && (
                         <button
                           type="button"
                           onClick={() => conferirIgualPedido(idx)}
@@ -540,29 +562,33 @@ function ConferenciaItens({
                           <Check size={12} /> Conferir
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => toggleQualidade(idx)}
-                        className={`h-7 w-7 rounded-md border flex items-center justify-center transition-colors ${
-                          it.qualidade
-                            ? "border-transparent bg-[rgba(240,169,43,0.15)] text-[var(--warning)]"
-                            : "border-border text-muted-foreground hover:text-navy hover:bg-secondary"
-                        }`}
-                        title="Marcar problema de qualidade"
-                      >
-                        <AlertTriangle size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        className="h-7 w-7 rounded-md border border-border text-muted-foreground hover:text-navy hover:bg-secondary flex items-center justify-center"
-                        title="Adicionar foto"
-                        onClick={() => {
-                          setFotoItemId(it.id);
-                          fotoRef.current?.click();
-                        }}
-                      >
-                        <Camera size={13} />
-                      </button>
+                      {!readOnly && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => toggleQualidade(idx)}
+                            className={`h-7 w-7 rounded-md border flex items-center justify-center transition-colors ${
+                              it.qualidade
+                                ? "border-transparent bg-[rgba(240,169,43,0.15)] text-[var(--warning)]"
+                                : "border-border text-muted-foreground hover:text-navy hover:bg-secondary"
+                            }`}
+                            title="Marcar problema de qualidade"
+                          >
+                            <AlertTriangle size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="h-7 w-7 rounded-md border border-border text-muted-foreground hover:text-navy hover:bg-secondary flex items-center justify-center"
+                            title="Adicionar foto"
+                            onClick={() => {
+                              setFotoItemId(it.id);
+                              fotoRef.current?.click();
+                            }}
+                          >
+                            <Camera size={13} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -572,6 +598,7 @@ function ConferenciaItens({
         </table>
       </div>
 
+      {!readOnly && (
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -601,8 +628,9 @@ function ConferenciaItens({
           <CheckCircle2 size={16} /> Finalizar conferência
         </button>
       </div>
+      )}
 
-      <Dialog open={avulsoOpen} onOpenChange={setAvulsoOpen}>
+      <Dialog open={avulsoOpen && !readOnly} onOpenChange={setAvulsoOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Item avulso</DialogTitle>

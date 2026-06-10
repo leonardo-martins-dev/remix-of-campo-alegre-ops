@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { validateRateio } from "@/lib/rateio";
-import { todayISO } from "@/lib/utils-date";
+import { dateRangeBRT, todayBRT } from "@/lib/utils-date";
 
 function assertItensRateio(
   itens: { produto_id: string; quantidade: number; rateio: { destinatario_id: string; quantidade: number }[] }[]
@@ -44,7 +44,7 @@ export type PedidoRow = {
   itens_count?: number;
 };
 
-export function usePedidosDia(date = todayISO()) {
+export function usePedidosDia(date = todayBRT()) {
   return useQuery({
     queryKey: ["pedidos", date],
     queryFn: async () => {
@@ -104,7 +104,7 @@ export function useCreatePedidoManual() {
           codigo: payload.codigo,
           fornecedor_id: payload.fornecedor_id,
           origem: "manual",
-          data_pedido: todayISO(),
+          data_pedido: todayBRT(),
           hora_chegada: new Date().toISOString(),
           status: "pendente",
           created_by: payload.created_by,
@@ -154,7 +154,7 @@ export function useImportPedidos() {
             codigo: p.codigo,
             fornecedor_id: p.fornecedor_id,
             origem: "excel",
-            data_pedido: todayISO(),
+            data_pedido: todayBRT(),
             hora_chegada: new Date().toISOString(),
             status: "pendente",
             created_by: p.created_by,
@@ -183,20 +183,119 @@ export function useImportPedidos() {
   });
 }
 
-export function useFaltas() {
+export type FaltasFilters = {
+  fornecedorId?: string | null;
+  period?: "today" | "week" | "month";
+  divergencia?: "falta" | "sobra" | "qualidade" | "all";
+};
+
+export function useFaltas(filters: FaltasFilters = {}) {
+  const { fornecedorId, period = "week", divergencia = "falta" } = filters;
+  const { from, to } = dateRangeBRT(period);
+
   return useQuery({
-    queryKey: ["faltas"],
+    queryKey: ["faltas", fornecedorId, period, divergencia],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("itens_conferencia")
         .select(`
           id, quantidade_recebida, divergencia, quantidade_divergencia, tem_problema_qualidade,
-          itens_pedido(quantidade_pedida, produtos(nome, unidade), pedidos_recebimento(codigo, fornecedores(nome)))
+          itens_pedido(
+            quantidade_pedida,
+            produtos(nome, unidade),
+            pedidos_recebimento(codigo, data_pedido, fornecedor_id, fornecedores(id, nome))
+          )
         `)
         .not("divergencia", "is", null);
+
+      if (divergencia !== "all") {
+        q = q.eq("divergencia", divergencia);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+
+      return (data ?? []).filter((row) => {
+        const ped = row.itens_pedido?.pedidos_recebimento;
+        if (!ped) return false;
+        if (ped.data_pedido < from || ped.data_pedido > to) return false;
+        if (fornecedorId && ped.fornecedor_id !== fornecedorId) return false;
+        return true;
+      });
+    },
+  });
+}
+
+export function useFaltasResumoFornecedor(period: "today" | "week" | "month" = "week") {
+  const { from, to } = dateRangeBRT(period);
+  return useQuery({
+    queryKey: ["faltas-resumo", period],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("v_faltas_por_fornecedor")
+        .select("*")
+        .gte("data_pedido", from)
+        .lte("data_pedido", to);
       if (error) throw error;
       return data ?? [];
     },
+  });
+}
+
+export function usePedidosAguardandoLiberacao() {
+  return useQuery({
+    queryKey: ["pedidos-liberacao"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pedidos_recebimento")
+        .select(`
+          id, codigo, status, data_pedido, hora_chegada,
+          fornecedores(nome),
+          conferencias(id, status, finalizada_em, itens_conferencia(
+            id, divergencia, quantidade_divergencia, quantidade_recebida, foto_url,
+            itens_pedido(quantidade_pedida, produtos(nome))
+          ))
+        `)
+        .in("status", ["aguardando_liberacao", "divergencia"])
+        .order("hora_chegada", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useLiberarPedido() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pedidoId, observacao }: { pedidoId: string; observacao?: string }) => {
+      const { data, error } = await supabase.rpc("liberar_pedido_divergencia", {
+        p_pedido_id: pedidoId,
+        p_observacao: observacao ?? null,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pedidos"] });
+      qc.invalidateQueries({ queryKey: ["pedidos-liberacao"] });
+      qc.invalidateQueries({ queryKey: ["cargas"] });
+    },
+  });
+}
+
+export function useUpdatePedidoAdmin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      pedidoId: string;
+      codigo?: string;
+      fornecedor_id?: string;
+    }) => {
+      const { pedidoId, ...fields } = payload;
+      const { error } = await supabase.from("pedidos_recebimento").update(fields).eq("id", pedidoId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pedidos"] }),
   });
 }
 

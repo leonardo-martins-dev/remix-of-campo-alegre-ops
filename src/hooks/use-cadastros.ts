@@ -144,4 +144,30 @@ export function useUpdateConfiguracao() {
   });
 }
 
+export function useDestinatarioClienteMap() {
+  return useQuery({
+    queryKey: ["destinatario-cliente-map"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("destinatario_cliente_map")
+        .select("id, destinatario_id, cliente_id, destinatarios(nome), clientes(nome)");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useSaveDestinatarioClienteMap() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { destinatario_id: string; cliente_id: string }) => {
+      const { error } = await supabase.from("destinatario_cliente_map").upsert(payload, {
+        onConflict: "destinatario_id,cliente_id",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["destinatario-cliente-map"] }),
+  });
+}
+
 export const cadastroKeys = CADASTRO_KEYS;
