@@ -1,6 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Truck, Clock, CheckCircle2, Tv, FileSpreadsheet, Download, Play } from "lucide-react";
+import {
+  Truck,
+  Clock,
+  CheckCircle2,
+  Tv,
+  FileSpreadsheet,
+  Download,
+  Play,
+  Package,
+  RefreshCw,
+  HelpCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { StatStrip } from "@/components/stat-strip";
@@ -14,10 +25,23 @@ import {
   useFinalizarCarga,
   useIniciarCarga,
   useImportCargasExcel,
+  useImportRomaneioItens,
+  useFilaExpedicao,
+  useGerarCargasPedido,
 } from "@/hooks/use-cargas";
 import { useClientes, useProdutos, useMotoristas } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
-import { buildCargasFromExcel, parseExpedicaoExcel } from "@/lib/excel-expedicao";
+import {
+  buildCargasFromExcel,
+  parseExpedicaoExcel,
+  parseWiseExpedicaoExcel,
+  parseWiseExportacaoProdutos,
+  isWiseExportacaoFormat,
+  matchProdutosFromWiseExport,
+  downloadExpedicaoTemplate,
+  EXPEDICAO_EXCEL_COLUNAS,
+} from "@/lib/excel-expedicao";
+import * as XLSX from "xlsx";
 import { useWiseCarregamentos, useImportWiseCarregamento } from "@/hooks/use-wise-import";
 import {
   Dialog,
@@ -92,11 +116,15 @@ function computeStatus(romaneio: number, real: number): RomaneioItemView["status
 function Page() {
   const { user } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
+  const wiseFileRef = useRef<HTMLInputElement>(null);
   const { data: cargas = [], isLoading: loadingCargas } = useCargasDia();
+  const { data: fila = [], isLoading: loadingFila } = useFilaExpedicao();
+  const gerarCargas = useGerarCargasPedido();
   const { data: clientes = [] } = useClientes();
   const { data: produtos = [] } = useProdutos();
   const { data: motoristas = [] } = useMotoristas();
   const importExcel = useImportCargasExcel();
+  const importRomaneio = useImportRomaneioItens();
   const wiseFetch = useWiseCarregamentos();
   const importWise = useImportWiseCarregamento();
   const iniciar = useIniciarCarga();
@@ -227,15 +255,52 @@ function Page() {
     [clientes, produtos, motoristas]
   );
 
+  const handleWiseExportToCarga = async (buffer: ArrayBuffer) => {
+    if (!activeId) {
+      toast.error("Selecione um carregamento no painel antes de importar");
+      return;
+    }
+    const rows = parseWiseExportacaoProdutos(buffer);
+    if (!rows.length) {
+      toast.error("Planilha Wise sem produtos válidos (colunas Código, Descrição, Unidade, Qtde)");
+      return;
+    }
+    const { matched, missing } = matchProdutosFromWiseExport(rows, produtos);
+    if (!matched.length) {
+      toast.error("Nenhum produto reconhecido no cadastro", {
+        description: missing.slice(0, 5).join(", ") + (missing.length > 5 ? "…" : ""),
+      });
+      return;
+    }
+    const result = await importRomaneio.mutateAsync({ cargaId: activeId, itens: matched });
+    toast.success(`${result.imported} item(ns) importado(s) na carga`, {
+      description:
+        missing.length > 0
+          ? `${missing.length} não encontrado(s): ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? "…" : ""}`
+          : undefined,
+    });
+  };
+
   const handleExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !user?.id) return;
     try {
-      const rows = parseExpedicaoExcel(await file.arrayBuffer());
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+
+      if (isWiseExportacaoFormat(rawRows)) {
+        await handleWiseExportToCarga(buffer);
+        return;
+      }
+
+      let rows = parseExpedicaoExcel(buffer);
+      if (!rows.length) rows = parseWiseExpedicaoExcel(buffer);
       const built = buildCargasFromExcel(rows, nameMaps);
       if (!built.length) {
-        toast.error("Nenhuma carga válida na planilha");
+        toast.error("Nenhuma carga válida na planilha — confira nomes de cliente/produto no cadastro");
         return;
       }
       await importExcel.mutateAsync(built.map((c) => ({ ...c, created_by: user.id })));
@@ -243,6 +308,34 @@ function Page() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao importar");
     }
+  };
+
+  const handleWiseExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      await handleWiseExportToCarga(await file.arrayBuffer());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao ler exportação Wise");
+    }
+  };
+
+  const handleGerarCargas = (pedidoId: string, codigo: string) => {
+    gerarCargas.mutate(pedidoId, {
+      onSuccess: (criadas) => {
+        if (criadas.length) {
+          toast.success(`${criadas.length} carga(s) gerada(s) para ${codigo}`, {
+            description: criadas.map((c) => c.codigo).join(", "),
+          });
+        } else {
+          toast.warning(`Nenhuma carga gerada para ${codigo}`, {
+            description: "Configure mapeamento destinatário→cliente em Gestão ou verifique rateio do pedido.",
+          });
+        }
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Erro ao gerar cargas"),
+    });
   };
 
   const openWiseImport = async () => {
@@ -260,6 +353,15 @@ function Page() {
   const importHeaderActions = (
     <>
       <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcel} />
+      <input ref={wiseFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleWiseExcel} />
+      <button
+        type="button"
+        onClick={() => downloadExpedicaoTemplate()}
+        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+        title={`Colunas: ${EXPEDICAO_EXCEL_COLUNAS.join(", ")}`}
+      >
+        <Download size={14} /> Baixar modelo
+      </button>
       <button
         type="button"
         onClick={() => fileRef.current?.click()}
@@ -273,7 +375,16 @@ function Page() {
         disabled={wiseFetch.isPending}
         className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
       >
-        <Download size={14} /> Importar Wise
+        <RefreshCw size={14} /> Wise API
+      </button>
+      <button
+        type="button"
+        onClick={() => wiseFileRef.current?.click()}
+        disabled={importRomaneio.isPending}
+        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+        title="Exportação Wise: Código, Descrição, Unidade, Qtde → carga selecionada"
+      >
+        <FileSpreadsheet size={14} /> Importar exportação Wise
       </button>
       <Link
         to="/expedicao/tv"
@@ -296,8 +407,15 @@ function Page() {
           subtitle="Abastecimento e conferência por loja"
           actions={importHeaderActions}
         />
-        <p className="text-sm text-muted-foreground text-center py-8">
-          Nenhuma carga programada para hoje. Importe pedidos do supermercado ou aguarde conferência de recebimento.
+        <FilaExpedicaoCard
+          fila={fila}
+          loading={loadingFila}
+          gerando={gerarCargas.isPending}
+          onGerar={handleGerarCargas}
+        />
+        <p className="text-sm text-muted-foreground text-center py-4 flex items-center justify-center gap-1">
+          <HelpCircle size={14} />
+          Nenhuma carga programada para hoje. Importe Excel, use a fila da conferência ou aguarde pedidos conferidos.
         </p>
         <WiseDialog
           open={wiseOpen}
@@ -338,6 +456,16 @@ function Page() {
         subtitle="Abastecimento e conferência por loja"
         actions={importHeaderActions}
       />
+
+      {fila.length > 0 && (
+        <FilaExpedicaoCard
+          fila={fila}
+          loading={loadingFila}
+          gerando={gerarCargas.isPending}
+          onGerar={handleGerarCargas}
+          compact
+        />
+      )}
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <Select value={activeId ?? ""} onValueChange={setSelectedId}>
@@ -650,6 +778,74 @@ function Page() {
         }}
         loading={importWise.isPending}
       />
+    </div>
+  );
+}
+
+function FilaExpedicaoCard({
+  fila,
+  loading,
+  gerando,
+  onGerar,
+  compact,
+}: {
+  fila: {
+    pedido_id: string;
+    codigo: string;
+    fornecedor: string;
+    finalizada_em: string | null;
+  }[];
+  loading: boolean;
+  gerando: boolean;
+  onGerar: (pedidoId: string, codigo: string) => void;
+  compact?: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="card-base p-4 mb-4 text-sm text-muted-foreground text-center">
+        Carregando fila da conferência...
+      </div>
+    );
+  }
+  if (!fila.length) return null;
+
+  return (
+    <div className={`card-base overflow-hidden ${compact ? "mb-4" : "mb-6"}`}>
+      <div className="px-5 py-3 border-b border-border flex items-center gap-2">
+        <Package size={16} className="text-primary-dark" />
+        <h3 className="text-sm font-bold text-navy">Fila da conferência</h3>
+        <span className="chip chip-warn ml-auto">{fila.length} pedido(s)</span>
+      </div>
+      <div className="divide-y divide-border">
+        {fila.map((p) => (
+          <div
+            key={p.pedido_id}
+            className="px-5 py-3 flex flex-wrap items-center gap-3 justify-between"
+          >
+            <div>
+              <div className="font-semibold text-navy text-sm">{p.codigo}</div>
+              <div className="text-xs text-muted-foreground">
+                {p.fornecedor}
+                {p.finalizada_em ? ` · conferido ${formatTime(p.finalizada_em)}` : ""}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={gerando}
+              onClick={() => onGerar(p.pedido_id, p.codigo)}
+            >
+              <RefreshCw size={14} className="mr-1" /> Gerar cargas
+            </Button>
+          </div>
+        ))}
+      </div>
+      {!compact && (
+        <p className="px-5 py-2 text-[11px] text-muted-foreground border-t border-border">
+          Pedidos conferidos sem carga no painel. Se a geração automática falhou, use o botão acima ou configure
+          mapeamento em Gestão.
+        </p>
+      )}
     </div>
   );
 }

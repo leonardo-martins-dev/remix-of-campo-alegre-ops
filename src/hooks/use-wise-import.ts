@@ -13,9 +13,9 @@ export type WiseCarregamento = {
 
 export function useWiseCarregamentos(date = todayBRT()) {
   return useMutation({
-    mutationFn: async (): Promise<WiseCarregamento[]> => {
+    mutationFn: async (rows?: Record<string, unknown>[]): Promise<WiseCarregamento[]> => {
       const { data, error } = await supabase.functions.invoke("sync-wise-cargas", {
-        body: { data },
+        body: rows?.length ? { data, rows } : { data },
       });
       if (error) throw error;
       return (data?.carregamentos ?? []) as WiseCarregamento[];

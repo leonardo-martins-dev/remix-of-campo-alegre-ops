@@ -124,6 +124,28 @@ export function useSaveConferenciaItens() {
         quantidade_qualidade: number;
       }[];
     }) => {
+      const { data: confAtual, error: confErr } = await supabase
+        .from("conferencias")
+        .select("status")
+        .eq("id", conferenciaId)
+        .single();
+      if (confErr) throw new Error(confErr.message);
+      if (confAtual?.status === "finalizada") {
+        throw new Error("Conferência já finalizada. Não é possível alterar.");
+      }
+
+      const { data: pedidoAtual } = await supabase
+        .from("pedidos_recebimento")
+        .select("status")
+        .eq("id", pedidoId)
+        .single();
+      if (
+        pedidoAtual?.status &&
+        pedidoAtual.status !== "pendente"
+      ) {
+        throw new Error("Pedido já conferido. Visualização somente leitura.");
+      }
+
       for (const it of itens) {
         const { error } = await supabase
           .from("itens_conferencia")
@@ -157,6 +179,8 @@ export function useSaveConferenciaItens() {
         }
       }
 
+      let cargasGeradas: { carga_id: string; codigo: string }[] = [];
+
       if (status === "finalizada") {
         const { error: cicloErr } = await supabase.from("registros_ciclo").insert({
           pedido_id: pedidoId,
@@ -166,17 +190,27 @@ export function useSaveConferenciaItens() {
         });
         if (cicloErr) console.warn("registros_ciclo:", cicloErr.message);
 
-        const { error: genErr } = await supabase.rpc("gerar_cargas_pos_conferencia", {
+        const { data: genData, error: genErr } = await supabase.rpc("gerar_cargas_pos_conferencia", {
           p_pedido_id: pedidoId,
         });
-        if (genErr && genErr.code !== "PGRST202") console.warn("gerar_cargas:", genErr.message);
+        if (genErr && genErr.code !== "PGRST202") {
+          console.warn("gerar_cargas:", genErr.message);
+        } else if (Array.isArray(genData)) {
+          cargasGeradas = genData as { carga_id: string; codigo: string }[];
+        }
       }
+
+      return { cargasGeradas };
     },
-    onSuccess: (_d, v) => {
+    onSuccess: (result, v) => {
       qc.invalidateQueries({ queryKey: ["conferencia", v.pedidoId] });
       qc.invalidateQueries({ queryKey: ["pedidos"] });
       qc.invalidateQueries({ queryKey: ["faltas"] });
       qc.invalidateQueries({ queryKey: ["fill-rate"] });
+      if (v.status === "finalizada") {
+        qc.invalidateQueries({ queryKey: ["cargas"] });
+        qc.invalidateQueries({ queryKey: ["fila-expedicao"] });
+      }
     },
   });
 }

@@ -43,4 +43,16 @@ ORDER BY p.proname;
 -- check_rateio_quantidade ausente → 00005_validate_rateio.sql
 -- check_retorno_saldo ausente     → 00006_validate_retorno_saldo.sql
 -- update_conferencia_status ausente → 00008 (substitui 00007)
--- Plano v2: 00009 → 00013 em sequência
+-- View fila expedição
+SELECT 'view' AS tipo, table_name AS nome, 'ok' AS status
+FROM information_schema.views
+WHERE table_schema = 'public' AND table_name = 'v_fila_expedicao';
+
+-- Mapeamento destinatário → cliente
+SELECT 'mapa' AS tipo, d.nome AS destinatario, c.nome AS cliente
+FROM public.destinatario_cliente_map m
+JOIN public.destinatarios d ON d.id = m.destinatario_id
+JOIN public.clientes c ON c.id = m.cliente_id
+ORDER BY d.nome;
+
+-- Plano v2: 00009 → 00014 em sequência

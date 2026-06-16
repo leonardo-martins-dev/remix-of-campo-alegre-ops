@@ -159,6 +159,49 @@ export function useCreateCarga() {
   });
 }
 
+export type FilaExpedicaoItem = {
+  pedido_id: string;
+  codigo: string;
+  status: string;
+  data_pedido: string;
+  fornecedor: string;
+  conferencia_id: string | null;
+  finalizada_em: string | null;
+};
+
+export type CargaGerada = { carga_id: string; codigo: string };
+
+export function useFilaExpedicao() {
+  return useQuery({
+    queryKey: ["fila-expedicao"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_fila_expedicao").select("*");
+      if (error) throw error;
+      return (data ?? []) as FilaExpedicaoItem[];
+    },
+  });
+}
+
+export function useGerarCargasPedido() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (pedidoId: string) => {
+      const { data, error } = await supabase.rpc("gerar_cargas_pos_conferencia", {
+        p_pedido_id: pedidoId,
+      });
+      if (error) {
+        if (error.code === "PGRST202") return [] as CargaGerada[];
+        throw error;
+      }
+      return (data ?? []) as CargaGerada[];
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cargas"] });
+      qc.invalidateQueries({ queryKey: ["fila-expedicao"] });
+    },
+  });
+}
+
 export function useImportCargasExcel() {
   const qc = useQueryClient();
   return useMutation({
@@ -200,5 +243,32 @@ export function useImportCargasExcel() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cargas"] }),
+  });
+}
+
+export function useImportRomaneioItens() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      cargaId: string;
+      itens: { produto_id: string; quantidade_romaneio: number }[];
+    }) => {
+      if (!payload.itens.length) return { imported: 0 };
+      const { error } = await supabase.from("romaneio_itens").insert(
+        payload.itens.map((it) => ({
+          carga_id: payload.cargaId,
+          produto_id: it.produto_id,
+          quantidade_romaneio: it.quantidade_romaneio,
+          quantidade_real: 0,
+          status: "pendente",
+        }))
+      );
+      if (error) throw error;
+      return { imported: payload.itens.length };
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["carga", v.cargaId] });
+      qc.invalidateQueries({ queryKey: ["cargas"] });
+    },
   });
 }

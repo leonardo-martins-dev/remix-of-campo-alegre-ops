@@ -331,29 +331,57 @@ function PhoneFrame() {
 }
 
 function RankingPanel() {
-  const { data: ranking = [], isLoading } = useRetornoRanking("week");
+  const [period, setPeriod] = useState<"today" | "week" | "month">("week");
+  const { data: ranking = [], isLoading } = useRetornoRanking(period);
   const { data: retornos = [] } = useRetornosDia();
   const top = ranking[0];
   const totalCaixas = ranking.reduce((a, r) => a + r.total_caixas, 0);
+  const periodLabel =
+    period === "today" ? "hoje" : period === "week" ? "7 dias" : "30 dias";
 
   return (
     <div className="space-y-6">
       <StatStrip
         items={[
           { label: "Motoristas ativos", value: isLoading ? "…" : String(ranking.length) },
-          { label: "Caixas retornadas (7d)", value: isLoading ? "…" : String(totalCaixas) },
+          { label: `Caixas retornadas (${periodLabel})`, value: isLoading ? "…" : String(totalCaixas) },
           { label: "Líder", value: top?.motorista ?? "—", tone: "ok" },
           { label: "Retornos hoje", value: String(retornos.length) },
         ]}
       />
 
       <div className="card-base p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Trophy size={18} className="text-warning" />
-          <h3 className="text-sm font-bold text-navy">Ranking de motoristas (7 dias)</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Trophy size={18} className="text-warning" />
+            <h3 className="text-sm font-bold text-navy">Ranking de motoristas</h3>
+          </div>
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary/50">
+            {(
+              [
+                ["today", "Hoje"],
+                ["week", "7 dias"],
+                ["month", "30 dias"],
+              ] as const
+            ).map(([k, l]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setPeriod(k)}
+                className={`px-3 h-7 rounded-md text-xs font-semibold transition-colors ${
+                  period === k ? "bg-card text-navy shadow-sm" : "text-muted-foreground hover:text-navy"
+                }`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
         </div>
         {ranking.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nenhum retorno com motorista identificado no período.</p>
+          <p className="text-sm text-muted-foreground">
+            Nenhum retorno com motorista identificado no período. Vincule o motorista ao perfil em Gestão e
+            registre retornos com motorista selecionado.
+          </p>
         )}
         {ranking.map((r, i) => (
           <BarRow

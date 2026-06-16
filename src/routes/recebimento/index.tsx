@@ -533,7 +533,7 @@ function Page() {
                       })()}
                     </div>
                     {item.rateio.map((r, ri) => (
-                      <div key={ri} className="flex gap-2">
+                      <div key={ri} className="flex gap-2 items-center">
                         <Select
                           value={r.destinatario_id || undefined}
                           onValueChange={(v) =>
@@ -585,6 +585,33 @@ function Page() {
                             );
                           }}
                         />
+                        {(item.rateio.length > 1 ||
+                          (!r.destinatario_id && r.quantidade === 0)) && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0"
+                            title="Remover linha de rateio"
+                            onClick={() =>
+                              setManualItens((prev) =>
+                                prev.map((it, i) =>
+                                  i === idx
+                                    ? {
+                                        ...it,
+                                        rateio:
+                                          it.rateio.length > 1
+                                            ? it.rateio.filter((_, j) => j !== ri)
+                                            : it.rateio,
+                                      }
+                                    : it
+                                )
+                              )
+                            }
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        )}
                       </div>
                     ))}
                     <Button

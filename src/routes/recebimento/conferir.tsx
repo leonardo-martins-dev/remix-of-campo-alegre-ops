@@ -217,19 +217,26 @@ function ConferenciaItens({
   const codigo = pedido?.codigo ?? pedidos.find((p) => p.id === pedidoId)?.codigo ?? "";
   const horaChegada = pedido?.hora_chegada ?? pedidos.find((p) => p.id === pedidoId)?.hora_chegada;
   const conferenteNome = profile?.nome ?? "—";
-  const readOnly = conferencia?.status === "finalizada";
   const pedidoStatus = pedido?.status ?? pedidos.find((p) => p.id === pedidoId)?.status;
   const aguardandoLiberacao = pedidoStatus === "aguardando_liberacao" || pedidoStatus === "divergencia";
+  const pedidoEncerrado =
+    pedidoStatus === "conferido" ||
+    pedidoStatus === "aguardando_liberacao" ||
+    pedidoStatus === "divergencia";
+  const readOnly = conferencia?.status === "finalizada" || pedidoEncerrado;
 
   useEffect(() => {
     if (!pedidoId || !user?.id) return;
     if (startedRef.current === pedidoId) return;
+    if (!pedidoStatus) return;
+    if (pedidoStatus !== "pendente") return;
+    if (conferencia?.status === "finalizada") return;
     startedRef.current = pedidoId;
     startMut.mutate(
       { pedidoId, conferenteId: user.id, user },
       { onError: (e) => toast.error(e.message) }
     );
-  }, [pedidoId, user]);
+  }, [pedidoId, user, pedidoStatus, conferencia?.status]);
 
   useEffect(() => {
     if (!conferencia?.itens_conferencia) return;
@@ -297,18 +304,21 @@ function ConferenciaItens({
       return;
     }
     try {
-      await saveMut.mutateAsync({
+      const result = await saveMut.mutateAsync({
         conferenciaId: conferencia.id,
         pedidoId,
         status,
         itens: itens.map(buildSavePayload),
       });
+      const cargas = result?.cargasGeradas ?? [];
       toast.success(
         status === "finalizada" ? "Conferência finalizada" : "Parcial salva",
         {
           description:
             status === "finalizada"
-              ? `${stats.conferidos} itens · ${stats.divergencias} divergências enviadas ao Relatório de Faltas.`
+              ? cargas.length
+                ? `${stats.conferidos} itens conferidos · ${cargas.length} carga(s) criada(s) no Painel de Carga (${cargas.map((c) => c.codigo).join(", ")}).`
+                : `${stats.conferidos} itens · ${stats.divergencias} divergências enviadas ao Relatório de Faltas. Verifique mapeamento destinatário→cliente em Gestão se nenhuma carga foi gerada.`
               : `${stats.conferidos} itens guardados.`,
         }
       );
@@ -484,7 +494,7 @@ function ConferenciaItens({
             return (
               <span
                 key={d}
-                className={`chip ${ok ? "chip-teal" : rec < q.ped ? "chip-danger" : "chip-info"} text-sm`}
+                className={`chip ${ok ? "chip-teal" : rec < q.ped ? "chip-danger" : "chip-danger"} text-sm`}
               >
                 {d} · {rec}/{q.ped}
               </span>
@@ -538,7 +548,7 @@ function ConferenciaItens({
                       {!pendente && div < 0 && (
                         <span className="chip chip-danger">Falta {Math.abs(div)}</span>
                       )}
-                      {!pendente && div > 0 && <span className="chip chip-info">Sobra {div}</span>}
+                      {!pendente && div > 0 && <span className="chip chip-danger">Sobra {div}</span>}
                       {it.qualidade && (
                         <span
                           className="chip"

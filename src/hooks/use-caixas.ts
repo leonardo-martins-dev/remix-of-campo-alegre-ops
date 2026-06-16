@@ -84,7 +84,7 @@ export function useRetornoRanking(period: "today" | "week" | "month" = "week") {
         cur.total_i += Number(row.total_i ?? 0);
         cur.total_p += Number(row.total_p ?? 0);
         cur.total_caixas += Number(row.total_caixas ?? 0);
-        cur.lojas_atendidas += Number(row.lojas_atendidas ?? 0);
+        cur.lojas_atendidas = Math.max(cur.lojas_atendidas, Number(row.lojas_atendidas ?? 0));
         byMotorista.set(key, cur);
       }
 
