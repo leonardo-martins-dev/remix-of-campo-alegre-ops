@@ -1,0 +1,6 @@
+pedido,codigo_fornecedor,fornecedor,codigo_produto,produto,quantidade,unidade,preco_unitario,loja,data_prevista
+W-2026-1001,F001,Horta Verde,ALF-01,Alface Crespa,40,cx,12.50,Campo Alegre,2026-09-08
+W-2026-1001,F001,Horta Verde,ALF-01,Alface Crespa,20,cx,12.50,Anderson,2026-09-08
+W-2026-1001,F001,Horta Verde,TOM-02,Tomate Italiano,100,cx,32.00,Campo Alegre,2026-09-08
+W-2026-1002,F002,Sítio Boa Vista,RUC-03,Rúcula,30,cx,18.00,Parceiro Sul,2026-09-09
+W-2026-1002,F002,Sítio Boa Vista,PROD-DESCONHECIDO,Produto Sem Cadastro,10,cx,9.00,Campo Alegre,2026-09-09

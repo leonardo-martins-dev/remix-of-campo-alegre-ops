@@ -21,7 +21,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { usePedidosDia, usePedido } from "@/hooks/use-pedidos";
+import { usePedidosDia, usePedido, useConfigValor, useSaldoItensPedido } from "@/hooks/use-pedidos";
+import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
+import { useRegistrarMovimentoFornecedor } from "@/hooks/use-ledger";
 import {
   useConferencia,
   useStartConferencia,
@@ -32,6 +34,9 @@ import {
 import { useProdutos } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
 import { formatTime } from "@/lib/utils-date";
+import { one } from "@/lib/embed";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
 
 type ConferirSearch = { pedidoId?: string };
 
@@ -45,6 +50,7 @@ export const Route = createFileRoute("/recebimento/conferir")({
 
 type LinhaItem = {
   id: string;
+  itemPedidoId?: string | null;
   produto: string;
   unid: string;
   pedido: number;
@@ -53,6 +59,8 @@ type LinhaItem = {
   conferido: boolean;
   qualidade: { ativo: boolean; qtd: number } | null;
   foto_url: string | null;
+  preco?: number | null;
+  toleranciaPct?: number | null;
 };
 
 function Page() {
@@ -107,7 +115,7 @@ function Page() {
                   <span className="chip chip-info">Chegou {formatTime(p.hora_chegada)}</span>
                   <span className="chip chip-warn">Pendente</span>
                 </div>
-                <div className="text-base font-bold text-navy">{p.fornecedores?.nome ?? p.codigo}</div>
+                <div className="text-base font-bold text-navy">{one(p.fornecedores)?.nome ?? p.codigo}</div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {p.codigo} · {itensCount} itens no pedido
                 </div>
@@ -139,20 +147,24 @@ function mapToLinha(
     quantidade_qualidade: number;
     foto_url: string | null;
     itens_pedido: {
+      id?: string;
       quantidade_pedida: number;
-      produtos: { nome: string; unidade: string } | null;
-      itens_pedido_rateio: { quantidade: number; destinatarios: { nome: string } | null }[];
-    } | null;
+      preco_unitario?: number | null;
+      produtos: { nome: string; unidade: string; tolerancia_pct?: number | null } | { nome: string; unidade: string; tolerancia_pct?: number | null }[] | null;
+      itens_pedido_rateio: { quantidade: number; destinatarios: { nome: string } | { nome: string }[] | null }[];
+    } | { id?: string; quantidade_pedida: number; preco_unitario?: number | null; produtos: unknown; itens_pedido_rateio: unknown }[] | null;
   }
 ): LinhaItem {
-  const ip = ic.itens_pedido;
+  const ip = one(ic.itens_pedido);
+  const prod = one(ip?.produtos as { nome: string; unidade: string; tolerancia_pct?: number | null } | { nome: string; unidade: string; tolerancia_pct?: number | null }[] | null);
   return {
     id: ic.id,
-    produto: ip?.produtos?.nome ?? "—",
-    unid: ip?.produtos?.unidade ?? "un",
+    itemPedidoId: ip?.id,
+    produto: prod?.nome ?? "—",
+    unid: prod?.unidade ?? "un",
     pedido: Number(ip?.quantidade_pedida ?? 0),
-    rateio: (ip?.itens_pedido_rateio ?? []).map((r) => [
-      r.destinatarios?.nome ?? "?",
+    rateio: ((ip?.itens_pedido_rateio as { quantidade: number; destinatarios: { nome: string } | { nome: string }[] | null }[] | undefined) ?? []).map((r) => [
+      one(r.destinatarios)?.nome ?? "?",
       Number(r.quantidade),
     ]),
     recebido: Number(ic.quantidade_recebida),
@@ -161,10 +173,15 @@ function mapToLinha(
       ? { ativo: true, qtd: Number(ic.quantidade_qualidade) || 1 }
       : null,
     foto_url: ic.foto_url,
+    preco: ip?.preco_unitario ?? null,
+    toleranciaPct: prod?.tolerancia_pct ?? null,
   };
 }
 
-function buildSavePayload(it: LinhaItem) {
+function buildSavePayload(
+  it: LinhaItem,
+  opts?: { toleranciaPct?: number; toleranciaMin?: number; preco?: number | null; fallback?: number }
+) {
   const div = it.recebido - it.pedido;
   let divergencia: string | null = null;
   if (it.conferido) {
@@ -172,6 +189,13 @@ function buildSavePayload(it: LinhaItem) {
     else if (div < 0) divergencia = "falta";
     else if (div > 0) divergencia = "sobra";
   }
+  const pct = opts?.toleranciaPct ?? 5;
+  const min = opts?.toleranciaMin ?? 1;
+  const limite = Math.max((pct / 100) * it.pedido, min);
+  const dentro = divergencia === "qualidade" ? false : Math.abs(div) <= limite;
+  const preco = opts?.preco ?? null;
+  const estimado = preco == null;
+  const valor = Math.abs(div) * (preco ?? opts?.fallback ?? 4.5);
   return {
     id: it.id,
     quantidade_recebida: it.recebido,
@@ -180,6 +204,10 @@ function buildSavePayload(it: LinhaItem) {
     quantidade_divergencia: Math.abs(div),
     tem_problema_qualidade: !!it.qualidade?.ativo,
     quantidade_qualidade: it.qualidade?.qtd ?? 0,
+    dentro_tolerancia: divergencia ? dentro : null,
+    valor_divergencia: divergencia && divergencia !== "sobra" ? valor : 0,
+    estimado,
+    tolerancia_pct_aplicada: pct,
   };
 }
 
@@ -202,6 +230,27 @@ function ConferenciaItens({
   const saveMut = useSaveConferenciaItens();
   const addAvulso = useAddItemAvulso();
   const { data: produtos = [] } = useProdutos();
+  const { data: tipos = [] } = useTiposCaixa();
+  const { data: toleranciaPct = 5 } = useConfigValor("tolerancia_pct", 5);
+  const { data: toleranciaMin = 1 } = useConfigValor("tolerancia_min_cx", 1);
+  const { data: fallbackPreco = 4.5 } = useConfigValor("impacto_falta_por_unidade", 4.5);
+  const { data: saldosItem = [] } = useSaldoItensPedido(pedidoId);
+  const { data: entregasMeta } = useQuery({
+    queryKey: ["entregas-meta", pedidoId],
+    enabled: !!pedidoId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conferencias")
+        .select("id, numero, status, created_at")
+        .eq("pedido_id", pedidoId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const movForn = useRegistrarMovimentoFornecedor();
+  const [cheias, setCheias] = useState<Record<string, number>>({});
+  const [vazias, setVazias] = useState<Record<string, number>>({});
 
   const startedRef = useRef<string | null>(null);
   const fotoRef = useRef<HTMLInputElement>(null);
@@ -213,17 +262,21 @@ function ConferenciaItens({
   const [itens, setItens] = useState<LinhaItem[]>([]);
 
   const pendentes = pedidos.filter((p) => p.status === "pendente");
-  const fornecedorNome = pedido?.fornecedores?.nome ?? pedidos.find((p) => p.id === pedidoId)?.fornecedores?.nome ?? "—";
+  const fornecedorNome = one(pedido?.fornecedores)?.nome ?? one(pedidos.find((p) => p.id === pedidoId)?.fornecedores)?.nome ?? "—";
   const codigo = pedido?.codigo ?? pedidos.find((p) => p.id === pedidoId)?.codigo ?? "";
+  const wiseId = (pedido as { wise_pedido_id?: string | null } | null)?.wise_pedido_id
+    ?? (pedidos.find((p) => p.id === pedidoId) as { wise_pedido_id?: string | null } | undefined)?.wise_pedido_id;
+  const entregaAtual = (entregasMeta ?? []).findIndex((e) => e.id === conferencia?.id) + 1;
+  const entregaTotal = Math.max(1, (entregasMeta ?? []).length);
   const horaChegada = pedido?.hora_chegada ?? pedidos.find((p) => p.id === pedidoId)?.hora_chegada;
   const conferenteNome = profile?.nome ?? "—";
   const pedidoStatus = pedido?.status ?? pedidos.find((p) => p.id === pedidoId)?.status;
   const aguardandoLiberacao = pedidoStatus === "aguardando_liberacao" || pedidoStatus === "divergencia";
   const pedidoEncerrado =
-    pedidoStatus === "conferido" ||
+    pedidoStatus === "encerrado" ||
     pedidoStatus === "aguardando_liberacao" ||
     pedidoStatus === "divergencia";
-  const readOnly = conferencia?.status === "finalizada" || pedidoEncerrado;
+  const readOnly = conferencia?.status === "finalizada" && pedidoEncerrado;
 
   useEffect(() => {
     if (!pedidoId || !user?.id) return;
@@ -242,6 +295,15 @@ function ConferenciaItens({
     if (!conferencia?.itens_conferencia) return;
     setItens(conferencia.itens_conferencia.map(mapToLinha));
   }, [conferencia]);
+
+  useEffect(() => {
+    const qtd = itens.reduce((a, it) => a + (it.recebido || 0), 0);
+    if (!tipos.length || !qtd) return;
+    setCheias((prev) => {
+      if (Object.values(prev).some((n) => n > 0)) return prev;
+      return { [tipos[0].sigla]: qtd };
+    });
+  }, [tipos, itens]);
 
   const update = (idx: number, v: number) => {
     if (readOnly) return;
@@ -308,17 +370,59 @@ function ConferenciaItens({
         conferenciaId: conferencia.id,
         pedidoId,
         status,
-        itens: itens.map(buildSavePayload),
+        itens: itens.map((it) =>
+          buildSavePayload(it, {
+            toleranciaPct: it.toleranciaPct ?? toleranciaPct,
+            toleranciaMin,
+            preco: it.preco,
+            fallback: fallbackPreco,
+          })
+        ),
       });
+      if (status === "finalizada" && user && pedido?.fornecedor_id) {
+        for (const t of tipos) {
+          const c = Number(cheias[t.sigla] ?? 0);
+          const v = Number(vazias[t.sigla] ?? 0);
+          if (c > 0) {
+            await movForn.mutateAsync({
+              fornecedor_id: pedido.fornecedor_id,
+              tipo_caixa: t.sigla,
+              quantidade: c,
+              natureza: "recebimento_cheias",
+              registrado_por: user.id,
+              conferencia_id: conferencia.id,
+            });
+          }
+          if (v > 0) {
+            await movForn.mutateAsync({
+              fornecedor_id: pedido.fornecedor_id,
+              tipo_caixa: t.sigla,
+              quantidade: v,
+              natureza: "entrega_vazias",
+              registrado_por: user.id,
+              conferencia_id: conferencia.id,
+            });
+          }
+        }
+      }
       const cargas = result?.cargasGeradas ?? [];
+      const movTxt = tipos
+        .map((t) => {
+          const c = Number(cheias[t.sigla] ?? 0);
+          const v = Number(vazias[t.sigla] ?? 0);
+          if (!c && !v) return null;
+          return `${t.sigla}: +${v} vazias · −${c} cheias`;
+        })
+        .filter(Boolean)
+        .join(" · ");
       toast.success(
-        status === "finalizada" ? "Conferência finalizada" : "Parcial salva",
+        status === "finalizada" ? "Entrega finalizada" : "Parcial salva",
         {
           description:
             status === "finalizada"
               ? cargas.length
                 ? `${stats.conferidos} itens conferidos · ${cargas.length} carga(s) criada(s) no Painel de Carga (${cargas.map((c) => c.codigo).join(", ")}).`
-                : `${stats.conferidos} itens · ${stats.divergencias} divergências enviadas ao Relatório de Faltas. Verifique mapeamento destinatário→cliente em Gestão se nenhuma carga foi gerada.`
+                : `${stats.conferidos} itens · ${cargas.length ? cargas.map((c) => c.codigo).join(", ") : "sem carga"} · ${movTxt || "sem movimento de caixa"}`
               : `${stats.conferidos} itens guardados.`,
         }
       );
@@ -330,11 +434,12 @@ function ConferenciaItens({
   };
 
   const finalizar = () => {
-    if (stats.faltantes > 0) {
-      toast.warning("Alguns itens ainda estão pendentes", {
-        description: `${stats.faltantes} item(ns) sem conferência. Finalize mesmo assim?`,
+    const saldoAberto = (saldosItem as { saldo: number }[]).some((s) => Number(s.saldo) > 0);
+    if (stats.faltantes > 0 || saldoAberto) {
+      toast.warning("O restante fica pendente no pedido", {
+        description: "Finalizar esta entrega e deixar o saldo no pedido?",
         action: {
-          label: "Finalizar mesmo assim",
+          label: "Finalizar entrega",
           onClick: () => salvar("finalizada"),
         },
       });
@@ -401,7 +506,7 @@ function ConferenciaItens({
 
       <PageHeader
         title={fornecedorNome}
-        subtitle={`Pedido ${codigo} · Chegou às ${formatTime(horaChegada)} · Conferente: ${conferenteNome}`}
+        subtitle={`Pedido ${codigo}${wiseId ? ` · Wise ${wiseId}` : ""} · Entrega ${entregaAtual || 1} de ${entregaTotal} · Chegou às ${formatTime(horaChegada)} · Conferente: ${conferenteNome}`}
         actions={
           <button
             type="button"
@@ -435,7 +540,7 @@ function ConferenciaItens({
                 : "bg-card border border-border text-navy hover:bg-secondary"
             }`}
           >
-            {p.fornecedores?.nome ?? p.codigo}
+            {one(p.fornecedores)?.nome ?? p.codigo}
           </button>
         ))}
       </div>
@@ -509,15 +614,23 @@ function ConferenciaItens({
             <tr>
               <th className="text-left px-4 py-3">Produto</th>
               <th className="text-left px-4 py-3">Un.</th>
-              <th className="text-right px-4 py-3">Pedida</th>
-              <th className="text-left px-4 py-3">Rateio</th>
-              <th className="text-center px-4 py-3">Recebida</th>
+              <th className="text-right px-4 py-3">Pedido</th>
+              <th className="text-right px-4 py-3">Já recebido</th>
+              <th className="text-center px-4 py-3">Nesta entrega</th>
+              <th className="text-right px-4 py-3">Saldo</th>
+              <th className="text-right px-4 py-3">Tol.</th>
               <th className="text-left px-4 py-3">Status</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {itens.map((it, idx) => {
+              const saldoRow = (saldosItem as { item_pedido_id: string; recebido_acumulado: number; saldo: number }[])
+                .find((s) => s.item_pedido_id === it.itemPedidoId);
+              const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
+              const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
+              const pct = it.toleranciaPct ?? toleranciaPct;
+              const limite = Math.max((pct / 100) * it.pedido, toleranciaMin);
               const div = it.recebido - it.pedido;
               const pendente = !it.conferido;
               return (
@@ -525,15 +638,7 @@ function ConferenciaItens({
                   <td className="px-4 py-3 font-semibold text-navy">{it.produto}</td>
                   <td className="px-4 py-3 text-muted-foreground">{it.unid}</td>
                   <td className="px-4 py-3 text-right text-ink">{it.pedido}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1 flex-wrap">
-                      {it.rateio.map(([d, q]) => (
-                        <span key={d} className="chip chip-muted">
-                          {d}·{q}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
+                  <td className="px-4 py-3 text-right text-muted-foreground">{jaRecebido}</td>
                   <td className="px-4 py-3">
                     {readOnly ? (
                       <span className="font-semibold tabular-nums">{it.recebido}</span>
@@ -541,6 +646,8 @@ function ConferenciaItens({
                       <NumberStepper value={it.recebido} onChange={(v) => update(idx, v)} />
                     )}
                   </td>
+                  <td className="px-4 py-3 text-right font-semibold">{Math.max(0, saldo - (it.conferido ? it.recebido : 0))}</td>
+                  <td className="px-4 py-3 text-right text-xs text-muted-foreground">±{limite.toFixed(0)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       {pendente && <span className="chip chip-muted">Pendente</span>}
@@ -566,7 +673,7 @@ function ConferenciaItens({
                         <button
                           type="button"
                           onClick={() => conferirIgualPedido(idx)}
-                          className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
+                          className="inline-flex items-center gap-1 min-h-11 px-3 rounded-md bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
                           title="Marcar conferido com a quantidade pedida"
                         >
                           <Check size={12} /> Conferir
@@ -577,7 +684,7 @@ function ConferenciaItens({
                           <button
                             type="button"
                             onClick={() => toggleQualidade(idx)}
-                            className={`h-7 w-7 rounded-md border flex items-center justify-center transition-colors ${
+                            className={`h-11 w-11 rounded-md border flex items-center justify-center transition-colors ${
                               it.qualidade
                                 ? "border-transparent bg-[rgba(240,169,43,0.15)] text-[var(--warning)]"
                                 : "border-border text-muted-foreground hover:text-navy hover:bg-secondary"
@@ -588,7 +695,7 @@ function ConferenciaItens({
                           </button>
                           <button
                             type="button"
-                            className="h-7 w-7 rounded-md border border-border text-muted-foreground hover:text-navy hover:bg-secondary flex items-center justify-center"
+                            className="h-11 w-11 rounded-md border border-border text-muted-foreground hover:text-navy hover:bg-secondary flex items-center justify-center"
                             title="Adicionar foto"
                             onClick={() => {
                               setFotoItemId(it.id);
@@ -608,12 +715,29 @@ function ConferenciaItens({
         </table>
       </div>
 
+      {!readOnly && tipos.length > 0 && (
+        <div className="mt-5 rounded-xl border p-4 space-y-3">
+          <h3 className="text-sm font-semibold">Caixas desta entrega</h3>
+          {tipos.map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center gap-3 text-sm">
+              <span className="w-28 font-medium">{t.nome} ({t.sigla})</span>
+              <label className="flex items-center gap-2">Cheias
+                <NumberStepper value={cheias[t.sigla] ?? 0} onChange={(n) => setCheias((s) => ({ ...s, [t.sigla]: n }))} />
+              </label>
+              <label className="flex items-center gap-2">Vazias
+                <NumberStepper value={vazias[t.sigla] ?? 0} onChange={(n) => setVazias((s) => ({ ...s, [t.sigla]: n }))} />
+              </label>
+            </div>
+          ))}
+        </div>
+      )}
+
       {!readOnly && (
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => setAvulsoOpen(true)}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+          className="inline-flex items-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
         >
           <Plus size={14} /> Item avulso
         </button>
@@ -621,7 +745,7 @@ function ConferenciaItens({
           type="button"
           onClick={() => salvar("parcial")}
           disabled={saveMut.isPending}
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+          className="inline-flex items-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
         >
           <Save size={14} /> Salvar parcial
         </button>
@@ -633,9 +757,9 @@ function ConferenciaItens({
           type="button"
           onClick={finalizar}
           disabled={saveMut.isPending}
-          className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+          className="inline-flex items-center gap-2 min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
         >
-          <CheckCircle2 size={16} /> Finalizar conferência
+          <CheckCircle2 size={16} /> Finalizar entrega
         </button>
       </div>
       )}

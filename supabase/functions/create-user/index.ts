@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { nome, email, password, role } = await req.json();
+    const { nome, email, password, role, fornecedor_id, motorista_id } = await req.json();
 
     if (!nome || !email || !password) {
       return new Response(
@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const userRole = role === "admin" ? "admin" : "user";
+    const userRole = role === "admin" ? "admin" : role === "fornecedor" ? "fornecedor" : "user";
 
     if (email.toLowerCase() === "admin@noponto.io") {
       return new Response(
@@ -104,7 +104,14 @@ Deno.serve(async (req) => {
 
     if (data.user) {
       await supabaseAdmin.from("profiles").upsert(
-        { id: data.user.id, nome, email, role: userRole },
+        {
+          id: data.user.id,
+          nome,
+          email,
+          role: userRole,
+          fornecedor_id: fornecedor_id ?? null,
+          motorista_id: motorista_id ?? null,
+        },
         { onConflict: "id" }
       );
     }

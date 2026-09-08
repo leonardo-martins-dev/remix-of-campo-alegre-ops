@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { validateRateio } from "@/lib/rateio";
 import { dateRangeBRT, todayBRT } from "@/lib/utils-date";
+import { one } from "@/lib/embed";
 
 function assertItensRateio(
   itens: { produto_id: string; quantidade: number; rateio: { destinatario_id: string; quantidade: number }[] }[]
@@ -40,6 +41,8 @@ export type PedidoRow = {
   data_pedido: string;
   hora_chegada: string | null;
   status: string;
+  wise_pedido_id?: string | null;
+  data_prevista?: string | null;
   fornecedores: { nome: string } | null;
   itens_count?: number;
 };
@@ -51,7 +54,7 @@ export function usePedidosDia(date = todayBRT()) {
       const { data, error } = await supabase
         .from("pedidos_recebimento")
         .select(`
-          id, codigo, fornecedor_id, origem, data_pedido, hora_chegada, status,
+          id, codigo, fornecedor_id, origem, data_pedido, hora_chegada, status, wise_pedido_id, data_prevista,
           fornecedores(nome),
           itens_pedido(id, itens_pedido_rateio(destinatario_id, quantidade, destinatarios(nome)))
         `)
@@ -74,8 +77,8 @@ export function usePedido(pedidoId: string | null) {
           *,
           fornecedores(nome),
           itens_pedido(
-            id, quantidade_pedida,
-            produtos(id, nome, unidade),
+            id, quantidade_pedida, preco_unitario, unidade,
+            produtos(id, nome, unidade, tolerancia_pct, tipo_caixa_padrao_id),
             itens_pedido_rateio(id, quantidade, destinatarios(id, nome))
           )
         `)
@@ -93,7 +96,7 @@ export function useCreatePedidoManual() {
     mutationFn: async (payload: {
       codigo: string;
       fornecedor_id: string;
-      itens: { produto_id: string; quantidade: number; rateio: { destinatario_id: string; quantidade: number }[] }[];
+      itens: { produto_id: string; quantidade: number; preco_unitario?: number | null; rateio: { destinatario_id: string; quantidade: number }[] }[];
       created_by: string;
     }) => {
       assertItensRateio(payload.itens);
@@ -116,7 +119,12 @@ export function useCreatePedidoManual() {
       for (const item of payload.itens) {
         const { data: itemRow, error: iErr } = await supabase
           .from("itens_pedido")
-          .insert({ pedido_id: pedido.id, produto_id: item.produto_id, quantidade_pedida: item.quantidade })
+          .insert({
+            pedido_id: pedido.id,
+            produto_id: item.produto_id,
+            quantidade_pedida: item.quantidade,
+            preco_unitario: "preco_unitario" in item ? (item as { preco_unitario?: number | null }).preco_unitario ?? null : null,
+          })
           .select()
           .single();
         if (iErr) throw iErr;
@@ -166,7 +174,12 @@ export function useImportPedidos() {
         for (const item of p.itens) {
           const { data: itemRow, error: iErr } = await supabase
             .from("itens_pedido")
-            .insert({ pedido_id: pedido.id, produto_id: item.produto_id, quantidade_pedida: item.quantidade })
+            .insert({
+            pedido_id: pedido.id,
+            produto_id: item.produto_id,
+            quantidade_pedida: item.quantidade,
+            preco_unitario: "preco_unitario" in item ? (item as { preco_unitario?: number | null }).preco_unitario ?? null : null,
+          })
             .select()
             .single();
           if (iErr) throw iErr;
@@ -200,10 +213,11 @@ export function useFaltas(filters: FaltasFilters = {}) {
         .from("itens_conferencia")
         .select(`
           id, quantidade_recebida, divergencia, quantidade_divergencia, tem_problema_qualidade,
+          dentro_tolerancia, valor_divergencia, estimado,
           itens_pedido(
-            quantidade_pedida,
+            quantidade_pedida, preco_unitario,
             produtos(nome, unidade),
-            pedidos_recebimento(codigo, data_pedido, fornecedor_id, fornecedores(id, nome))
+            pedidos_recebimento(codigo, data_pedido, status, fornecedor_id, fornecedores(id, nome))
           )
         `)
         .not("divergencia", "is", null);
@@ -216,10 +230,12 @@ export function useFaltas(filters: FaltasFilters = {}) {
       if (error) throw error;
 
       return (data ?? []).filter((row) => {
-        const ped = row.itens_pedido?.pedidos_recebimento;
+        const ip = one(row.itens_pedido);
+        const ped = one(ip?.pedidos_recebimento);
         if (!ped) return false;
         if (ped.data_pedido < from || ped.data_pedido > to) return false;
         if (fornecedorId && ped.fornecedor_id !== fornecedorId) return false;
+        if (ped.status === "parcial" || ped.status === "pendente" || ped.status === "aguardando_vinculo") return false;
         return true;
       });
     },
@@ -318,6 +334,65 @@ export function useConfigValor(chave: string, fallback: number) {
       if (!data?.valor) return fallback;
       const v = typeof data.valor === "string" ? parseFloat(data.valor) : Number(data.valor);
       return Number.isFinite(v) ? v : fallback;
+    },
+  });
+}
+
+export function useEncerrarPedido() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ pedidoId, motivo }: { pedidoId: string; motivo: string }) => {
+      const { error } = await supabase.rpc("encerrar_pedido", {
+        p_pedido_id: pedidoId,
+        p_motivo: motivo,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pedidos"] });
+      qc.invalidateQueries({ queryKey: ["pedidos-liberacao"] });
+      qc.invalidateQueries({ queryKey: ["faltas"] });
+    },
+  });
+}
+
+export function useSaldoItensPedido(pedidoId: string | null) {
+  return useQuery({
+    queryKey: ["saldo-itens", pedidoId],
+    enabled: !!pedidoId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("v_saldo_item_pedido")
+        .select("*")
+        .eq("pedido_id", pedidoId!);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function usePendenciasVinculo() {
+  return useQuery({
+    queryKey: ["pendencias-vinculo"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pendencias_vinculo")
+        .select("*, pedidos_recebimento(codigo, wise_pedido_id)")
+        .eq("status", "aberta")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+export function useAliases() {
+  return useQuery({
+    queryKey: ["aliases"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("aliases").select("*").order("nome_externo");
+      if (error) throw error;
+      return data ?? [];
     },
   });
 }

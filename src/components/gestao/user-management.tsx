@@ -35,15 +35,28 @@ import {
   createUserViaEdge,
 } from "@/hooks/use-users";
 import { isSuperAdmin, SUPER_ADMIN_EMAIL } from "@/lib/super-admin";
+import { useFornecedores, useMotoristas } from "@/hooks/use-cadastros";
 
-type UserRow = { id: string; nome: string; email: string; role: string; ativo: boolean };
+type UserRow = {
+  id: string;
+  nome: string;
+  email: string;
+  role: string;
+  ativo: boolean;
+  motorista_id?: string | null;
+  fornecedor_id?: string | null;
+};
 
 export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"admin" | "user">("user");
+  const [role, setRole] = useState<"admin" | "user" | "fornecedor">("user");
+  const [fornecedorId, setFornecedorId] = useState("");
+  const [motoristaId, setMotoristaId] = useState("");
   const [loading, setLoading] = useState(false);
+  const { data: fornecedores = [] } = useFornecedores();
+  const { data: motoristas = [] } = useMotoristas();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,12 +70,17 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
     }
     setLoading(true);
     try {
-      await createUserViaEdge(nome.trim(), email.trim(), password, role);
+      await createUserViaEdge(nome.trim(), email.trim(), password, role, {
+        fornecedor_id: role === "fornecedor" ? fornecedorId || null : null,
+        motorista_id: motoristaId || null,
+      });
       toast.success(`Usuário "${nome}" criado com sucesso`);
       setNome("");
       setEmail("");
       setPassword("");
       setRole("user");
+      setFornecedorId("");
+      setMotoristaId("");
       onCreated?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao criar usuário");
@@ -93,13 +111,39 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="role">Perfil</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as "admin" | "user")}>
+            <Select value={role} onValueChange={(v) => setRole(v as "admin" | "user" | "fornecedor")}>
               <SelectTrigger id="role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="user">Operação</SelectItem>
                 <SelectItem value="admin">Administrador</SelectItem>
+                <SelectItem value="fornecedor">Fornecedor</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {role === "fornecedor" && (
+            <div className="space-y-2">
+              <Label>Fornecedor vinculado</Label>
+              <Select value={fornecedorId} onValueChange={setFornecedorId}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {fornecedores.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label>Motorista vinculado (opcional)</Label>
+            <Select value={motoristaId || "__none"} onValueChange={(v) => setMotoristaId(v === "__none" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">Nenhum</SelectItem>
+                {motoristas.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -197,6 +241,8 @@ function PermissionsSheet({
 
 export function UsersList() {
   const { data: users = [], isLoading } = useProfiles();
+  const { data: motoristas = [] } = useMotoristas();
+  const { data: fornecedores = [] } = useFornecedores();
   const updateProfile = useUpdateProfile();
   const [openUserId, setOpenUserId] = useState<string | null>(null);
 
@@ -239,7 +285,8 @@ export function UsersList() {
                     <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="user">Operação</SelectItem>
+                      <SelectItem value="fornecedor">Fornecedor</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button
@@ -259,6 +306,36 @@ export function UsersList() {
                     Permissões
                   </button>
                 </div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Select
+                  value={u.motorista_id ?? "__none"}
+                  onValueChange={(v) =>
+                    updateProfile.mutate({ id: u.id, motorista_id: v === "__none" ? null : v }, { onSuccess: () => toast.success("Motorista vinculado") })
+                  }
+                >
+                  <SelectTrigger className="w-44 h-8"><SelectValue placeholder="Motorista" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Sem motorista</SelectItem>
+                    {motoristas.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={u.fornecedor_id ?? "__none"}
+                  onValueChange={(v) =>
+                    updateProfile.mutate({ id: u.id, fornecedor_id: v === "__none" ? null : v }, { onSuccess: () => toast.success("Fornecedor vinculado") })
+                  }
+                >
+                  <SelectTrigger className="w-44 h-8"><SelectValue placeholder="Fornecedor" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Sem fornecedor</SelectItem>
+                    {fornecedores.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           ))}

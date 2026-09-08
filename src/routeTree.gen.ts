@@ -26,6 +26,12 @@ import { Route as ExpedicaoTvRouteImport } from './routes/expedicao/tv'
 import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
 import { Route as CaixasEconomiaRouteImport } from './routes/caixas/economia'
+import { Route as CaixasGalpaoRouteImport } from './routes/caixas/galpao'
+import { Route as CaixasFornecedorRouteImport } from './routes/caixas/fornecedor'
+import { Route as FornecedorRouteImport } from './routes/fornecedor'
+import { Route as FornecedoresRouteImport } from './routes/fornecedores'
+import { Route as QuebraIndexRouteImport } from './routes/quebra/index'
+import { Route as QuebraLancarRouteImport } from './routes/quebra/lancar'
 import { Route as PlatformTenantsIndexRouteImport } from './routes/platform/tenants/index'
 import { Route as FiscalNotasIndexRouteImport } from './routes/fiscal/notas/index'
 import { Route as FiscalNotasChaveRouteImport } from './routes/fiscal/notas/$chave'
@@ -117,6 +123,36 @@ const CaixasEconomiaRoute = CaixasEconomiaRouteImport.update({
   path: '/caixas/economia',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CaixasGalpaoRoute = CaixasGalpaoRouteImport.update({
+  id: '/caixas/galpao',
+  path: '/caixas/galpao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CaixasFornecedorRoute = CaixasFornecedorRouteImport.update({
+  id: '/caixas/fornecedor',
+  path: '/caixas/fornecedor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FornecedorRoute = FornecedorRouteImport.update({
+  id: '/fornecedor',
+  path: '/fornecedor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FornecedoresRoute = FornecedoresRouteImport.update({
+  id: '/fornecedores',
+  path: '/fornecedores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuebraIndexRoute = QuebraIndexRouteImport.update({
+  id: '/quebra/',
+  path: '/quebra/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuebraLancarRoute = QuebraLancarRouteImport.update({
+  id: '/quebra/lancar',
+  path: '/quebra/lancar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlatformTenantsIndexRoute = PlatformTenantsIndexRouteImport.update({
   id: '/platform/tenants/',
   path: '/platform/tenants/',
@@ -148,6 +184,12 @@ export interface FileRoutesByFullPath {
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/caixas/galpao': typeof CaixasGalpaoRoute
+  '/caixas/fornecedor': typeof CaixasFornecedorRoute
+  '/fornecedor': typeof FornecedorRoute
+  '/fornecedores': typeof FornecedoresRoute
+  '/quebra/': typeof QuebraIndexRoute
+  '/quebra/lancar': typeof QuebraLancarRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
   '/fiscal/categorias': typeof FiscalCategoriasRoute
   '/fiscal/fornecedores-categoria': typeof FiscalFornecedoresCategoriaRoute
@@ -171,6 +213,12 @@ export interface FileRoutesByTo {
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/caixas/galpao': typeof CaixasGalpaoRoute
+  '/caixas/fornecedor': typeof CaixasFornecedorRoute
+  '/fornecedor': typeof FornecedorRoute
+  '/fornecedores': typeof FornecedoresRoute
+  '/quebra': typeof QuebraIndexRoute
+  '/quebra/lancar': typeof QuebraLancarRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
   '/fiscal/categorias': typeof FiscalCategoriasRoute
   '/fiscal/fornecedores-categoria': typeof FiscalFornecedoresCategoriaRoute
@@ -195,6 +243,12 @@ export interface FileRoutesById {
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/caixas/galpao': typeof CaixasGalpaoRoute
+  '/caixas/fornecedor': typeof CaixasFornecedorRoute
+  '/fornecedor': typeof FornecedorRoute
+  '/fornecedores': typeof FornecedoresRoute
+  '/quebra/': typeof QuebraIndexRoute
+  '/quebra/lancar': typeof QuebraLancarRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
   '/fiscal/categorias': typeof FiscalCategoriasRoute
   '/fiscal/fornecedores-categoria': typeof FiscalFornecedoresCategoriaRoute
@@ -220,6 +274,12 @@ export interface FileRouteTypes {
     | '/caixas/economia'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/caixas/galpao'
+    | '/caixas/fornecedor'
+    | '/fornecedor'
+    | '/fornecedores'
+    | '/quebra/'
+    | '/quebra/lancar'
     | '/expedicao/tv'
     | '/fiscal/categorias'
     | '/fiscal/fornecedores-categoria'
@@ -243,6 +303,12 @@ export interface FileRouteTypes {
     | '/caixas/economia'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/caixas/galpao'
+    | '/caixas/fornecedor'
+    | '/fornecedor'
+    | '/fornecedores'
+    | '/quebra'
+    | '/quebra/lancar'
     | '/expedicao/tv'
     | '/fiscal/categorias'
     | '/fiscal/fornecedores-categoria'
@@ -266,6 +332,12 @@ export interface FileRouteTypes {
     | '/caixas/economia'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/caixas/galpao'
+    | '/caixas/fornecedor'
+    | '/fornecedor'
+    | '/fornecedores'
+    | '/quebra/'
+    | '/quebra/lancar'
     | '/expedicao/tv'
     | '/fiscal/categorias'
     | '/fiscal/fornecedores-categoria'
@@ -290,6 +362,12 @@ export interface RootRouteChildren {
   CaixasEconomiaRoute: typeof CaixasEconomiaRoute
   CaixasRetornoRoute: typeof CaixasRetornoRoute
   CaixasSaldoRoute: typeof CaixasSaldoRoute
+  CaixasGalpaoRoute: typeof CaixasGalpaoRoute
+  CaixasFornecedorRoute: typeof CaixasFornecedorRoute
+  FornecedorRoute: typeof FornecedorRoute
+  FornecedoresRoute: typeof FornecedoresRoute
+  QuebraIndexRoute: typeof QuebraIndexRoute
+  QuebraLancarRoute: typeof QuebraLancarRoute
   ExpedicaoTvRoute: typeof ExpedicaoTvRoute
   FiscalCategoriasRoute: typeof FiscalCategoriasRoute
   FiscalFornecedoresCategoriaRoute: typeof FiscalFornecedoresCategoriaRoute
@@ -425,6 +503,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CaixasEconomiaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/caixas/galpao': {
+      id: '/caixas/galpao'
+      path: '/caixas/galpao'
+      fullPath: '/caixas/galpao'
+      preLoaderRoute: typeof CaixasGalpaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/caixas/fornecedor': {
+      id: '/caixas/fornecedor'
+      path: '/caixas/fornecedor'
+      fullPath: '/caixas/fornecedor'
+      preLoaderRoute: typeof CaixasFornecedorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fornecedor': {
+      id: '/fornecedor'
+      path: '/fornecedor'
+      fullPath: '/fornecedor'
+      preLoaderRoute: typeof FornecedorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fornecedores': {
+      id: '/fornecedores'
+      path: '/fornecedores'
+      fullPath: '/fornecedores'
+      preLoaderRoute: typeof FornecedoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quebra/': {
+      id: '/quebra/'
+      path: '/quebra'
+      fullPath: '/quebra/'
+      preLoaderRoute: typeof QuebraIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quebra/lancar': {
+      id: '/quebra/lancar'
+      path: '/quebra/lancar'
+      fullPath: '/quebra/lancar'
+      preLoaderRoute: typeof QuebraLancarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/platform/tenants/': {
       id: '/platform/tenants/'
       path: '/platform/tenants'
@@ -476,6 +596,12 @@ const rootRouteChildren: RootRouteChildren = {
   CaixasEconomiaRoute: CaixasEconomiaRoute,
   CaixasRetornoRoute: CaixasRetornoRoute,
   CaixasSaldoRoute: CaixasSaldoRoute,
+  CaixasGalpaoRoute: CaixasGalpaoRoute,
+  CaixasFornecedorRoute: CaixasFornecedorRoute,
+  FornecedorRoute: FornecedorRoute,
+  FornecedoresRoute: FornecedoresRoute,
+  QuebraIndexRoute: QuebraIndexRoute,
+  QuebraLancarRoute: QuebraLancarRoute,
   ExpedicaoTvRoute: ExpedicaoTvRoute,
   FiscalCategoriasRoute: FiscalCategoriasRoute,
   FiscalFornecedoresCategoriaRoute: FiscalFornecedoresCategoriaRoute,

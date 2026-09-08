@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { getIcon, slugToPath } from "@/lib/pages";
 import { initials } from "@/lib/utils-date";
 import { useGlobalSearch, useAlertas } from "@/hooks/use-dashboard";
+import { one } from "@/lib/embed";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +25,8 @@ export function AppShell() {
   const { data: alertas = [] } = useAlertas();
 
   const isTv = pathname.startsWith("/expedicao/tv");
-  const isMobile = pathname.startsWith("/caixas/retorno");
+  const isMobile = pathname.startsWith("/caixas/retorno") || pathname.startsWith("/caixas/galpao") || pathname.startsWith("/caixas/fornecedor") || pathname === "/fornecedor";
+  const isFornecedor = profile?.role === "fornecedor";
 
   const hasGestaoInSidebar = pages.some((p) => p.slug === "gestao");
 
@@ -41,7 +43,7 @@ export function AppShell() {
     }));
   }, [pages]);
 
-  if (isTv) return <Outlet />;
+  if (isTv || isFornecedor) return <Outlet />;
 
   const roleLabel = isAdmin ? "Administrador" : "Operação";
 
@@ -145,13 +147,13 @@ export function AppShell() {
             />
             {search.length >= 2 && searchResults && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-64 overflow-auto text-sm">
-                {searchResults.pedidos.map((p: { id: string; codigo: string; fornecedores: { nome: string } | null }) => (
+                {searchResults.pedidos.map((p: { id: string; codigo: string; fornecedores: { nome: string } | { nome: string }[] | null }) => (
                   <button
                     key={p.id}
                     className="block w-full text-left px-3 py-2 hover:bg-secondary"
                     onClick={() => { navigate({ to: "/recebimento/conferir", search: { pedidoId: p.id } }); setSearch(""); }}
                   >
-                    Pedido {p.codigo} · {p.fornecedores?.nome}
+                    Pedido {p.codigo} · {one(p.fornecedores)?.nome}
                   </button>
                 ))}
                 {searchResults.clientes.map((c: { id: string; nome: string }) => (
@@ -190,7 +192,13 @@ export function AppShell() {
                   <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum alerta</div>
                 ) : (
                   alertas.map((a, i) => (
-                    <DropdownMenuItem key={i} className="flex flex-col items-start gap-0.5">
+                    <DropdownMenuItem
+                      key={i}
+                      className="flex flex-col items-start gap-0.5"
+                      onClick={() => {
+                        if (a.href) navigate({ to: a.href as "/gestao" });
+                      }}
+                    >
                       <span className="font-semibold text-xs">{a.title}</span>
                       <span className="text-[10px] text-muted-foreground">{a.desc}</span>
                     </DropdownMenuItem>

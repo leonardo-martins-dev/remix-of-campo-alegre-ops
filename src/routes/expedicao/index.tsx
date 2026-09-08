@@ -59,20 +59,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatTime } from "@/lib/utils-date";
+import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
+import { fromLegacyColumns, toLegacyColumns } from "@/lib/caixas-map";
+import { one } from "@/lib/embed";
 
 export const Route = createFileRoute("/expedicao/")({
   component: Page,
   head: () => ({ meta: [{ title: "Expedição · Campo Alegre" }] }),
 });
 
-type TipoCx = "G" | "I" | "P";
+type TipoCx = string;
 
 type RomaneioItemView = {
   id: string;
   produto: string;
   romaneio: number;
   real: number;
-  caixas: Record<TipoCx, number>;
+  caixas: Record<string, number>;
   status: "ok" | "corrigido" | "pendente";
 };
 
@@ -86,19 +89,21 @@ function groupRomaneio(
     caixas_g: number;
     caixas_i: number;
     caixas_p: number;
+    caixas?: Record<string, number> | null;
     status: string;
-    produtos: { nome: string; familias_produto: { nome: string } | null } | null;
+    produtos: { nome: string; familias_produto: { nome: string } | { nome: string }[] | null } | { nome: string; familias_produto: unknown }[] | null;
   }[] | undefined
 ): FamiliaView[] {
   const map = new Map<string, RomaneioItemView[]>();
   for (const it of items ?? []) {
-    const familia = it.produtos?.familias_produto?.nome ?? "Outros";
+    const prod = one(it.produtos);
+    const familia = one(prod?.familias_produto as { nome: string } | { nome: string }[] | null)?.nome ?? "Outros";
     const row: RomaneioItemView = {
       id: it.id,
-      produto: it.produtos?.nome ?? "—",
+      produto: prod?.nome ?? "—",
       romaneio: Number(it.quantidade_romaneio),
       real: Number(it.quantidade_real),
-      caixas: { G: it.caixas_g, I: it.caixas_i, P: it.caixas_p },
+      caixas: fromLegacyColumns(it),
       status: it.status as RomaneioItemView["status"],
     };
     if (!map.has(familia)) map.set(familia, []);
@@ -123,6 +128,7 @@ function Page() {
   const { data: clientes = [] } = useClientes();
   const { data: produtos = [] } = useProdutos();
   const { data: motoristas = [] } = useMotoristas();
+  const { data: tiposCx = [] } = useTiposCaixa();
   const importExcel = useImportCargasExcel();
   const importRomaneio = useImportRomaneioItens();
   const wiseFetch = useWiseCarregamentos();
@@ -153,16 +159,19 @@ function Page() {
     ? detail.carga_caixas_resumo[0]
     : detail?.carga_caixas_resumo;
 
-  const sugCaixas = useMemo<Record<TipoCx, number>>(() => {
-    const sum = (k: TipoCx) => familias.flatMap((f) => f.itens).reduce((a, i) => a + i.caixas[k], 0);
-    return {
-      G: resumo?.sugerido_g ?? sum("G"),
-      I: resumo?.sugerido_i ?? sum("I"),
-      P: resumo?.sugerido_p ?? sum("P"),
-    };
-  }, [familias, resumo]);
+  const sugCaixas = useMemo<Record<string, number>>(() => {
+    const sum = (k: string) => familias.flatMap((f) => f.itens).reduce((a, i) => a + (i.caixas[k] ?? 0), 0);
+    const json = (resumo as { sugerido?: Record<string, number> } | null)?.sugerido;
+    const next: Record<string, number> = {};
+    const keys = tiposCx.length ? tiposCx.map((t) => t.sigla) : ["G", "I", "P"];
+    for (const k of keys) {
+      const legacy = k === "G" ? resumo?.sugerido_g : k === "I" ? resumo?.sugerido_i : k === "P" ? resumo?.sugerido_p : undefined;
+      next[k] = json?.[k] ?? legacy ?? sum(k);
+    }
+    return next;
+  }, [familias, resumo, tiposCx]);
 
-  const [realCaixas, setRealCaixas] = useState<Record<TipoCx, number>>({ G: 0, I: 0, P: 0 });
+  const [realCaixas, setRealCaixas] = useState<Record<string, number>>({ G: 0, I: 0, P: 0 });
 
   useEffect(() => {
     setRealTouched(false);
@@ -171,7 +180,13 @@ function Page() {
   useEffect(() => {
     if (realTouched) return;
     if (resumo) {
-      setRealCaixas({ G: resumo.real_g, I: resumo.real_i, P: resumo.real_p });
+      const json = (resumo as { real?: Record<string, number> }).real;
+      setRealCaixas({
+        G: json?.G ?? resumo.real_g,
+        I: json?.I ?? resumo.real_i,
+        P: json?.P ?? resumo.real_p,
+        ...json,
+      });
     } else {
       setRealCaixas(sugCaixas);
     }
@@ -189,16 +204,18 @@ function Page() {
     return () => clearInterval(t);
   }, [detail?.hora_inicio]);
 
-  const persistResumo = (next: Record<TipoCx, number>) => {
+  const persistResumo = (next: Record<string, number>) => {
     if (!activeId) return;
     updateResumo.mutate({
       cargaId: activeId,
-      real_g: next.G,
-      real_i: next.I,
-      real_p: next.P,
-      sugerido_g: sugCaixas.G,
-      sugerido_i: sugCaixas.I,
-      sugerido_p: sugCaixas.P,
+      real_g: next.G ?? 0,
+      real_i: next.I ?? 0,
+      real_p: next.P ?? 0,
+      sugerido_g: sugCaixas.G ?? 0,
+      sugerido_i: sugCaixas.I ?? 0,
+      sugerido_p: sugCaixas.P ?? 0,
+      real: next,
+      sugerido: sugCaixas,
     });
   };
 
@@ -209,10 +226,11 @@ function Page() {
     updateItem.mutate({ cargaId: activeId, itemId, quantidade_real: real, status });
   };
 
-  const updateCaixaItem = (itemId: string, tipo: TipoCx, v: number) => {
+  const updateCaixaItem = (itemId: string, tipo: TipoCx, current: Record<string, number>, v: number) => {
     if (!activeId) return;
-    const field = tipo === "G" ? "caixas_g" : tipo === "I" ? "caixas_i" : "caixas_p";
-    updateItem.mutate({ cargaId: activeId, itemId, [field]: Math.max(0, v) });
+    const next = { ...current, [tipo]: Math.max(0, v) };
+    const legacy = toLegacyColumns(next);
+    updateItem.mutate({ cargaId: activeId, itemId, ...legacy });
   };
 
   const flat = familias.flatMap((f) => f.itens);
@@ -236,7 +254,7 @@ function Page() {
         onSuccess: () => {
           const total = realCaixas.G + realCaixas.I + realCaixas.P;
           const cliente =
-            (detail.clientes as { nome: string } | null)?.nome ?? "Cliente";
+            one(detail.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? "Cliente";
           toast.success("Carga finalizada", {
             description: `${cliente} · ${total} caixas registradas (G ${realCaixas.G} / I ${realCaixas.I} / P ${realCaixas.P}).`,
           });
@@ -340,7 +358,7 @@ function Page() {
 
   const openWiseImport = async () => {
     try {
-      const list = await wiseFetch.mutateAsync();
+      const list = await wiseFetch.mutateAsync(undefined);
       setWiseList(list);
       setWiseSelected(list[0]?.id ?? "");
       setWiseOpen(true);
@@ -436,7 +454,7 @@ function Page() {
     );
   }
 
-  const clienteNome = (detail?.clientes as { nome: string } | null)?.nome ?? "—";
+  const clienteNome = one(detail?.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
   const motorista = (detail?.motoristas as { nome: string } | null)?.nome ?? "—";
   const placa = (detail?.caminhoes as { placa: string } | null)?.placa ?? "—";
   const rota = (detail?.rotas as { nome: string } | null)?.nome ?? "—";
@@ -475,7 +493,7 @@ function Page() {
           <SelectContent>
             {cargas.map((c) => (
               <SelectItem key={c.id} value={c.id}>
-                {c.codigo} · {(c.clientes as { nome: string } | null)?.nome ?? "—"} ({c.status})
+                {c.codigo} · {one(c.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? "—"} ({c.status})
               </SelectItem>
             ))}
           </SelectContent>
@@ -548,7 +566,7 @@ function Page() {
                           <th className="text-left px-5 py-2">Produto</th>
                           <th className="text-right px-3 py-2">Romaneio</th>
                           <th className="text-center px-3 py-2">Real</th>
-                          <th className="text-center px-3 py-2">Caixas G / I / P</th>
+                          <th className="text-center px-3 py-2">Caixas {tiposCx.map((t) => t.sigla).join(" / ") || "G / I / P"}</th>
                           <th className="text-right px-5 py-2">Status</th>
                         </tr>
                       </thead>
@@ -566,14 +584,14 @@ function Page() {
                             </td>
                             <td className="px-3 py-3">
                               <div className="flex items-center justify-center gap-2">
-                                {(["G", "I", "P"] as const).map((k) => (
+                                {(tiposCx.length ? tiposCx.map((t) => t.sigla) : (["G", "I", "P"] as const)).map((k) => (
                                   <div key={k} className="flex items-center gap-1">
                                     <span className="text-[10px] font-bold text-muted-foreground w-3">{k}</span>
                                     <NumberStepper
                                       size="sm"
                                       width="w-8"
-                                      value={it.caixas[k]}
-                                      onChange={(v) => updateCaixaItem(it.id, k, v)}
+                                      value={it.caixas[k] ?? 0}
+                                      onChange={(v) => updateCaixaItem(it.id, k, it.caixas, v)}
                                     />
                                   </div>
                                 ))}
@@ -642,18 +660,19 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {(["G", "I", "P"] as const).map((k) => {
-                  const diff = realCaixas[k] - sugCaixas[k];
+                {(tiposCx.length ? tiposCx : [{ sigla: "G", nome: "Grande" }, { sigla: "I", nome: "Isopor" }, { sigla: "P", nome: "Plástica" }]).map((t) => {
+                  const k = t.sigla;
+                  const diff = (realCaixas[k] ?? 0) - (sugCaixas[k] ?? 0);
                   return (
                     <tr key={k} className="border-t border-border">
                       <td className="py-2 font-semibold text-navy">
-                        {k === "G" ? "Grande" : k === "I" ? "Isopor" : "Plástica"}
+                        {t.nome}
                       </td>
-                      <td className="py-2 text-right text-muted-foreground">{sugCaixas[k]}</td>
+                      <td className="py-2 text-right text-muted-foreground">{sugCaixas[k] ?? 0}</td>
                       <td className="py-2">
                         <NumberStepper
                           size="sm"
-                          value={realCaixas[k]}
+                          value={realCaixas[k] ?? 0}
                           onChange={(v) => {
                             setRealTouched(true);
                             const next = { ...realCaixas, [k]: v };
@@ -733,8 +752,8 @@ function Page() {
             </div>
           )}
           {cargasFiltradas.map((c) => {
-            const nome = (c.clientes as { nome: string } | null)?.nome ?? "—";
-            const mot = (c.motoristas as { nome: string } | null)?.nome ?? "—";
+            const nome = one(c.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
+            const mot = one(c.motoristas as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
             const active = c.id === activeId;
             return (
               <button

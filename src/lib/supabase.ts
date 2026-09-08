@@ -18,10 +18,11 @@ export type Profile = {
   id: string;
   nome: string;
   email: string;
-  role: "admin" | "user";
+  role: "admin" | "user" | "fornecedor";
   avatar_url: string | null;
   ativo: boolean;
   motorista_id?: string | null;
+  fornecedor_id?: string | null;
 };
 
 export type AccessiblePage = {

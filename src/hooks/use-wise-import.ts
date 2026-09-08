@@ -14,11 +14,11 @@ export type WiseCarregamento = {
 export function useWiseCarregamentos(date = todayBRT()) {
   return useMutation({
     mutationFn: async (rows?: Record<string, unknown>[]): Promise<WiseCarregamento[]> => {
-      const { data, error } = await supabase.functions.invoke("sync-wise-cargas", {
-        body: rows?.length ? { data, rows } : { data },
+      const { data: result, error } = await supabase.functions.invoke("sync-wise-cargas", {
+        body: rows?.length ? { rows } : {},
       });
       if (error) throw error;
-      return (data?.carregamentos ?? []) as WiseCarregamento[];
+      return (result?.carregamentos ?? []) as WiseCarregamento[];
     },
   });
 }
@@ -63,7 +63,7 @@ export function useImportWiseCarregamento() {
             status: "pendente",
           };
         })
-        .filter(Boolean);
+        .filter((it): it is NonNullable<typeof it> => !!it);
 
       if (itens.length) {
         const { error: rErr } = await supabase.from("romaneio_itens").insert(itens);

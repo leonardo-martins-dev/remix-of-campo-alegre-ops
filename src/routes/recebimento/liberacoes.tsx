@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
-import { usePedidosAguardandoLiberacao, useLiberarPedido } from "@/hooks/use-pedidos";
+import { usePedidosAguardandoLiberacao, useLiberarPedido, useEncerrarPedido } from "@/hooks/use-pedidos";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ function Page() {
   const { isAdmin } = useAuth();
   const { data: pedidos = [], isLoading } = usePedidosAguardandoLiberacao();
   const liberar = useLiberarPedido();
+  const encerrar = useEncerrarPedido();
   const [obs, setObs] = useState<Record<string, string>>({});
 
   if (!isAdmin) {
@@ -60,7 +61,7 @@ function Page() {
             <div key={p.id} className="card-base p-4">
               <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                 <div>
-                  <div className="font-bold text-navy">{p.fornecedores?.nome ?? p.codigo}</div>
+                  <div className="font-bold text-navy">{(Array.isArray(p.fornecedores) ? p.fornecedores[0] : p.fornecedores)?.nome ?? p.codigo}</div>
                   <div className="text-xs text-muted-foreground">
                     Pedido {p.codigo} · {divs.length} divergência(s)
                   </div>
@@ -78,6 +79,26 @@ function Page() {
                   }}
                 >
                   <CheckCircle2 size={14} className="mr-1" /> Liberar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={encerrar.isPending}
+                  onClick={async () => {
+                    const motivo = obs[p.id]?.trim();
+                    if (!motivo) {
+                      toast.error("Observação obrigatória para encerrar com falta");
+                      return;
+                    }
+                    try {
+                      await encerrar.mutateAsync({ pedidoId: p.id, motivo });
+                      toast.success("Pedido encerrado com falta definitiva");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao encerrar");
+                    }
+                  }}
+                >
+                  Encerrar com falta
                 </Button>
               </div>
               <ul className="text-sm space-y-1 mb-3">

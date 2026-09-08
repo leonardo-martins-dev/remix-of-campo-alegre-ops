@@ -9,6 +9,7 @@ import { useFaltas, useConfigValor } from "@/hooks/use-pedidos";
 import { useFornecedores } from "@/hooks/use-cadastros";
 import { exportToExcel } from "@/lib/excel";
 import { todayBRT } from "@/lib/utils-date";
+import { one } from "@/lib/embed";
 import {
   Select,
   SelectContent,
@@ -44,6 +45,7 @@ function Page() {
   const [period, setPeriod] = useState<"today" | "week" | "month">("week");
   const [divergencia, setDivergencia] = useState<"falta" | "sobra" | "qualidade" | "all">("falta");
   const [modo, setModo] = useState<"itens" | "resumo">("itens");
+  const [tolFiltro, setTolFiltro] = useState<"all" | "acima" | "dentro">("all");
 
   const { data: fornecedores = [] } = useFornecedores();
   const { data: faltas = [], isLoading, error } = useFaltas({
@@ -54,26 +56,51 @@ function Page() {
   const { data: valorUnitario = 4.5 } = useConfigValor("impacto_falta_por_unidade", 4.5);
 
   const faltasComImpacto = useMemo(() => {
-    return (faltas as FaltaRow[]).map((f) => {
-      const pedido = Number(f.itens_pedido?.quantidade_pedida ?? 0);
+    return faltas.map((raw) => {
+      const rec = raw as unknown as {
+        id: string;
+        quantidade_recebida: number;
+        quantidade_divergencia: number;
+        divergencia: string | null;
+        tem_problema_qualidade: boolean;
+        valor_divergencia?: number;
+        estimado?: boolean;
+        dentro_tolerancia?: boolean | null;
+        itens_pedido?: unknown;
+      };
+      const f = rec;
+      const ip = one(rec.itens_pedido as FaltaRow["itens_pedido"] | FaltaRow["itens_pedido"][] | null);
+      const ped = one(ip?.pedidos_recebimento);
+      const prod = one(ip?.produtos);
+      const forn = one(ped?.fornecedores);
+      const pedido = Number(ip?.quantidade_pedida ?? 0);
       const recebido = Number(f.quantidade_recebida);
       const falta = Math.max(0, pedido - recebido);
       const qtd = f.quantidade_divergencia > 0 ? Number(f.quantidade_divergencia) : falta;
+      const preco = Number((ip as { preco_unitario?: number } | null)?.preco_unitario) || valorUnitario;
       return {
         ...f,
-        produto: f.itens_pedido?.produtos?.nome ?? "—",
-        unid: f.itens_pedido?.produtos?.unidade ?? "un",
-        fornecedor: f.itens_pedido?.pedidos_recebimento?.fornecedores?.nome ?? "—",
-        fornecedor_id: f.itens_pedido?.pedidos_recebimento?.fornecedor_id,
-        codigo: f.itens_pedido?.pedidos_recebimento?.codigo ?? "—",
+        id: rec.id,
+        produto: prod?.nome ?? "—",
+        unid: prod?.unidade ?? "un",
+        fornecedor: forn?.nome ?? "—",
+        fornecedor_id: ped?.fornecedor_id,
+        codigo: ped?.codigo ?? "—",
         pedido,
         recebido,
         falta: qtd,
-        impacto: qtd * valorUnitario,
+        impacto: Number(f.valor_divergencia ?? qtd * preco),
+        estimado: Boolean(f.estimado) || !(ip as { preco_unitario?: number } | null)?.preco_unitario,
+        preco,
         tipo: f.divergencia ?? (f.tem_problema_qualidade ? "qualidade" : "falta"),
+        dentro_tolerancia: f.dentro_tolerancia ?? null,
       };
+    }).filter((row) => {
+      if (tolFiltro === "acima") return row.dentro_tolerancia === false;
+      if (tolFiltro === "dentro") return row.dentro_tolerancia === true;
+      return true;
     });
-  }, [faltas, valorUnitario]);
+  }, [faltas, valorUnitario, tolFiltro]);
 
   const resumoFiltrado = useMemo(() => {
     const map = new Map<string, { fornecedor: string; itens: number; qty: number; impacto: number }>();
@@ -103,7 +130,10 @@ function Page() {
         Recebido: i.recebido,
         Falta: i.falta,
         Tipo: i.tipo,
+        Preco: i.preco,
         "Impacto R$": i.impacto.toFixed(2),
+        Estimado: i.estimado ? "sim" : "nao",
+        Tolerancia: i.dentro_tolerancia === false ? "acima" : i.dentro_tolerancia === true ? "dentro" : "",
       }))
     );
   };
@@ -158,6 +188,16 @@ function Page() {
             <SelectItem value="sobra">Sobras</SelectItem>
             <SelectItem value="qualidade">Qualidade</SelectItem>
             <SelectItem value="all">Todas</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={tolFiltro} onValueChange={(v) => setTolFiltro(v as typeof tolFiltro)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toda tolerância</SelectItem>
+            <SelectItem value="acima">Acima da régua</SelectItem>
+            <SelectItem value="dentro">Dentro da régua</SelectItem>
           </SelectContent>
         </Select>
         <div className="flex gap-1">

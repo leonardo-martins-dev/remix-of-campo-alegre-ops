@@ -30,7 +30,7 @@ export function resolveProfile(
       (user.user_metadata?.full_name as string | undefined) ??
       user.email.split("@")[0] ??
       "Usuário",
-    role: resolveIsAdmin(null, user) ? "admin" : "user",
+    role: resolveIsAdmin(null, user) ? "admin" : (user.app_metadata?.role === "fornecedor" ? "fornecedor" : "user"),
     avatar_url: null,
     ativo: true,
   };

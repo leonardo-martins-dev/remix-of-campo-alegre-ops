@@ -16,7 +16,7 @@ export const Route = createFileRoute("/caixas/economia")({
   head: () => ({ meta: [{ title: "Custo & Perda · Campo Alegre" }] }),
 });
 
-const TIPO_LABEL: Record<"G" | "I" | "P", string> = { G: "Grande", I: "Isopor", P: "Plástica" };
+const FALLBACK_LABEL: Record<string, string> = { G: "Grande", I: "Isopor", P: "Plástica" };
 
 function Page() {
   const { user } = useAuth();
@@ -32,18 +32,23 @@ function Page() {
   const custoById = useMemo(() => {
     const m: Record<string, number> = {};
     for (const t of tipos) {
-      m[t.id] = draftCustos[t.id] !== undefined ? parseFloat(draftCustos[t.id]) || 0 : t.custo_unitario;
+      const val = draftCustos[t.id] !== undefined ? parseFloat(draftCustos[t.id]) || 0 : t.custo_unitario;
+      m[t.id] = val;
+      m[t.sigla] = val;
     }
     return m;
   }, [tipos, draftCustos]);
 
-  const custoMedio = ((custoById.G ?? 0) + (custoById.I ?? 0) + (custoById.P ?? 0)) / 3;
+  const custoMedio = tipos.length
+    ? tipos.reduce((a, t) => a + (custoById[t.id] ?? t.custo_unitario), 0) / tipos.length
+    : 0;
+  const labelOf = (sigla: string) => tipos.find((t) => t.sigla === sigla)?.nome ?? FALLBACK_LABEL[sigla] ?? sigla;
 
   const piorTipoByCliente = useMemo(() => {
-    const map = new Map<string, { tipo: "G" | "I" | "P"; perdidas: number }>();
+    const map = new Map<string, { tipo: string; perdidas: number }>();
     for (const r of saldoRows) {
       if (!r.cliente_id || !r.tipo_caixa) continue;
-      const t = r.tipo_caixa as "G" | "I" | "P";
+      const t = String(r.tipo_caixa);
       const p = Number(r.perdidas ?? 0);
       const cur = map.get(r.cliente_id);
       if (!cur || p > cur.perdidas) map.set(r.cliente_id, { tipo: t, perdidas: p });
@@ -64,13 +69,13 @@ function Page() {
           enviadas: Number(c.enviadas ?? 0),
           perdidas,
           taxa: Number(c.taxa_perda ?? 0),
-          pior: TIPO_LABEL[tipoCx],
+          pior: labelOf(tipoCx),
           tipoCx,
           custoPerda: perdidas * custo,
           trend: [perdidas, perdidas, perdidas],
         };
       }),
-    [perdas, piorTipoByCliente, custoById, custoMedio]
+    [perdas, piorTipoByCliente, custoById, custoMedio, tipos]
   );
 
   const perdaTotal = dados.reduce((a, c) => a + c.custoPerda, 0);

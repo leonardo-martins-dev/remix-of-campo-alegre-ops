@@ -30,7 +30,7 @@ export function useCargaDetail(cargaId: string | null) {
         .select(`
           *,
           clientes(nome), motoristas(nome), caminhoes(placa), rotas(nome),
-          romaneio_itens(id, quantidade_romaneio, quantidade_real, caixas_g, caixas_i, caixas_p, status, produtos(nome, familia_id, familias_produto(nome))),
+          romaneio_itens(id, quantidade_romaneio, quantidade_real, caixas_g, caixas_i, caixas_p, caixas, status, produtos(nome, familia_id, familias_produto(nome))),
           carga_caixas_resumo(*)
         `)
         .eq("id", cargaId!)
@@ -51,6 +51,7 @@ export function useUpdateRomaneioItem() {
       caixas_g?: number;
       caixas_i?: number;
       caixas_p?: number;
+      caixas?: Record<string, number>;
       status?: string;
     }) => {
       const { itemId, cargaId, ...fields } = payload;
@@ -73,6 +74,8 @@ export function useUpdateCargaResumo() {
       sugerido_g?: number;
       sugerido_i?: number;
       sugerido_p?: number;
+      sugerido?: Record<string, number>;
+      real?: Record<string, number>;
     }) => {
       const { cargaId, ...fields } = payload;
       const { error } = await supabase.from("carga_caixas_resumo").upsert(

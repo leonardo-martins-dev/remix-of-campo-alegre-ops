@@ -50,19 +50,14 @@ function Page() {
     { etapa: "Retorno de caixas", tempo: cicloTotal + retorno },
   ];
 
-  const tempoCargaPorLoja = (data.cargas as {
-    id: string;
-    hora_inicio: string;
-    hora_fim: string;
-    clientes: { nome: string } | null;
-    romaneio_itens: { id: string }[];
-  }[]).map((c) => {
+  const tempoCargaPorLoja = data.cargas.map((c) => {
     const inicio = new Date(c.hora_inicio).getTime();
     const fim = new Date(c.hora_fim).getTime();
     const duracao = Math.max(1, (fim - inicio) / 60000);
     const itens = c.romaneio_itens?.length ?? 0;
+    const cliente = Array.isArray(c.clientes) ? c.clientes[0] : c.clientes;
     return {
-      loja: c.clientes?.nome ?? "—",
+      loja: cliente?.nome ?? "—",
       inicio: formatTime(c.hora_inicio),
       fim: formatTime(c.hora_fim),
       duracao: Math.round(duracao),
@@ -70,17 +65,14 @@ function Page() {
     };
   });
 
-  const conferenciasRows = (data.conferencias as {
-    id: string;
-    iniciada_em: string;
-    finalizada_em: string;
-    pedidos_recebimento: { codigo: string; fornecedores: { nome: string } | null } | null;
-  }[]).map((c) => {
+  const conferenciasRows = data.conferencias.map((c) => {
     const dur =
       (new Date(c.finalizada_em).getTime() - new Date(c.iniciada_em).getTime()) / 60000;
+    const ped = Array.isArray(c.pedidos_recebimento) ? c.pedidos_recebimento[0] : c.pedidos_recebimento;
+    const forn = ped ? (Array.isArray(ped.fornecedores) ? ped.fornecedores[0] : ped.fornecedores) : null;
     return {
-      codigo: c.pedidos_recebimento?.codigo ?? "—",
-      fornecedor: c.pedidos_recebimento?.fornecedores?.nome ?? "—",
+      codigo: ped?.codigo ?? "—",
+      fornecedor: forn?.nome ?? "—",
       duracao: Math.round(dur),
     };
   });

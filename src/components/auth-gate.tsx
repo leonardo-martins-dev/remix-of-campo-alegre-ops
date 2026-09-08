@@ -20,14 +20,19 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     }
 
     if (session && isLogin) {
-      navigate({ to: "/" });
+      navigate({ to: profile?.role === "fornecedor" ? "/fornecedor" : "/" });
+      return;
+    }
+
+    if (session && profile?.role === "fornecedor" && pathname !== "/fornecedor") {
+      navigate({ to: "/fornecedor" });
       return;
     }
 
     if (session && profile && !isLogin) {
       const slug = pathnameToSlug(pathname);
       if (!hasPageAccess(slug)) {
-        navigate({ to: "/" });
+        navigate({ to: profile.role === "fornecedor" ? "/fornecedor" : "/" });
       }
     }
   }, [loading, session, isLogin, pathname, profile, hasPageAccess, navigate]);

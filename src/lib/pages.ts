@@ -10,6 +10,8 @@ import {
   Activity,
   Settings,
   UserPlus,
+  Warehouse,
+  Handshake,
   PackageCheck as ConferirIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +27,12 @@ export const SLUG_TO_PATH: Record<string, string> = {
   "caixas/saldo": "/caixas/saldo",
   "caixas/economia": "/caixas/economia",
   "caixas/retorno": "/caixas/retorno",
+  "caixas/galpao": "/caixas/galpao",
+  "caixas/fornecedor": "/caixas/fornecedor",
+  "quebra/lancar": "/quebra/lancar",
+  quebra: "/quebra",
+  fornecedores: "/fornecedores",
+  fornecedor: "/fornecedor",
   indicadores: "/indicadores",
   gestao: "/gestao",
   "gestao/usuarios": "/gestao/usuarios",
@@ -45,6 +53,8 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   Activity,
   Settings,
   UserPlus,
+  Warehouse,
+  Handshake,
   PackageCheckConferir: ConferirIcon,
 };
 

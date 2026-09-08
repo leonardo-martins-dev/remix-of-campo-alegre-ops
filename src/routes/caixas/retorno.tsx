@@ -20,6 +20,8 @@ import { useAuth } from "@/lib/auth";
 import { enqueueRetorno, getRetornoQueue, removeFromQueue, validateRetornoQuantities } from "@/lib/offline-queue";
 import { supabase } from "@/lib/supabase";
 import { formatTime, todayBRT } from "@/lib/utils-date";
+import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
+import { emptyCaixas, fromLegacyColumns, sumCaixas, tipoColor } from "@/lib/caixas-map";
 
 export const Route = createFileRoute("/caixas/retorno")({
   component: Page,
@@ -65,12 +67,13 @@ function PhoneFrame() {
   const { data: clientes = [] } = useClientes();
   const { data: saldo = [] } = useSaldoCaixas();
   const { data: motoristas = [] } = useMotoristas();
+  const { data: tipos = [] } = useTiposCaixa();
   const { user, profile, isAdmin } = useAuth();
   const registrar = useRegistrarRetorno();
   const [motoristaId, setMotoristaId] = useState<string>("");
   const [clienteIdx, setClienteIdx] = useState(0);
   const [open, setOpen] = useState(false);
-  const [ret, setRet] = useState({ G: 0, I: 0, P: 0 });
+  const [ret, setRet] = useState<Record<string, number>>({});
   const [offline, setOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
@@ -109,23 +112,24 @@ function PhoneFrame() {
 
   const cliente = clientes[clienteIdx];
   const saldoCliente = useMemo(() => {
-    if (!cliente) return { G: 0, I: 0, P: 0 };
+    const base = emptyCaixas(tipos);
+    if (!cliente) return base;
     const rows = saldo.filter((s: { cliente_id: string }) => s.cliente_id === cliente.id);
-    const get = (tipo: string) => rows.find((r: { tipo_caixa: string }) => r.tipo_caixa === tipo)?.saldo ?? 0;
-    return { G: get("G"), I: get("I"), P: get("P") };
-  }, [cliente, saldo]);
+    for (const t of tipos) {
+      base[t.sigla] = rows.find((r: { tipo_caixa: string }) => r.tipo_caixa === t.sigla)?.saldo ?? 0;
+    }
+    return base;
+  }, [cliente, saldo, tipos]);
 
-  const saldoAtual = {
-    G: saldoCliente.G - ret.G,
-    I: saldoCliente.I - ret.I,
-    P: saldoCliente.P - ret.P,
-  };
+  const saldoAtual = useMemo(() => {
+    const next = { ...saldoCliente };
+    for (const t of tipos) next[t.sigla] = (saldoCliente[t.sigla] ?? 0) - (ret[t.sigla] ?? 0);
+    return next;
+  }, [saldoCliente, ret, tipos]);
 
-  const hasSaldoNegativo =
-    saldoCliente.G < 0 || saldoCliente.I < 0 || saldoCliente.P < 0;
-  const saldoResultanteNegativo =
-    saldoAtual.G < 0 || saldoAtual.I < 0 || saldoAtual.P < 0;
-  const totalRet = ret.G + ret.I + ret.P;
+  const hasSaldoNegativo = tipos.some((t) => (saldoCliente[t.sigla] ?? 0) < 0);
+  const saldoResultanteNegativo = tipos.some((t) => (saldoAtual[t.sigla] ?? 0) < 0);
+  const totalRet = sumCaixas(ret);
 
   async function confirmar() {
     if (!cliente || !user) return;
@@ -133,7 +137,7 @@ function PhoneFrame() {
       toast.error("Informe ao menos uma caixa");
       return;
     }
-    if (ret.G > saldoCliente.G || ret.I > saldoCliente.I || ret.P > saldoCliente.P) {
+    if (tipos.some((t) => (ret[t.sigla] ?? 0) > (saldoCliente[t.sigla] ?? 0))) {
       toast.error("Retorno maior que o saldo disponível");
       return;
     }
@@ -151,14 +155,15 @@ function PhoneFrame() {
       cliente_id: cliente.id,
       registrado_por: user.id,
       motorista_id: resolvedMotorista,
-      caixas_g: ret.G,
-      caixas_i: ret.I,
-      caixas_p: ret.P,
+      caixas_g: ret.G ?? 0,
+      caixas_i: ret.I ?? 0,
+      caixas_p: ret.P ?? 0,
+      caixas: ret,
     };
 
     if (!navigator.onLine) {
       const offlineErr = validateRetornoQuantities(
-        { caixas_g: ret.G, caixas_i: ret.I, caixas_p: ret.P },
+        { caixas_g: ret.G ?? 0, caixas_i: ret.I ?? 0, caixas_p: ret.P ?? 0, caixas: ret },
         saldoCliente
       );
       if (offlineErr) {
@@ -167,20 +172,20 @@ function PhoneFrame() {
       }
       enqueueRetorno(payload);
       toast.success("Retorno salvo offline", { description: "Sincroniza ao recuperar sinal." });
-      setRet({ G: 0, I: 0, P: 0 });
+      setRet(emptyCaixas(tipos));
       return;
     }
 
     registrar.mutate(payload, {
       onSuccess: () => {
         toast.success("Retorno registrado");
-        setRet({ G: 0, I: 0, P: 0 });
+        setRet(emptyCaixas(tipos));
       },
       onError: (e) => toast.error(e.message),
     });
   }
 
-  const Step = ({ tipo, label, color }: { tipo: "G" | "I" | "P"; label: string; color: string }) => (
+  const Step = ({ tipo, label, color }: { tipo: string; label: string; color: string }) => (
     <div className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.06)" }}>
       <div className="flex items-center justify-between mb-3">
         <div>
@@ -200,20 +205,20 @@ function PhoneFrame() {
         <button
           type="button"
           aria-label={`Diminuir ${label}`}
-          onClick={() => setRet((r) => ({ ...r, [tipo]: Math.max(0, r[tipo] - 1) }))}
+          onClick={() => setRet((r) => ({ ...r, [tipo]: Math.max(0, (r[tipo] ?? 0) - 1) }))}
           className="h-12 w-12 rounded-2xl bg-white/10 active:bg-white/20 flex items-center justify-center"
         >
           <Minus size={18} />
         </button>
-        <span className="text-5xl font-bold tabular-nums">{ret[tipo]}</span>
+        <span className="text-5xl font-bold tabular-nums">{ret[tipo] ?? 0}</span>
         <button
           type="button"
           aria-label={`Aumentar ${label}`}
-          disabled={ret[tipo] >= saldoCliente[tipo]}
+          disabled={(ret[tipo] ?? 0) >= (saldoCliente[tipo] ?? 0)}
           onClick={() =>
             setRet((r) => ({
               ...r,
-              [tipo]: Math.min(saldoCliente[tipo], r[tipo] + 1),
+              [tipo]: Math.min(saldoCliente[tipo] ?? 0, (r[tipo] ?? 0) + 1),
             }))
           }
           className="h-12 w-12 rounded-2xl flex items-center justify-center disabled:opacity-40"
@@ -267,7 +272,7 @@ function PhoneFrame() {
                     onClick={() => {
                       setClienteIdx(i);
                       setOpen(false);
-                      setRet({ G: 0, I: 0, P: 0 });
+                      setRet(emptyCaixas(tipos));
                     }}
                     className={`block w-full text-left px-4 py-2.5 text-sm hover:bg-white/10 ${i === clienteIdx ? "text-primary" : ""}`}
                   >
@@ -287,9 +292,9 @@ function PhoneFrame() {
             )}
 
             <div className="space-y-3 mt-4">
-              <Step tipo="G" label="Caixa Grande" color="var(--primary-dark)" />
-              <Step tipo="I" label="Caixa Isopor" color="var(--info)" />
-              <Step tipo="P" label="Caixa Plástica" color="var(--brand-green)" />
+              {tipos.map((t, i) => (
+                <Step key={t.id} tipo={t.sigla} label={t.nome} color={tipoColor(i)} />
+              ))}
             </div>
 
             {(isAdmin || !(profile as { motorista_id?: string } | null)?.motorista_id) && (
@@ -401,9 +406,17 @@ function RankingPanel() {
 
 function DesktopPanel() {
   const { data: retornos = [] } = useRetornosDia();
-  const totG = retornos.reduce((a, r) => a + (r.caixas_g ?? 0), 0);
-  const totI = retornos.reduce((a, r) => a + (r.caixas_i ?? 0), 0);
-  const totP = retornos.reduce((a, r) => a + (r.caixas_p ?? 0), 0);
+  const { data: tipos = [] } = useTiposCaixa();
+  const totais = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const t of tipos) map[t.sigla] = 0;
+    for (const r of retornos) {
+      const m = fromLegacyColumns(r);
+      for (const [k, v] of Object.entries(m)) map[k] = (map[k] ?? 0) + Number(v || 0);
+    }
+    return map;
+  }, [retornos, tipos]);
+  const totalAll = Object.values(totais).reduce((a, n) => a + n, 0);
 
   return (
     <div>
@@ -413,17 +426,13 @@ function DesktopPanel() {
           <Donut
             size={140}
             thickness={16}
-            segments={[
-              { label: "G", value: totG, color: "var(--primary-dark)" },
-              { label: "I", value: totI, color: "var(--info)" },
-              { label: "P", value: totP, color: "var(--brand-green)" },
-            ]}
-            center={{ label: "Caixas", value: (totG + totI + totP).toString() }}
+            segments={tipos.map((t, i) => ({ label: t.sigla, value: totais[t.sigla] ?? 0, color: tipoColor(i) }))}
+            center={{ label: "Caixas", value: totalAll.toString() }}
           />
           <div className="flex-1 space-y-3">
-            <Pill color="var(--primary-dark)" label="Grande" value={totG} />
-            <Pill color="var(--info)" label="Isopor" value={totI} />
-            <Pill color="var(--brand-green)" label="Plástica" value={totP} />
+            {tipos.map((t, i) => (
+              <Pill key={t.id} color={tipoColor(i)} label={t.nome} value={totais[t.sigla] ?? 0} />
+            ))}
           </div>
         </div>
       </div>
@@ -436,9 +445,9 @@ function DesktopPanel() {
               <th className="text-left px-4 py-2">Hora</th>
               <th className="text-left px-4 py-2">Motorista</th>
               <th className="text-left px-4 py-2">Loja</th>
-              <th className="text-right px-4 py-2">G</th>
-              <th className="text-right px-4 py-2">I</th>
-              <th className="text-right px-4 py-2">P</th>
+              {tipos.map((t) => (
+                <th key={t.id} className="text-right px-4 py-2">{t.sigla}</th>
+              ))}
               <th className="text-right px-4 py-2">Total</th>
             </tr>
           </thead>
@@ -446,23 +455,27 @@ function DesktopPanel() {
             {retornos.map((r: {
               id: string;
               created_at: string;
+              caixas?: Record<string, number> | null;
               caixas_g: number;
               caixas_i: number;
               caixas_p: number;
-              clientes: { nome: string } | null;
-              motoristas: { nome: string } | null;
-              profiles: { nome: string } | null;
-            }) => (
+              clientes: { nome: string } | { nome: string }[] | null;
+              motoristas: { nome: string } | { nome: string }[] | null;
+              profiles: { nome: string } | { nome: string }[] | null;
+            }) => {
+              const map = fromLegacyColumns(r);
+              return (
               <tr key={r.id} className="border-t border-border">
                 <td className="px-4 py-2.5 font-mono text-muted-foreground">{formatTime(r.created_at)}</td>
-                <td className="px-4 py-2.5 text-ink">{r.motoristas?.nome ?? r.profiles?.nome ?? "—"}</td>
-                <td className="px-4 py-2.5 font-semibold text-navy">{r.clientes?.nome ?? "—"}</td>
-                <td className="px-4 py-2.5 text-right">{r.caixas_g}</td>
-                <td className="px-4 py-2.5 text-right">{r.caixas_i}</td>
-                <td className="px-4 py-2.5 text-right">{r.caixas_p}</td>
-                <td className="px-4 py-2.5 text-right font-bold text-navy">{r.caixas_g + r.caixas_i + r.caixas_p}</td>
+                <td className="px-4 py-2.5 text-ink">{(Array.isArray(r.motoristas) ? r.motoristas[0] : r.motoristas)?.nome ?? (Array.isArray(r.profiles) ? r.profiles[0] : r.profiles)?.nome ?? "—"}</td>
+                <td className="px-4 py-2.5 font-semibold text-navy">{(Array.isArray(r.clientes) ? r.clientes[0] : r.clientes)?.nome ?? "—"}</td>
+                {tipos.map((t) => (
+                  <td key={t.id} className="px-4 py-2.5 text-right">{map[t.sigla] ?? 0}</td>
+                ))}
+                <td className="px-4 py-2.5 text-right font-bold text-navy">{sumCaixas(map)}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

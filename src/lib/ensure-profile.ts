@@ -12,7 +12,7 @@ export async function ensureUserProfile(user: User): Promise<Profile | null> {
 
   const { data: existing } = await supabase
     .from("profiles")
-    .select("id, nome, email, role, avatar_url, ativo")
+    .select("id, nome, email, role, avatar_url, ativo, motorista_id, fornecedor_id")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -27,7 +27,7 @@ export async function ensureUserProfile(user: User): Promise<Profile | null> {
   const { data: upserted, error: upsertErr } = await supabase
     .from("profiles")
     .upsert({ id: user.id, email: user.email!, nome, role, ativo: true }, { onConflict: "id" })
-    .select("id, nome, email, role, avatar_url, ativo")
+    .select("id, nome, email, role, avatar_url, ativo, motorista_id, fornecedor_id")
     .single();
 
   if (upsertErr) {

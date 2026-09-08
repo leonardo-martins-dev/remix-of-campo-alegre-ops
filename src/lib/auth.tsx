@@ -102,6 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasPageAccess = useCallback(
     (slug: string) => {
+      if (profile?.role === "fornecedor") {
+        return slug === "fornecedor";
+      }
       if (slug === "gestao/usuarios") {
         return resolveIsAdmin(profile, user);
       }

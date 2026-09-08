@@ -32,6 +32,10 @@ import {
   useDestinatarioClienteMap,
   useSaveDestinatarioClienteMap,
 } from "@/hooks/use-cadastros";
+import { useCreateTipoCaixa, useDeleteTipoCaixa, useTiposCaixa, useUpdateTipoCaixa } from "@/hooks/use-tipos-caixa";
+import { useAliases, usePendenciasVinculo } from "@/hooks/use-pedidos";
+import { useResolverPendencia } from "@/hooks/use-wise-pedidos";
+import { usePosicoes, useSaldosAbertura } from "@/hooks/use-ledger";
 
 export const Route = createFileRoute("/gestao")({
   component: Page,
@@ -62,10 +66,22 @@ function Page() {
       <Tabs defaultValue="cadastros" className="max-w-4xl">
         <TabsList>
           <TabsTrigger value="cadastros">Cadastros</TabsTrigger>
+          <TabsTrigger value="caixas">Tipos de caixa</TabsTrigger>
+          <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
+          <TabsTrigger value="abertura">Saldos de abertura</TabsTrigger>
           <TabsTrigger value="config">Parâmetros</TabsTrigger>
         </TabsList>
         <TabsContent value="cadastros" className="mt-4">
           <CadastrosPanel />
+        </TabsContent>
+        <TabsContent value="caixas" className="mt-4">
+          <TiposCaixaPanel />
+        </TabsContent>
+        <TabsContent value="vinculos" className="mt-4">
+          <VinculosPanel />
+        </TabsContent>
+        <TabsContent value="abertura" className="mt-4">
+          <AberturaPanel />
         </TabsContent>
         <TabsContent value="config" className="mt-4">
           <ConfigPanel />
@@ -153,14 +169,10 @@ function MapeamentoExpedicao() {
           </Button>
         </div>
         <ul className="text-sm space-y-1">
-          {map.map((m: {
-            id: string;
-            destinatarios: { nome: string } | null;
-            clientes: { nome: string } | null;
-          }) => (
+          {map.map((m) => (
             <li key={m.id} className="flex justify-between border-t border-border py-1">
-              <span>{m.destinatarios?.nome}</span>
-              <span className="text-muted-foreground">→ {m.clientes?.nome}</span>
+              <span>{(Array.isArray(m.destinatarios) ? m.destinatarios[0] : m.destinatarios)?.nome}</span>
+              <span className="text-muted-foreground">→ {(Array.isArray(m.clientes) ? m.clientes[0] : m.clientes)?.nome}</span>
             </li>
           ))}
         </ul>
@@ -387,6 +399,170 @@ function ProdutosTable() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TiposCaixaPanel() {
+  const { data: tipos = [] } = useTiposCaixa(true);
+  const create = useCreateTipoCaixa();
+  const update = useUpdateTipoCaixa();
+  const del = useDeleteTipoCaixa();
+  const [nome, setNome] = useState("");
+  const [sigla, setSigla] = useState("");
+  const [custo, setCusto] = useState("0");
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Tipos de caixa</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <form
+          className="flex flex-wrap gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            create.mutate(
+              { nome, sigla, custo_unitario: Number(custo) || 0 },
+              {
+                onSuccess: () => { toast.success("Tipo criado"); setNome(""); setSigla(""); },
+                onError: (err) => toast.error(err.message),
+              }
+            );
+          }}
+        >
+          <Input placeholder="Nome" value={nome} onChange={(e) => setNome(e.target.value)} />
+          <Input placeholder="Sigla" className="w-20" maxLength={2} value={sigla} onChange={(e) => setSigla(e.target.value)} />
+          <Input placeholder="Custo" className="w-28" value={custo} onChange={(e) => setCusto(e.target.value)} />
+          <Button type="submit">Adicionar</Button>
+        </form>
+        <ul className="text-sm space-y-2">
+          {tipos.map((t) => (
+            <li key={t.id} className="flex flex-wrap items-center gap-2 border-b py-2">
+              <span className="font-medium w-28">{t.sigla} · {t.nome}</span>
+              <Input
+                className="w-28"
+                defaultValue={t.custo_unitario}
+                onBlur={(e) => update.mutate({ id: t.id, custo_unitario: Number(e.target.value) }, { onSuccess: () => toast.success("Custo atualizado") })}
+              />
+              <Button size="sm" variant="outline" onClick={() => update.mutate({ id: t.id, ativo: !t.ativo })}>
+                {t.ativo ? "Inativar" : "Ativar"}
+              </Button>
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={() => del.mutate(t.id, { onError: (e) => toast.error(e.message) })}>
+                Excluir
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
+
+function VinculosPanel() {
+  const { data: pendencias = [] } = usePendenciasVinculo();
+  const { data: aliases = [] } = useAliases();
+  const resolver = useResolverPendencia();
+  const { user, isAdmin } = useAuth();
+  const { data: fornecedores = [] } = useFornecedores();
+  const { data: produtos = [] } = useProdutos();
+  const { data: destinatarios = [] } = useDestinatarios();
+  const { data: clientes = [] } = useClientes();
+  const [entidade, setEntidade] = useState<Record<string, string>>({});
+  const [cliente, setCliente] = useState<Record<string, string>>({});
+
+  if (!isAdmin) return <p className="text-sm">Somente administradores resolvem vínculos.</p>;
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle>Pendências de vínculo</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {(pendencias as { id: string; tipo: string; nome_externo: string; codigo_externo: string | null }[]).map((p) => {
+            const lista = p.tipo === "fornecedor" ? fornecedores : p.tipo === "produto" ? produtos : destinatarios;
+            return (
+              <div key={p.id} className="border-b py-2 text-sm space-y-2">
+                <p><strong>{p.tipo}</strong> · {p.nome_externo} {p.codigo_externo ? `(${p.codigo_externo})` : ""}</p>
+                <div className="flex flex-wrap gap-2">
+                  <select className="h-8 rounded-md border px-2" value={entidade[p.id] ?? ""} onChange={(e) => setEntidade((s) => ({ ...s, [p.id]: e.target.value }))}>
+                    <option value="">Vincular a…</option>
+                    {lista.map((x: { id: string; nome: string }) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+                  </select>
+                  {p.tipo === "destinatario" && (
+                    <select className="h-8 rounded-md border px-2" value={cliente[p.id] ?? ""} onChange={(e) => setCliente((s) => ({ ...s, [p.id]: e.target.value }))}>
+                      <option value="">Cliente (carga)…</option>
+                      {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                    </select>
+                  )}
+                  <Button size="sm" onClick={() => resolver.mutate({
+                    pendenciaId: p.id, acao: "vincular", tipo: p.tipo as "fornecedor", nomeExterno: p.nome_externo,
+                    codigoExterno: p.codigo_externo, entidadeId: entidade[p.id], userId: user!.id,
+                  }, { onSuccess: () => toast.success("Vinculado") })}>Vincular</Button>
+                  <Button size="sm" variant="outline" onClick={() => resolver.mutate({
+                    pendenciaId: p.id, acao: "criar", tipo: p.tipo as "fornecedor", nomeExterno: p.nome_externo,
+                    criarNome: p.nome_externo, clienteId: cliente[p.id], userId: user!.id,
+                  }, { onSuccess: () => toast.success("Criado") })}>Criar</Button>
+                  <Button size="sm" variant="ghost" onClick={() => {
+                    const motivo = window.prompt("Motivo para dispensar") ?? "";
+                    resolver.mutate({
+                      pendenciaId: p.id, acao: "dispensar", tipo: p.tipo as "fornecedor", nomeExterno: p.nome_externo,
+                      motivo, userId: user!.id,
+                    }, { onSuccess: () => toast.success("Dispensado") });
+                  }}>Dispensar</Button>
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Aliases</CardTitle></CardHeader>
+        <CardContent>
+          <ul className="text-sm">
+            {(aliases as { id: string; tipo: string; nome_externo: string }[]).map((a) => (
+              <li key={a.id}>{a.tipo} · {a.nome_externo}</li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AberturaPanel() {
+  const { data: posicoes = [] } = usePosicoes();
+  const { data: tipos = [] } = useTiposCaixa();
+  const { data: clientes = [] } = useClientes();
+  const { data: fornecedores = [] } = useFornecedores();
+  const { user } = useAuth();
+  const abertura = useSaldosAbertura();
+  const [pos, setPos] = useState("");
+  const [sigla, setSigla] = useState("");
+  const [qtd, setQtd] = useState("0");
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Saldos de abertura</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">Lançamento único da posição inicial. Não entra em enviadas/retornadas.</p>
+        <select className="h-9 w-full rounded-md border px-2" value={pos} onChange={(e) => setPos(e.target.value)}>
+          <option value="">Posição…</option>
+          {(posicoes as { id: string; tipo: string; ref_id: string | null }[]).map((p) => {
+            const nome = p.tipo === "galpao" ? "Galpão" : p.tipo === "cliente"
+              ? clientes.find((c) => c.id === p.ref_id)?.nome
+              : fornecedores.find((f) => f.id === p.ref_id)?.nome;
+            return <option key={p.id} value={p.id}>{p.tipo} · {nome ?? p.ref_id}</option>;
+          })}
+        </select>
+        <select className="h-9 w-full rounded-md border px-2" value={sigla} onChange={(e) => setSigla(e.target.value)}>
+          <option value="">Tipo…</option>
+          {tipos.map((t) => <option key={t.id} value={t.sigla}>{t.sigla}</option>)}
+        </select>
+        <Input value={qtd} onChange={(e) => setQtd(e.target.value)} />
+        <Button onClick={() => abertura.mutate({
+          posicao_id: pos, tipo_caixa: sigla, quantidade: Number(qtd), registrado_por: user!.id,
+        }, { onSuccess: () => toast.success("Abertura lançada"), onError: (e) => toast.error(e.message) })}>
+          Lançar abertura
+        </Button>
       </CardContent>
     </Card>
   );

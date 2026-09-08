@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { ChevronLeft, ChevronRight, Pin, PinOff, X, Clock } from "lucide-react";
 import { useCargasDia, useCargaDetail } from "@/hooks/use-cargas";
 import { formatTime } from "@/lib/utils-date";
+import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
+import { fromLegacyColumns, sumCaixas } from "@/lib/caixas-map";
+import { one } from "@/lib/embed";
 
 export const Route = createFileRoute("/expedicao/tv")({
   component: TvMode,
@@ -11,6 +14,7 @@ export const Route = createFileRoute("/expedicao/tv")({
 
 function TvMode() {
   const { data: cargas = [], isLoading } = useCargasDia();
+  const { data: tiposCx = [] } = useTiposCaixa();
   const [idx, setIdx] = useState(0);
   const [pinned, setPinned] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -29,13 +33,14 @@ function TvMode() {
         caixas_g: number;
         caixas_i: number;
         caixas_p: number;
+        caixas?: Record<string, number> | null;
         status: string;
-        produtos: { nome: string } | null;
+        produtos: { nome: string } | { nome: string }[] | null;
       }) => ({
-        produto: it.produtos?.nome ?? "—",
+        produto: one(it.produtos)?.nome ?? "—",
         romaneio: Number(it.quantidade_romaneio),
         real: Number(it.quantidade_real),
-        caixas: { G: it.caixas_g, I: it.caixas_i, P: it.caixas_p },
+        caixas: fromLegacyColumns(it),
         status: it.status as "ok" | "corrigido" | "pendente",
       })
     );
@@ -63,13 +68,14 @@ function TvMode() {
     return () => clearInterval(r);
   }, [pinned, cargas.length]);
 
-  const conferidos = flat.filter((i) => i.status === "ok").length;
+  const conferidos = flat.filter((i: { status: string }) => i.status === "ok").length;
   const totalItens = flat.length;
   const progresso = totalItens ? Math.round((conferidos / totalItens) * 100) : 0;
-  const caixas = flat.reduce(
-    (acc, i) => ({ G: acc.G + i.caixas.G, I: acc.I + i.caixas.I, P: acc.P + i.caixas.P }),
-    { G: 0, I: 0, P: 0 }
-  );
+  const caixas = flat.reduce((acc: Record<string, number>, i: { caixas: Record<string, number> }) => {
+    const next = { ...acc };
+    for (const [k, v] of Object.entries(i.caixas)) next[k] = (next[k] ?? 0) + Number(v || 0);
+    return next;
+  }, {} as Record<string, number>);
 
   const concluidasHoje = cargas.filter((c) => c.status === "concluida").length;
   const naFila = cargas.filter((c) => c.status === "aguardando" || c.status === "carregando").length;
@@ -100,10 +106,10 @@ function TvMode() {
     );
   }
 
-  const cliente = (cargaList?.clientes as { nome: string } | null)?.nome ?? "—";
-  const motorista = (detail?.motoristas as { nome: string } | null)?.nome ?? (cargaList?.motoristas as { nome: string } | null)?.nome ?? "—";
-  const placa = (detail?.caminhoes as { placa: string } | null)?.placa ?? (cargaList?.caminhoes as { placa: string } | null)?.placa ?? "—";
-  const rota = (detail?.rotas as { nome: string } | null)?.nome ?? (cargaList?.rotas as { nome: string } | null)?.nome ?? "—";
+  const cliente = one(cargaList?.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
+  const motorista = one(detail?.motoristas as { nome: string } | { nome: string }[] | null)?.nome ?? one(cargaList?.motoristas as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
+  const placa = one(detail?.caminhoes as { placa: string } | { placa: string }[] | null)?.placa ?? one(cargaList?.caminhoes as { placa: string } | { placa: string }[] | null)?.placa ?? "—";
+  const rota = one(detail?.rotas as { nome: string } | { nome: string }[] | null)?.nome ?? one(cargaList?.rotas as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
 
   return (
     <div className="min-h-screen text-white" style={{ background: "#0F1B2D", fontFamily: "var(--font-sans)" }}>
@@ -175,7 +181,7 @@ function TvMode() {
         <div className="grid grid-cols-2 gap-x-12 gap-y-3 my-8">
           {[col1, col2].map((col, ci) => (
             <div key={ci} className="space-y-2">
-              {col.map((it, i) => {
+              {col.map((it: (typeof flat)[number], i: number) => {
                 const ok = it.status === "ok";
                 const pend = it.status === "pendente";
                 const cor = it.status === "corrigido";
@@ -220,10 +226,8 @@ function TvMode() {
 
         <div className="grid grid-cols-4 gap-6 mb-6">
           {[
-            ["Grande", caixas.G],
-            ["Isopor", caixas.I],
-            ["Plástica", caixas.P],
-            ["Total caixas", caixas.G + caixas.I + caixas.P],
+            ...tiposCx.map((t) => [t.nome, caixas[t.sigla] ?? 0] as const),
+            ["Total caixas", sumCaixas(caixas)] as const,
           ].map(([l, v]) => (
             <div key={l as string} className="rounded-xl p-5" style={{ background: "rgba(255,255,255,0.05)" }}>
               <div className="text-sm uppercase tracking-wider text-white/50">{l as string}</div>
@@ -250,8 +254,8 @@ function TvMode() {
                   : c.status === "carregando"
                     ? "var(--warning)"
                     : "var(--danger)";
-              const nome = (c.clientes as { nome: string } | null)?.nome ?? "—";
-              const mot = (c.motoristas as { nome: string } | null)?.nome ?? "—";
+              const nome = one(c.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
+              const mot = one(c.motoristas as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
               return (
                 <button
                   key={c.id}

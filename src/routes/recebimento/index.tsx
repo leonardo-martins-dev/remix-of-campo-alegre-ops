@@ -35,7 +35,11 @@ import { useFornecedores, useProdutos, useDestinatarios } from "@/hooks/use-cada
 import { useAuth } from "@/lib/auth";
 import { resolveIsAdmin } from "@/lib/roles";
 import { parsePedidosExcel, buildPedidosFromExcel } from "@/lib/excel";
+import { downloadWiseModelo } from "@/lib/excel-wise-pedidos";
+import { useImportWisePedidos } from "@/hooks/use-wise-pedidos";
+import { usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { formatTime } from "@/lib/utils-date";
+import { one } from "@/lib/embed";
 
 export const Route = createFileRoute("/recebimento/")({
   component: Page,
@@ -60,6 +64,8 @@ type PedidoDia = {
   origem: string;
   hora_chegada: string | null;
   status: string;
+  wise_pedido_id?: string | null;
+  data_prevista?: string | null;
   fornecedores: { nome: string } | null;
   itens_pedido: ItemPedido[];
 };
@@ -71,14 +77,17 @@ type ManualItem = {
 };
 
 const statusChip = (s: string) => {
-  if (s === "conferido") return <span className="chip chip-ok">Conferido</span>;
+  if (s === "conferido" || s === "recebido") return <span className="chip chip-ok">Recebido</span>;
+  if (s === "parcial") return <span className="chip chip-warn">Parcial</span>;
+  if (s === "aguardando_vinculo") return <span className="chip chip-warn">Aguardando vínculo</span>;
+  if (s === "encerrado") return <span className="chip">Encerrado</span>;
   if (s === "aguardando_liberacao") return <span className="chip chip-warn">Aguardando liberação</span>;
   if (s === "divergencia") return <span className="chip chip-danger">Com divergência</span>;
-  return <span className="chip chip-warn">Pendente</span>;
+  return <span className="chip chip-warn">A conferir</span>;
 };
 
 function pedidoActionLink(p: PedidoDia) {
-  if (p.status === "pendente") {
+  if (p.status === "pendente" || p.status === "parcial") {
     return (
       <Link
         to="/recebimento/conferir"
@@ -123,14 +132,14 @@ function getRateioChips(p: PedidoDia): [string, number][] {
 }
 
 function origemLabel(o: string) {
-  if (o === "wisetec") return "Wisetec";
+  if (o === "wisetec") return "Wise (planilha)";
   if (o === "excel") return "Excel";
   if (o === "manual") return "Manual";
   return o;
 }
 
 function Page() {
-  const [tab, setTab] = useState<"todos" | "pendente" | "conferido" | "divergencia" | "aguardando_liberacao">("todos");
+  const [tab, setTab] = useState<"todos" | "pendente" | "parcial" | "conferido" | "divergencia" | "aguardando_liberacao" | "aguardando_vinculo">("todos");
   const [manualOpen, setManualOpen] = useState(false);
   const [editPedido, setEditPedido] = useState<PedidoDia | null>(null);
   const [editCodigo, setEditCodigo] = useState("");
@@ -145,6 +154,8 @@ function Page() {
   const { data: destinatarios = [] } = useDestinatarios();
   const createManual = useCreatePedidoManual();
   const importPedidos = useImportPedidos();
+  const importWise = useImportWisePedidos();
+  const { data: pendencias = [] } = usePendenciasVinculo();
   const updatePedido = useUpdatePedidoAdmin();
   const canAdmin = isAdmin || resolveIsAdmin(profile, user);
 
@@ -154,7 +165,11 @@ function Page() {
     { produto_id: "", quantidade: 1, rateio: [{ destinatario_id: "", quantidade: 0 }] },
   ]);
 
-  const typedPedidos = pedidos as PedidoDia[];
+  const typedPedidos: PedidoDia[] = pedidos.map((p) => ({
+    ...p,
+    fornecedores: one(p.fornecedores),
+    itens_pedido: (p.itens_pedido ?? []) as ItemPedido[],
+  }));
   const filtered = typedPedidos.filter((p) => tab === "todos" || p.status === tab);
 
   const stats = useMemo(() => {
@@ -188,20 +203,25 @@ function Page() {
 
     try {
       const buf = await file.arrayBuffer();
-      const rows = parsePedidosExcel(buf);
-      if (!rows.length) {
-        toast.error("Planilha vazia ou formato inválido");
+      try {
+        const result = await importWise.mutateAsync({
+          file: buf,
+          filename: file.name,
+          created_by: user.id,
+          fornecedores,
+          produtos: produtos.map((p) => ({ id: p.id, nome: p.nome })),
+          destinatarios,
+        });
+        toast.success(`${result.novos} novos · ${result.atualizados} atualizados · ${result.pendencias} pendências`);
         return;
+      } catch (wiseErr) {
+        const rows = parsePedidosExcel(buf);
+        if (!rows.length) throw wiseErr;
+        const built = buildPedidosFromExcel(rows, nameMaps);
+        if (!built.length) throw wiseErr;
+        await importPedidos.mutateAsync(built.map((p) => ({ ...p, created_by: user.id })));
+        toast.success(`${built.length} pedido(s) importado(s)`);
       }
-      const built = buildPedidosFromExcel(rows, nameMaps);
-      if (!built.length) {
-        toast.error("Nenhum pedido válido — verifique nomes de fornecedor/produto");
-        return;
-      }
-      await importPedidos.mutateAsync(
-        built.map((p) => ({ ...p, created_by: user.id }))
-      );
-      toast.success(`${built.length} pedido(s) importado(s)`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao importar Excel");
     }
@@ -268,7 +288,7 @@ function Page() {
             <input
               ref={fileRef}
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.xls,.csv"
               className="hidden"
               onChange={handleExcel}
             />
@@ -286,7 +306,14 @@ function Page() {
               onClick={() => fileRef.current?.click()}
               className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
             >
-              <FileSpreadsheet size={14} /> Importar Excel
+              <FileSpreadsheet size={14} /> Importar pedido do Wise
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadWiseModelo()}
+              className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+            >
+              Baixar modelo
             </button>
             <button
               type="button"
@@ -320,6 +347,12 @@ function Page() {
         ]}
       />
 
+      {pendencias.length > 0 && (
+        <div className="mb-4 p-3 rounded-lg bg-warning/15 text-navy text-sm">
+          {pendencias.length} pendência(s) de vínculo — resolva em Configurações → Vínculos de importação.
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
           Erro ao carregar pedidos: {error.message}
@@ -332,7 +365,9 @@ function Page() {
             [
               ["todos", "Todos"],
               ["pendente", "A conferir"],
-              ["conferido", "Conferidos"],
+              ["parcial", "Parcial"],
+              ["aguardando_vinculo", "Vínculo"],
+              ["conferido", "Recebidos"],
               ["aguardando_liberacao", "Aguard. liberação"],
               ["divergencia", "Com divergência"],
             ] as const

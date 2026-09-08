@@ -8,7 +8,7 @@ export function useProfiles() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, nome, email, role, ativo, created_at")
+        .select("id, nome, email, role, ativo, motorista_id, fornecedor_id, created_at")
         .not("email", "ilike", SUPER_ADMIN_EMAIL)
         .order("nome");
       if (error) throw error;
@@ -20,7 +20,17 @@ export function useProfiles() {
 export function useUpdateProfile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...fields }: { id: string; role?: string; ativo?: boolean; nome?: string }) => {
+    mutationFn: async ({
+      id,
+      ...fields
+    }: {
+      id: string;
+      role?: string;
+      ativo?: boolean;
+      nome?: string;
+      motorista_id?: string | null;
+      fornecedor_id?: string | null;
+    }) => {
       const { error } = await supabase.from("profiles").update(fields).eq("id", id);
       if (error) throw error;
     },
@@ -82,7 +92,8 @@ export async function createUserViaEdge(
   nome: string,
   email: string,
   password: string,
-  role: "admin" | "user" = "user"
+  role: "admin" | "user" | "fornecedor" = "user",
+  extra?: { motorista_id?: string | null; fornecedor_id?: string | null }
 ) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error("Não autenticado");
@@ -93,7 +104,7 @@ export async function createUserViaEdge(
       "Content-Type": "application/json",
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ nome, email, password, role }),
+      body: JSON.stringify({ nome, email, password, role, ...extra }),
   });
 
   const body = await res.json();

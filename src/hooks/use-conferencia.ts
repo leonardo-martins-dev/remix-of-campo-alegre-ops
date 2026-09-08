@@ -16,7 +16,8 @@ export function useConferencia(pedidoId: string | null) {
           itens_conferencia(
             id, quantidade_recebida, conferido, divergencia, quantidade_divergencia,
             tem_problema_qualidade, quantidade_qualidade, foto_url,
-            itens_pedido(id, quantidade_pedida, produtos(nome, unidade), itens_pedido_rateio(quantidade, destinatarios(nome)))
+            dentro_tolerancia, valor_divergencia, estimado, tolerancia_pct_aplicada,
+            itens_pedido(id, quantidade_pedida, preco_unitario, produtos(nome, unidade, tipo_caixa_padrao_id, tolerancia_pct), itens_pedido_rateio(quantidade, destinatarios(nome)))
           )
         `)
         .eq("pedido_id", pedidoId!)
@@ -43,20 +44,9 @@ export function useStartConferencia() {
     }) => {
       await ensureUserProfile(user);
 
-      const { data: finalized } = await supabase
-        .from("conferencias")
-        .select("id, status")
-        .eq("pedido_id", pedidoId)
-        .eq("status", "finalizada")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (finalized) return finalized;
-
       const { data: existing } = await supabase
         .from("conferencias")
-        .select("id")
+        .select("id, status")
         .eq("pedido_id", pedidoId)
         .in("status", ["em_andamento", "parcial"])
         .maybeSingle();
@@ -69,8 +59,17 @@ export function useStartConferencia() {
         .eq("id", pedidoId)
         .single();
 
-      if (pedido?.status && pedido.status !== "pendente") {
-        throw new Error("Pedido já conferido. Apenas administradores podem reabrir edição.");
+      const openStatuses = ["pendente", "parcial", "recebido"];
+      if (pedido?.status && !openStatuses.includes(pedido.status)) {
+        const { data: last } = await supabase
+          .from("conferencias")
+          .select("id, status")
+          .eq("pedido_id", pedidoId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (last) return last;
+        throw new Error("Pedido encerrado. Apenas administradores podem reabrir.");
       }
 
       const { data: conf, error: cErr } = await supabase
@@ -122,6 +121,10 @@ export function useSaveConferenciaItens() {
         quantidade_divergencia: number;
         tem_problema_qualidade: boolean;
         quantidade_qualidade: number;
+        dentro_tolerancia?: boolean | null;
+        valor_divergencia?: number | null;
+        estimado?: boolean;
+        tolerancia_pct_aplicada?: number | null;
       }[];
     }) => {
       const { data: confAtual, error: confErr } = await supabase
@@ -139,11 +142,9 @@ export function useSaveConferenciaItens() {
         .select("status")
         .eq("id", pedidoId)
         .single();
-      if (
-        pedidoAtual?.status &&
-        pedidoAtual.status !== "pendente"
-      ) {
-        throw new Error("Pedido já conferido. Visualização somente leitura.");
+      const locked = ["encerrado", "aguardando_liberacao", "divergencia"];
+      if (pedidoAtual?.status && locked.includes(pedidoAtual.status) && status === "finalizada") {
+        throw new Error("Pedido bloqueado. Visualização somente leitura.");
       }
 
       for (const it of itens) {
@@ -156,6 +157,10 @@ export function useSaveConferenciaItens() {
             quantidade_divergencia: it.quantidade_divergencia,
             tem_problema_qualidade: it.tem_problema_qualidade,
             quantidade_qualidade: it.quantidade_qualidade,
+            dentro_tolerancia: it.dentro_tolerancia ?? null,
+            valor_divergencia: it.valor_divergencia ?? null,
+            estimado: it.estimado ?? false,
+            tolerancia_pct_aplicada: it.tolerancia_pct_aplicada ?? null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", it.id);

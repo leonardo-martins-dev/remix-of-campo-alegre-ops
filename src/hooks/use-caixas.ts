@@ -137,6 +137,7 @@ export function useRegistrarRetorno() {
       caixas_g: number;
       caixas_i: number;
       caixas_p: number;
+      caixas?: Record<string, number>;
       offline?: boolean;
     }) => {
       const { data: saldoRows, error: saldoErr } = await supabase
@@ -145,21 +146,31 @@ export function useRegistrarRetorno() {
         .eq("cliente_id", payload.cliente_id);
       if (saldoErr) throw saldoErr;
 
-      const saldo = { G: 0, I: 0, P: 0 };
+      const saldo: Record<string, number> = {};
       (saldoRows ?? []).forEach((r: { tipo_caixa: string; saldo: number }) => {
-        if (r.tipo_caixa === "G") saldo.G = r.saldo ?? 0;
-        if (r.tipo_caixa === "I") saldo.I = r.saldo ?? 0;
-        if (r.tipo_caixa === "P") saldo.P = r.saldo ?? 0;
+        if (r.tipo_caixa) saldo[r.tipo_caixa] = r.saldo ?? 0;
       });
 
       const validationErr = validateRetornoQuantities(
-        { caixas_g: payload.caixas_g, caixas_i: payload.caixas_i, caixas_p: payload.caixas_p },
+        {
+          caixas_g: payload.caixas_g,
+          caixas_i: payload.caixas_i,
+          caixas_p: payload.caixas_p,
+          caixas: payload.caixas,
+        },
         saldo
       );
       if (validationErr) throw new Error(validationErr);
 
       const { error } = await supabase.from("retornos_caixa").insert({
-        ...payload,
+        cliente_id: payload.cliente_id,
+        motorista_id: payload.motorista_id,
+        registrado_por: payload.registrado_por,
+        caixas_g: payload.caixas_g,
+        caixas_i: payload.caixas_i,
+        caixas_p: payload.caixas_p,
+        caixas: payload.caixas ?? { G: payload.caixas_g, I: payload.caixas_i, P: payload.caixas_p },
+        offline: payload.offline,
         data_retorno: todayBRT(),
         sincronizado_em: new Date().toISOString(),
       });
@@ -181,11 +192,12 @@ export function useCobrarCaixa() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: {
-      cliente_id: string;
-      tipo_caixa: "G" | "I" | "P";
+      cliente_id?: string | null;
+      tipo_caixa: string;
       quantidade: number;
       custo_unitario: number;
       created_by: string;
+      fornecedor_id?: string | null;
     }) => {
       const { error } = await supabase.from("cobrancas_caixa").insert({
         ...payload,
@@ -203,7 +215,7 @@ export function useRegistrarPerda() {
   return useMutation({
     mutationFn: async (payload: {
       cliente_id: string;
-      tipo_caixa: "G" | "I" | "P";
+      tipo_caixa: string;
       quantidade: number;
       registrado_por: string;
     }) => {
