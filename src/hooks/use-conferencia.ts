@@ -17,7 +17,7 @@ export function useConferencia(pedidoId: string | null) {
             id, quantidade_recebida, conferido, divergencia, quantidade_divergencia,
             tem_problema_qualidade, quantidade_qualidade, foto_url,
             dentro_tolerancia, valor_divergencia, estimado, tolerancia_pct_aplicada,
-            itens_pedido(id, quantidade_pedida, preco_unitario, produtos(nome, unidade, tipo_caixa_padrao_id, tolerancia_pct), itens_pedido_rateio(quantidade, destinatarios(nome)))
+            itens_pedido(id, quantidade_pedida, preco_unitario, unidade, cliente_id, clientes(nome), produtos(nome, unidade, tipo_caixa_padrao_id, tolerancia_pct))
           )
         `)
         .eq("pedido_id", pedidoId!)

@@ -29,7 +29,7 @@ export function useFornecedores() {
 }
 
 export function useClientes() {
-  return useCadastro<{ id: string; nome: string; ativo: boolean }>("clientes", CADASTRO_KEYS.clientes);
+  return useCadastro<{ id: string; nome: string; cnpj?: string | null; ativo: boolean }>("clientes", CADASTRO_KEYS.clientes);
 }
 
 export function useProdutos() {
@@ -38,7 +38,7 @@ export function useProdutos() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("produtos")
-        .select("id, nome, unidade, familia_id, ativo, familias_produto(nome)")
+        .select("id, nome, unidade, codigo, unidades_por_caixa, familia_id, ativo, familias_produto(nome)")
         .order("nome");
       if (error) throw error;
       return data ?? [];

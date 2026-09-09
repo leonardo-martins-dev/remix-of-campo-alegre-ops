@@ -17,6 +17,7 @@ function assertItensRateio(
 export function usePedidosRealtime() {
   const qc = useQueryClient();
   useEffect(() => {
+    let errors = 0;
     const channel = supabase
       .channel("pedidos-recebimento-changes")
       .on(
@@ -26,7 +27,15 @@ export function usePedidosRealtime() {
           qc.invalidateQueries({ queryKey: ["pedidos"] });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          errors += 1;
+          if (errors >= 3) {
+            supabase.removeChannel(channel);
+          }
+        }
+        if (status === "SUBSCRIBED") errors = 0;
+      });
     return () => {
       supabase.removeChannel(channel);
     };
@@ -56,7 +65,7 @@ export function usePedidosDia(date = todayBRT()) {
         .select(`
           id, codigo, fornecedor_id, origem, data_pedido, hora_chegada, status, wise_pedido_id, data_prevista,
           fornecedores(nome),
-          itens_pedido(id, itens_pedido_rateio(destinatario_id, quantidade, destinatarios(nome)))
+          itens_pedido(id, cliente_id, clientes(nome), itens_pedido_rateio(destinatario_id, quantidade, destinatarios(nome)))
         `)
         .eq("data_pedido", date)
         .order("hora_chegada", { ascending: true });
@@ -77,8 +86,9 @@ export function usePedido(pedidoId: string | null) {
           *,
           fornecedores(nome),
           itens_pedido(
-            id, quantidade_pedida, preco_unitario, unidade,
-            produtos(id, nome, unidade, tolerancia_pct, tipo_caixa_padrao_id),
+            id, quantidade_pedida, preco_unitario, unidade, cliente_id,
+            produtos(id, nome, unidade, codigo, tolerancia_pct, tipo_caixa_padrao_id),
+            clientes(id, nome, cnpj),
             itens_pedido_rateio(id, quantidade, destinatarios(id, nome))
           )
         `)
@@ -96,10 +106,11 @@ export function useCreatePedidoManual() {
     mutationFn: async (payload: {
       codigo: string;
       fornecedor_id: string;
-      itens: { produto_id: string; quantidade: number; preco_unitario?: number | null; rateio: { destinatario_id: string; quantidade: number }[] }[];
+      itens: { produto_id: string; quantidade: number; preco_unitario?: number | null; cliente_id?: string | null; rateio: { destinatario_id: string; quantidade: number }[] }[];
       created_by: string;
     }) => {
-      assertItensRateio(payload.itens);
+      const precisaRateio = payload.itens.some((i) => !i.cliente_id && i.rateio.length);
+      if (precisaRateio) assertItensRateio(payload.itens);
 
       const { data: pedido, error: pErr } = await supabase
         .from("pedidos_recebimento")
@@ -123,13 +134,14 @@ export function useCreatePedidoManual() {
             pedido_id: pedido.id,
             produto_id: item.produto_id,
             quantidade_pedida: item.quantidade,
-            preco_unitario: "preco_unitario" in item ? (item as { preco_unitario?: number | null }).preco_unitario ?? null : null,
+            preco_unitario: item.preco_unitario ?? null,
+            cliente_id: item.cliente_id ?? null,
           })
           .select()
           .single();
         if (iErr) throw iErr;
 
-        if (item.rateio.length) {
+        if (!item.cliente_id && item.rateio.length) {
           const { error: rErr } = await supabase.from("itens_pedido_rateio").insert(
             item.rateio.map((r) => ({ item_pedido_id: itemRow.id, destinatario_id: r.destinatario_id, quantidade: r.quantidade }))
           );
@@ -269,6 +281,7 @@ export function usePedidosAguardandoLiberacao() {
           fornecedores(nome),
           conferencias(id, status, finalizada_em, itens_conferencia(
             id, divergencia, quantidade_divergencia, quantidade_recebida, foto_url,
+            dentro_tolerancia, tolerancia_pct_aplicada,
             itens_pedido(quantidade_pedida, produtos(nome))
           ))
         `)

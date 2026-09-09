@@ -46,8 +46,9 @@ function Page() {
     try {
       const itens = lancados.map(([produtoId, quantidade]) => {
         const vinculo = vinculos[produtoId];
-        const preco = vinculo ? Number(vinculo.split("|")[1] || 0) : fallback;
-        const estimado = !vinculo || !Number(vinculo.split("|")[1]);
+        const raw = vinculo && vinculo !== "none" ? Number(vinculo.split("|")[1] || 0) : 0;
+        const preco = raw > 0 ? raw : fallback;
+        const estimado = raw <= 0;
         return {
           produto_id: produtoId,
           quantidade,
@@ -101,6 +102,11 @@ function Page() {
         </div>
         <Input placeholder="Observação geral" value={obs} onChange={(e) => setObs(e.target.value)} />
         <Button className="min-h-11" onClick={handleSave} disabled={registrar.isPending}>Registrar quebra</Button>
+        {lancados.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {lancados.filter(([id]) => !vinculos[id] || vinculos[id] === "none" || !Number(vinculos[id].split("|")[1])).length} item(ns) com preço estimado.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -120,10 +126,10 @@ function ProdutoLinha({
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border py-2">
       <span className="flex-1 text-sm">{produto.nome}</span>
-      <Input className="w-24" type="number" min={0} value={qtd || ""} placeholder="cx" onChange={(e) => onQtd(Number(e.target.value) || 0)} />
+      <Input className="w-24" type="number" min={0} value={qtd || ""} placeholder="un" onChange={(e) => onQtd(Number(e.target.value) || 0)} />
       {qtd > 0 && (
         <select className="h-9 rounded-md border px-2 text-xs" value={vinculo} onChange={(e) => onVinculo(e.target.value)}>
-          <option value="none">Sem vínculo</option>
+          <option value="none">Sem vínculo · preço estimado</option>
           {(entregas as { id: string; quantidade_recebida: number; itens_pedido?: { preco_unitario?: number; pedidos_recebimento?: { codigo: string; data_pedido: string } } }[]).map((e) => {
             const ped = e.itens_pedido?.pedidos_recebimento;
             const preco = e.itens_pedido?.preco_unitario ?? 0;

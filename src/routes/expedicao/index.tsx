@@ -61,6 +61,7 @@ import {
 import { formatTime } from "@/lib/utils-date";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { fromLegacyColumns, toLegacyColumns } from "@/lib/caixas-map";
+import { CoberturaDiaCard } from "@/components/cobertura-dia";
 import { one } from "@/lib/embed";
 
 export const Route = createFileRoute("/expedicao/")({
@@ -348,7 +349,7 @@ function Page() {
           });
         } else {
           toast.warning(`Nenhuma carga gerada para ${codigo}`, {
-            description: "Configure mapeamento destinatário→cliente em Gestão ou verifique rateio do pedido.",
+            description: "Informe o cliente no item do pedido (CNPJ) ou verifique o cadastro.",
           });
         }
       },
@@ -531,6 +532,10 @@ function Page() {
           },
         ]}
       />
+
+      <div className="mb-5">
+        <CoberturaDiaCard />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 card-base overflow-hidden">

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { one } from "@/lib/embed";
+import { dateKeyBRT } from "@/lib/utils-date";
 
 export function useQuebras(filters: {
   from?: string;
@@ -20,7 +21,7 @@ export function useQuebras(filters: {
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []).filter((row) => {
-        const d = (row.registrado_em as string).slice(0, 10);
+        const d = dateKeyBRT(row.registrado_em as string);
         if (filters.from && d < filters.from) return false;
         if (filters.to && d > filters.to) return false;
         if (filters.produtoId) {

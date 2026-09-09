@@ -127,7 +127,7 @@ function MapeamentoExpedicao() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          Vincule destinatários do rateio (recebimento) aos clientes do painel de carga.
+          Legado: só para pedidos antigos com rateio. O fluxo novo usa cliente (CNPJ) direto no item — não é exigido para pedidos manuais ou Wise novos.
         </p>
         <div className="flex flex-wrap gap-2">
           <select
@@ -181,7 +181,7 @@ function MapeamentoExpedicao() {
   );
 }
 
-type CadastroRow = { id: string; nome?: string; placa?: string };
+type CadastroRow = { id: string; nome?: string; placa?: string; cnpj?: string | null };
 
 function CadastroTable({
   label,
@@ -197,6 +197,7 @@ function CadastroTable({
   const { data = [], isLoading } = useData();
   const { insert, remove } = useCadastroMutations(table, ["cadastros", table]);
   const [nome, setNome] = useState("");
+  const [cnpj, setCnpj] = useState("");
   const [touched, setTouched] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -215,10 +216,15 @@ function CadastroTable({
       return;
     }
     insert.mutate(
-      table === "caminhoes" ? { placa: nome.trim().toUpperCase() } : { nome: nome.trim() },
+      table === "caminhoes"
+        ? { placa: nome.trim().toUpperCase() }
+        : table === "clientes"
+          ? { nome: nome.trim(), cnpj: cnpj.replace(/\D/g, "") || null }
+          : { nome: nome.trim() },
       {
         onSuccess: () => {
           setNome("");
+          setCnpj("");
           setTouched(false);
           toast.success("Cadastrado");
         },
@@ -232,7 +238,7 @@ function CadastroTable({
       <CardHeader><CardTitle className="text-base">{label}</CardTitle></CardHeader>
       <CardContent>
         <form onSubmit={handleAdd} className="mb-1">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Input
               placeholder={placeholder}
               value={nome}
@@ -244,6 +250,14 @@ function CadastroTable({
                 if (e.target.value.trim()) setTouched(false);
               }}
             />
+            {table === "clientes" && (
+              <Input
+                className="w-44"
+                placeholder="CNPJ"
+                value={cnpj}
+                onChange={(e) => setCnpj(e.target.value)}
+              />
+            )}
             <Button type="submit">Adicionar</Button>
           </div>
           {showError && (
@@ -256,7 +270,12 @@ function CadastroTable({
           <ul className="space-y-1 text-sm">
             {data.map((row) => (
               <li key={row.id} className="flex justify-between items-center py-1 border-b border-border">
-                <span>{rowLabel(row)}</span>
+                <span>
+                  {rowLabel(row)}
+                  {table === "clientes" && row.cnpj ? (
+                    <span className="text-muted-foreground"> · {row.cnpj}</span>
+                  ) : null}
+                </span>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -306,6 +325,8 @@ function ProdutosTable() {
   const { data = [], isLoading } = useProdutos();
   const { insert, remove } = useCadastroMutations("produtos", ["cadastros", "produtos"]);
   const [nome, setNome] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [unidades, setUnidades] = useState("");
   const [touched, setTouched] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -319,10 +340,17 @@ function ProdutosTable() {
       return;
     }
     insert.mutate(
-      { nome: nome.trim(), unidade: "un" },
+      {
+        nome: nome.trim(),
+        unidade: "un",
+        codigo: codigo.trim() || null,
+        unidades_por_caixa: unidades ? Number(unidades) : null,
+      },
       {
         onSuccess: () => {
           setNome("");
+          setCodigo("");
+          setUnidades("");
           setTouched(false);
           toast.success("Produto cadastrado");
         },
@@ -336,7 +364,7 @@ function ProdutosTable() {
       <CardHeader><CardTitle className="text-base">Produtos</CardTitle></CardHeader>
       <CardContent>
         <form onSubmit={handleAdd} className="mb-1">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Input
               placeholder="Nome do produto"
               value={nome}
@@ -348,6 +376,20 @@ function ProdutosTable() {
                 if (e.target.value.trim()) setTouched(false);
               }}
             />
+            <Input
+              className="w-36"
+              placeholder="Código"
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value)}
+            />
+            <Input
+              className="w-28"
+              type="number"
+              min={0}
+              placeholder="Un/cx"
+              value={unidades}
+              onChange={(e) => setUnidades(e.target.value)}
+            />
             <Button type="submit">Adicionar</Button>
           </div>
           {showError && (
@@ -358,9 +400,13 @@ function ProdutosTable() {
         </form>
         {!isLoading && (
           <ul className="space-y-1 text-sm">
-            {(data as { id: string; nome: string }[]).map((row) => (
+            {(data as { id: string; nome: string; codigo?: string | null; unidades_por_caixa?: number | null }[]).map((row) => (
               <li key={row.id} className="flex justify-between py-1 border-b border-border">
-                <span>{row.nome}</span>
+                <span>
+                  {row.nome}
+                  {row.codigo ? <span className="text-muted-foreground"> · {row.codigo}</span> : null}
+                  {row.unidades_por_caixa ? <span className="text-muted-foreground"> · {row.unidades_por_caixa} un/cx</span> : null}
+                </span>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -582,12 +628,22 @@ function ConfigPanel() {
             {c.descricao && <p className="text-[10px] text-muted-foreground">{c.descricao}</p>}
             <Input
               defaultValue={String(c.valor ?? "").replace(/"/g, "")}
-              onBlur={(e) =>
+              onBlur={(e) => {
+                const raw = e.target.value.trim();
+                if (c.chave === "aging_alerta_dias") {
+                  const n = Number(raw);
+                  if (!Number.isFinite(n) || n < 1 || n > 60) {
+                    toast.error("aging_alerta_dias deve ser um número entre 1 e 60");
+                    e.target.value = "7";
+                    updateConfig.mutate({ chave: c.chave, valor: "7" });
+                    return;
+                  }
+                }
                 updateConfig.mutate(
-                  { chave: c.chave, valor: e.target.value },
+                  { chave: c.chave, valor: raw },
                   { onSuccess: () => toast.success("Salvo") }
-                )
-              }
+                );
+              }}
             />
           </div>
         ))}

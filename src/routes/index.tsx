@@ -4,6 +4,7 @@ import { KpiCard } from "@/components/kpi-card";
 import { Donut, BarRow } from "@/components/charts";
 import { PageHeader } from "@/components/page-header";
 import { useDashboard, useAlertas } from "@/hooks/use-dashboard";
+import { CoberturaDiaCard } from "@/components/cobertura-dia";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -92,6 +93,8 @@ function Dashboard() {
             ))}
           </div>
         </div>
+
+        <CoberturaDiaCard />
 
         <div className="card-base p-5">
           <h3 className="text-sm font-bold text-navy mb-4">Alertas operacionais</h3>

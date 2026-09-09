@@ -26,6 +26,17 @@ export function formatDateBRT(iso: string | null | undefined): string {
   return formatInTimeZone(new Date(iso), TZ_BRASILIA, "dd/MM/yyyy");
 }
 
+/** YYYY-MM-DD no fuso de Brasília (para filtros, não para display). */
+export function dateKeyBRT(iso: string | null | undefined): string {
+  if (!iso) return "";
+  return formatInTimeZone(new Date(iso), TZ_BRASILIA, "yyyy-MM-dd");
+}
+
+export function isoWeekKeyBRT(iso: string | null | undefined): string {
+  if (!iso) return "";
+  return formatInTimeZone(new Date(iso), TZ_BRASILIA, "RRRR-'W'II");
+}
+
 export function nowISO(): string {
   return new Date().toISOString();
 }

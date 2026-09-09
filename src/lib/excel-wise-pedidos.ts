@@ -112,10 +112,12 @@ export type CadastroMaps = {
   produtoByName: Map<string, string>;
   produtoByCode: Map<string, string>;
   destinatarioByName: Map<string, string>;
+  clienteByName: Map<string, string>;
+  clienteByCnpj: Map<string, string>;
 };
 
 export type AliasRow = {
-  tipo: "fornecedor" | "produto" | "destinatario";
+  tipo: "fornecedor" | "produto" | "destinatario" | "cliente";
   nome_externo: string;
   codigo_externo: string | null;
   entidade_id: string;
@@ -127,7 +129,9 @@ export function applyAliases(maps: CadastroMaps, aliases: AliasRow[]): CadastroM
     fornecedorByCode: new Map(maps.fornecedorByCode),
     produtoByName: new Map(maps.produtoByName),
     produtoByCode: new Map(maps.produtoByCode),
-    destinatarioByName: new Map(maps.destinatarioByName),
+      destinatarioByName: new Map(maps.destinatarioByName),
+    clienteByName: new Map(maps.clienteByName),
+    clienteByCnpj: new Map(maps.clienteByCnpj),
   };
   for (const a of aliases) {
     const nome = normalizeKey(a.nome_externo);
@@ -138,6 +142,9 @@ export function applyAliases(maps: CadastroMaps, aliases: AliasRow[]): CadastroM
     } else if (a.tipo === "produto") {
       next.produtoByName.set(nome, a.entidade_id);
       if (code) next.produtoByCode.set(code, a.entidade_id);
+    } else if (a.tipo === "cliente") {
+      next.clienteByName.set(nome, a.entidade_id);
+      if (code) next.clienteByCnpj.set(code.replace(/\D/g, ""), a.entidade_id);
     } else {
       next.destinatarioByName.set(nome, a.entidade_id);
     }
@@ -152,6 +159,7 @@ export type WiseBuildItem = {
   quantidade: number;
   unidade: string;
   preco_unitario: number | null;
+  cliente_id: string | null;
   rateio: { destinatario_id: string | null; destinatario_nome: string; quantidade: number }[];
 };
 
@@ -179,6 +187,10 @@ export function buildWisePedidos(rows: WisePedidoRow[], maps: CadastroMaps): Wis
     const produto_id = prodCode ?? prodName ?? null;
 
     const dest_id = row.loja ? maps.destinatarioByName.get(normalizeKey(row.loja)) ?? null : null;
+    const lojaKey = row.loja ? normalizeKey(row.loja) : "";
+    const cliente_id = lojaKey
+      ? maps.clienteByCnpj.get(lojaKey.replace(/\D/g, "")) ?? maps.clienteByName.get(lojaKey) ?? null
+      : null;
 
     if (!byPedido.has(row.pedido)) {
       byPedido.set(row.pedido, {
@@ -200,7 +212,7 @@ export function buildWisePedidos(rows: WisePedidoRow[], maps: CadastroMaps): Wis
     if (!produto_id) {
       ped.pendencias.push({ tipo: "produto", nome: row.produto || row.codigo_produto, codigo: row.codigo_produto });
     }
-    if (row.loja && !dest_id) {
+    if (row.loja && !cliente_id && !dest_id) {
       if (!ped.pendencias.some((p) => p.tipo === "destinatario" && p.nome === row.loja)) {
         ped.pendencias.push({ tipo: "destinatario", nome: row.loja });
       }
@@ -215,6 +227,7 @@ export function buildWisePedidos(rows: WisePedidoRow[], maps: CadastroMaps): Wis
         quantidade: 0,
         unidade: row.unidade,
         preco_unitario: row.preco_unitario,
+        cliente_id,
         rateio: [],
       };
       ped.itens.push(item);

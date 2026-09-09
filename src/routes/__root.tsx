@@ -96,12 +96,14 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const isLogin = useRouterState({ select: (s) => s.location.pathname === "/login" });
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isLogin = pathname === "/login";
+  const hideToaster = pathname.startsWith("/expedicao/tv");
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Toaster />
+        {!hideToaster && <Toaster />}
         <AuthGate>
           {isLogin ? <Outlet /> : <AppShell />}
         </AuthGate>

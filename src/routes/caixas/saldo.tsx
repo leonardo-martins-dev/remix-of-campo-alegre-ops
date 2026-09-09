@@ -10,10 +10,12 @@ import { useSaldoCaixas, useMovimentacoesCliente, useCobrarCaixa } from "@/hooks
 import { useSaldosCaixa } from "@/hooks/use-ledger";
 import { useTiposCaixa, useUpdateTipoCaixa, type TipoCaixa } from "@/hooks/use-tipos-caixa";
 import { exportToExcel } from "@/lib/excel";
-import { tipoColor, computeFifoAging } from "@/lib/caixas-map";
+import { formatBRL } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
+import { useFornecedores } from "@/hooks/use-cadastros";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { computeFifoAging, tipoColor } from "@/lib/caixas-map";
 import {
   Dialog,
   DialogContent,
@@ -68,6 +70,7 @@ function Page() {
   const { data: saldoRows = [], isLoading } = useSaldoCaixas();
   const { data: tipos = [], isLoading: loadingTipos } = useTiposCaixa();
   const { data: saldosAll = [] } = useSaldosCaixa();
+  const { data: fornecedores = [] } = useFornecedores();
   const updateTipo = useUpdateTipoCaixa();
   const cobrar = useCobrarCaixa();
   const [aba, setAba] = useState<"cliente" | "fornecedor" | "galpao">("cliente");
@@ -115,13 +118,17 @@ function Page() {
     let capital = 0;
     let total = 0;
     for (const t of tipos) {
-      const s = clientes.reduce((a, c) => a + qtyOf(c, t.sigla).saldo, 0);
-      byTipo[t.sigla] = s;
+      const sClientes = clientes.reduce((a, c) => a + qtyOf(c, t.sigla).saldo, 0);
+      const sOutros = (saldosAll as { posicao_tipo: string; tipo_caixa: string; saldo: number }[])
+        .filter((s) => s.tipo_caixa === t.sigla && s.posicao_tipo !== "cliente")
+        .reduce((a, s) => a + Number(s.saldo ?? 0), 0);
+      const s = sClientes + sOutros;
+      byTipo[t.sigla] = sClientes;
       capital += s * (custoById[t.sigla] ?? 0);
       total += s;
     }
     return { byTipo, capital, total };
-  }, [clientes, tipos, custoById]);
+  }, [clientes, tipos, custoById, saldosAll]);
 
   const taxaRetorno = useMemo(() => {
     const env = clientes.reduce((a, c) => a + Object.values(c.byTipo).reduce((b, q) => b + q.env, 0), 0);
@@ -239,6 +246,7 @@ function Page() {
           <table className="w-full text-sm">
             <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
               <tr>
+                <th className="text-left px-4 py-3">{aba === "fornecedor" ? "Fornecedor" : "Posição"}</th>
                 <th className="text-left px-4 py-3">Tipo</th>
                 <th className="text-right px-3 py-3">Env</th>
                 <th className="text-right px-3 py-3">Ret</th>
@@ -247,8 +255,11 @@ function Page() {
               </tr>
             </thead>
             <tbody>
-              {parceiros.map((s, i) => (
+              {parceiros.map((s, i) => {
+                const nomeForn = fornecedores.find((f) => f.id === s.ref_id)?.nome ?? s.ref_id?.slice(0, 8);
+                return (
                 <tr key={`${s.ref_id}-${s.tipo_caixa}-${i}`} className="border-t">
+                  <td className="px-4 py-2 font-medium">{aba === "fornecedor" ? nomeForn : "Galpão"}</td>
                   <td className="px-4 py-2 font-semibold">{s.tipo_caixa}</td>
                   <td className="px-3 py-2 text-right">{s.enviadas}</td>
                   <td className="px-3 py-2 text-right">{s.retornadas}</td>
@@ -265,10 +276,11 @@ function Page() {
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
               {!parceiros.length && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Sem saldo nesta posição.</td>
+                  <td colSpan={aba === "fornecedor" ? 6 : 5} className="px-4 py-6 text-center text-muted-foreground">Sem saldo nesta posição.</td>
                 </tr>
               )}
             </tbody>
@@ -320,7 +332,7 @@ function Page() {
         <KpiCard label="Clientes com saldo" value={clientes.length.toString()} icon={Users} />
         <KpiCard
           label="Capital na rua"
-          value={`R$ ${totais.capital.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`}
+          value={formatBRL(totais.capital)}
           icon={Clock}
           positiveIsGood={false}
         />

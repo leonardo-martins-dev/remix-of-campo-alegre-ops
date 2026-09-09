@@ -36,20 +36,39 @@ export function useImportWiseCarregamento() {
         carregamento.cliente_id ?? maps.clienteByName.get(carregamento.cliente);
       if (!cliente_id) throw new Error(`Cliente não encontrado: ${carregamento.cliente}`);
 
-      const { data: carga, error } = await supabase
+      const { data: existing } = await supabase
         .from("cargas")
-        .insert({
-          codigo: carregamento.codigo,
-          cliente_id,
-          data_carga: todayBRT(),
-          status: "aguardando",
-          origem: "wisetec",
-          wise_carregamento_id: carregamento.id,
-          created_by,
-        })
-        .select()
-        .single();
-      if (error) throw error;
+        .select("id")
+        .eq("wise_carregamento_id", carregamento.id)
+        .maybeSingle();
+
+      let carga = existing as { id: string } | null;
+      if (!carga) {
+        const { data: created, error } = await supabase
+          .from("cargas")
+          .insert({
+            codigo: carregamento.codigo,
+            cliente_id,
+            data_carga: todayBRT(),
+            status: "aguardando",
+            origem: "wisetec",
+            wise_carregamento_id: carregamento.id,
+            created_by,
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        if (!created) throw new Error("Falha ao persistir carga Wise");
+        carga = created;
+        await supabase.from("carga_caixas_resumo").insert({ carga_id: created.id });
+      } else {
+        await supabase
+          .from("cargas")
+          .update({ codigo: carregamento.codigo, cliente_id, data_carga: todayBRT() })
+          .eq("id", carga.id);
+      }
+
+      if (!carga) throw new Error("Falha ao persistir carga Wise");
 
       const itens = carregamento.itens
         .map((it) => {
@@ -66,11 +85,25 @@ export function useImportWiseCarregamento() {
         .filter((it): it is NonNullable<typeof it> => !!it);
 
       if (itens.length) {
-        const { error: rErr } = await supabase.from("romaneio_itens").insert(itens);
-        if (rErr) throw rErr;
+        for (const it of itens) {
+          const { data: rom } = await supabase
+            .from("romaneio_itens")
+            .select("id")
+            .eq("carga_id", carga.id)
+            .eq("produto_id", it.produto_id)
+            .maybeSingle();
+          if (rom) {
+            const { error: uErr } = await supabase
+              .from("romaneio_itens")
+              .update({ quantidade_romaneio: it.quantidade_romaneio })
+              .eq("id", rom.id);
+            if (uErr) throw uErr;
+          } else {
+            const { error: rErr } = await supabase.from("romaneio_itens").insert(it);
+            if (rErr) throw rErr;
+          }
+        }
       }
-
-      await supabase.from("carga_caixas_resumo").insert({ carga_id: carga.id });
       return carga;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cargas"] }),

@@ -3,9 +3,10 @@ import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { exportToExcel } from "@/lib/excel";
-import { dateRangeBRT } from "@/lib/utils-date";
+import { dateRangeBRT, isoWeekKeyBRT } from "@/lib/utils-date";
+import { formatBRL } from "@/lib/format";
 import { useFornecedores } from "@/hooks/use-cadastros";
-import { useFaltas, useConfigValor } from "@/hooks/use-pedidos";
+import { useFaltas, useConfigValor, useFillRate } from "@/hooks/use-pedidos";
 import { useQuebras } from "@/hooks/use-quebra";
 import { useSaldosCaixa } from "@/hooks/use-ledger";
 import { useQuery } from "@tanstack/react-query";
@@ -24,6 +25,7 @@ function Page() {
   const { data: faltas = [] } = useFaltas({ period, divergencia: "all" });
   const { data: quebras = [] } = useQuebras({ from, to });
   const { data: saldos = [] } = useSaldosCaixa();
+  const { data: fillRows = [] } = useFillRate();
   const { data: alvo = 95 } = useConfigValor("alvo_fill_rate", 95);
   const { data: benchQ = 2 } = useConfigValor("benchmark_quebra_fornecedor", 2);
   const [fichaId, setFichaId] = useState<string | null>(null);
@@ -41,7 +43,9 @@ function Page() {
   });
 
   const rows = useMemo(() => {
-    return fornecedores.map((f) => {
+    return fornecedores
+      .filter((f) => f.nome !== "Aguardando vínculo")
+      .map((f) => {
       const peds = (pedidos as { fornecedor_id: string; id: string; conferencias: { status: string }[] }[]).filter((p) => p.fornecedor_id === f.id);
       const faltasF = faltas
         .map((x) => {
@@ -63,7 +67,9 @@ function Page() {
         .filter((s) => s.posicao_tipo === "fornecedor" && s.ref_id === f.id)
         .reduce((a, s) => a + Number(s.saldo ?? 0), 0);
       const entregas = peds.reduce((a, p) => a + (p.conferencias?.filter((c) => c.status === "finalizada").length ?? 0), 0);
-      const fill = peds.length ? ((peds.length - (faltasF.filter((x) => x.dentro_tolerancia === false).length ? 1 : 0)) / peds.length) * 100 : 100;
+      const fillRow = (fillRows as { fornecedor_id: string; fill_rate?: number; fill_rate_valor?: number }[])
+        .find((r) => r.fornecedor_id === f.id);
+      const fill = Number(fillRow?.fill_rate_valor ?? fillRow?.fill_rate ?? 100);
       return {
         id: f.id,
         nome: f.nome,
@@ -82,7 +88,7 @@ function Page() {
         impacto: faltaR + qualidadeR + quebraR,
       };
     }).sort((a, b) => b.impacto - a.impacto);
-  }, [fornecedores, pedidos, faltas, quebras, saldos]);
+  }, [fornecedores, pedidos, faltas, quebras, saldos, fillRows]);
 
   const ficha = rows.find((r) => r.id === fichaId);
 
@@ -112,12 +118,15 @@ function Page() {
               <tr key={r.id} className="border-b cursor-pointer hover:bg-secondary/40" onClick={() => setFichaId(r.id)}>
                 <td className="py-2 font-medium">{r.nome}</td>
                 <td>{r.pedidos}/{r.entregas}</td>
-                <td className={r.fill < alvo ? "text-destructive" : ""}>{r.fill.toFixed(0)}%</td>
-                <td>{r.faltaCx} cx · {r.faltaR.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} {r.acima ? `(${r.acima} acima)` : ""}</td>
+                <td className={r.fill < alvo ? "text-destructive" : r.fill >= alvo ? "text-[var(--success)]" : ""}>
+                  <span className={`inline-block h-2 w-2 rounded-full mr-1 ${r.fill < alvo * 0.9 ? "bg-destructive" : r.fill < alvo ? "bg-[var(--warning)]" : "bg-[var(--success)]"}`} />
+                  {r.fill.toFixed(0)}%
+                </td>
+                <td>{r.faltaCx} un · {formatBRL(r.faltaR)} {r.acima ? `(${r.acima} acima)` : ""}</td>
                 <td>{r.qualidadeCx}</td>
-                <td className={r.quebraCx && (r.quebraCx / Math.max(1, r.pedidos)) * 100 > benchQ ? "text-destructive" : ""}>{r.quebraCx} · {r.quebraR.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                <td className={r.quebraCx && (r.quebraCx / Math.max(1, r.pedidos)) * 100 > benchQ ? "text-destructive" : ""}>{r.quebraCx} · {formatBRL(r.quebraR)}</td>
                 <td>{r.caixaAberto}</td>
-                <td className="font-semibold">{r.impacto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                <td className="font-semibold">{formatBRL(r.impacto)}</td>
               </tr>
             ))}
           </tbody>
@@ -129,7 +138,7 @@ function Page() {
             <h3 className="font-semibold">Ficha · {ficha.nome}</h3>
             <Button size="sm" variant="outline" onClick={() => exportToExcel(`ficha-${ficha.nome}.xlsx`, "Ficha", [ficha])}>Exportar ficha</Button>
           </div>
-          <p className="text-sm">Impacto total {ficha.impacto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} · fill {ficha.fill.toFixed(1)}% · quebra {ficha.quebraCx} cx</p>
+          <p className="text-sm">Impacto total {formatBRL(ficha.impacto)} · fill {ficha.fill.toFixed(1)}% · quebra {ficha.quebraCx} un</p>
           <SerieSemanal fornecedorId={ficha.id} />
         </div>
       )}
@@ -149,8 +158,7 @@ function SerieSemanal({ fornecedorId }: { fornecedorId: string }) {
       for (const r of data ?? []) {
         const ped = one(one(r.itens_pedido)?.pedidos_recebimento);
         if (ped?.fornecedor_id !== fornecedorId) continue;
-        const d = new Date(ped.data_pedido);
-        const key = `${d.getFullYear()}-S${Math.ceil((d.getDate() + 6 - d.getDay()) / 7)}`;
+        const key = isoWeekKeyBRT(ped.data_pedido);
         byWeek[key] = (byWeek[key] ?? 0) + Number(r.quantidade_divergencia ?? 0);
       }
       return Object.entries(byWeek).sort(([a], [b]) => a.localeCompare(b));

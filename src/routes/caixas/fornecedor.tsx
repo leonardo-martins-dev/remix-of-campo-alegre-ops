@@ -9,6 +9,7 @@ import { useFornecedores } from "@/hooks/use-cadastros";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { useMovimentosFornecedor, useRegistrarMovimentoFornecedor } from "@/hooks/use-ledger";
 import { NumberStepper } from "@/components/number-stepper";
+import { formatDateBRT, formatTimeBRT } from "@/lib/utils-date";
 
 export const Route = createFileRoute("/caixas/fornecedor")({
   component: Page,
@@ -69,11 +70,32 @@ function Page() {
         <Button className="min-h-11 w-full" onClick={handleSave} disabled={registrar.isPending}>Registrar</Button>
       </div>
       {fornecedorId && (
-        <div className="mt-6 max-w-lg text-sm space-y-1">
-          <h3 className="font-semibold">Extrato</h3>
-          {(extrato as { id: string; created_at: string; tipo_caixa: string; quantidade: number; natureza: string; documento_tipo: string }[]).map((m) => (
-            <p key={m.id}>{m.created_at.slice(0, 16)} · {m.natureza} {m.quantidade} {m.tipo_caixa} · {m.documento_tipo}</p>
-          ))}
+        <div className="mt-6 max-w-lg">
+          <h3 className="font-semibold text-sm mb-2">Extrato</h3>
+          {(extrato as { id: string; created_at: string; tipo_caixa: string; quantidade: number; natureza: string; documento_tipo: string }[]).length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sem movimentações recentes.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground uppercase">
+                <tr>
+                  <th className="text-left py-2">Data</th>
+                  <th className="text-left py-2">Tipo</th>
+                  <th className="text-center py-2">Cx</th>
+                  <th className="text-right py-2">Qtd</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(extrato as { id: string; created_at: string; tipo_caixa: string; quantidade: number; natureza: string; documento_tipo: string }[]).map((m) => (
+                  <tr key={m.id} className="border-t border-border">
+                    <td className="py-2 text-muted-foreground">{formatDateBRT(m.created_at)} {formatTimeBRT(m.created_at)}</td>
+                    <td className="py-2 capitalize">{m.natureza.replace(/_/g, " ")}</td>
+                    <td className="py-2 text-center font-semibold">{m.tipo_caixa}</td>
+                    <td className="py-2 text-right font-bold">{m.quantidade}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </div>

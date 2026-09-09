@@ -12,6 +12,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -54,7 +64,7 @@ type LinhaItem = {
   produto: string;
   unid: string;
   pedido: number;
-  rateio: [string, number][];
+  cliente: string | null;
   recebido: number;
   conferido: boolean;
   qualidade: { ativo: boolean; qtd: number } | null;
@@ -68,7 +78,7 @@ function Page() {
   const navigate = useNavigate({ from: Route.fullPath });
 
   const { data: pedidos = [], isLoading: loadingPedidos } = usePedidosDia();
-  const pendentes = pedidos.filter((p) => p.status === "pendente");
+  const pendentes = pedidos.filter((p) => p.status === "pendente" || p.status === "parcial");
 
   const clearPedido = () => navigate({ search: {} });
   const selectPedido = (id: string) => navigate({ search: { pedidoId: id } });
@@ -151,8 +161,8 @@ function mapToLinha(
       quantidade_pedida: number;
       preco_unitario?: number | null;
       produtos: { nome: string; unidade: string; tolerancia_pct?: number | null } | { nome: string; unidade: string; tolerancia_pct?: number | null }[] | null;
-      itens_pedido_rateio: { quantidade: number; destinatarios: { nome: string } | { nome: string }[] | null }[];
-    } | { id?: string; quantidade_pedida: number; preco_unitario?: number | null; produtos: unknown; itens_pedido_rateio: unknown }[] | null;
+      clientes?: { nome: string } | { nome: string }[] | null;
+    } | { id?: string; quantidade_pedida: number; preco_unitario?: number | null; produtos: unknown; clientes?: unknown }[] | null;
   }
 ): LinhaItem {
   const ip = one(ic.itens_pedido);
@@ -161,12 +171,9 @@ function mapToLinha(
     id: ic.id,
     itemPedidoId: ip?.id,
     produto: prod?.nome ?? "—",
-    unid: prod?.unidade ?? "un",
+    unid: (ip as { unidade?: string | null })?.unidade || prod?.unidade || "un",
     pedido: Number(ip?.quantidade_pedida ?? 0),
-    rateio: ((ip?.itens_pedido_rateio as { quantidade: number; destinatarios: { nome: string } | { nome: string }[] | null }[] | undefined) ?? []).map((r) => [
-      one(r.destinatarios)?.nome ?? "?",
-      Number(r.quantidade),
-    ]),
+    cliente: one(ip?.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? null,
     recebido: Number(ic.quantidade_recebida),
     conferido: ic.conferido,
     qualidade: ic.tem_problema_qualidade
@@ -180,28 +187,36 @@ function mapToLinha(
 
 function buildSavePayload(
   it: LinhaItem,
-  opts?: { toleranciaPct?: number; toleranciaMin?: number; preco?: number | null; fallback?: number }
+  opts?: {
+    toleranciaPct?: number;
+    toleranciaMin?: number;
+    preco?: number | null;
+    fallback?: number;
+    jaRecebido?: number;
+  }
 ) {
-  const div = it.recebido - it.pedido;
+  const ja = Number(opts?.jaRecebido ?? 0);
+  const totalApos = ja + it.recebido;
+  const gap = totalApos - it.pedido;
   let divergencia: string | null = null;
   if (it.conferido) {
     if (it.qualidade?.ativo) divergencia = "qualidade";
-    else if (div < 0) divergencia = "falta";
-    else if (div > 0) divergencia = "sobra";
+    else if (gap > 0) divergencia = "sobra";
+    // R07: saldo pendente (totalApos < pedido) não é falta nesta entrega
   }
   const pct = opts?.toleranciaPct ?? 5;
   const min = opts?.toleranciaMin ?? 1;
   const limite = Math.max((pct / 100) * it.pedido, min);
-  const dentro = divergencia === "qualidade" ? false : Math.abs(div) <= limite;
+  const dentro = divergencia === "qualidade" ? false : Math.abs(Math.max(0, gap)) <= limite;
   const preco = opts?.preco ?? null;
   const estimado = preco == null;
-  const valor = Math.abs(div) * (preco ?? opts?.fallback ?? 4.5);
+  const valor = Math.abs(Math.max(0, gap)) * (preco ?? opts?.fallback ?? 4.5);
   return {
     id: it.id,
     quantidade_recebida: it.recebido,
     conferido: it.conferido,
     divergencia,
-    quantidade_divergencia: Math.abs(div),
+    quantidade_divergencia: divergencia ? Math.abs(gap) : 0,
     tem_problema_qualidade: !!it.qualidade?.ativo,
     quantidade_qualidade: it.qualidade?.qtd ?? 0,
     dentro_tolerancia: divergencia ? dentro : null,
@@ -232,7 +247,7 @@ function ConferenciaItens({
   const { data: produtos = [] } = useProdutos();
   const { data: tipos = [] } = useTiposCaixa();
   const { data: toleranciaPct = 5 } = useConfigValor("tolerancia_pct", 5);
-  const { data: toleranciaMin = 1 } = useConfigValor("tolerancia_min_cx", 1);
+  const { data: toleranciaMin = 1 } = useConfigValor("tolerancia_min_un", 1);
   const { data: fallbackPreco = 4.5 } = useConfigValor("impacto_falta_por_unidade", 4.5);
   const { data: saldosItem = [] } = useSaldoItensPedido(pedidoId);
   const { data: entregasMeta } = useQuery({
@@ -252,6 +267,8 @@ function ConferenciaItens({
   const [cheias, setCheias] = useState<Record<string, number>>({});
   const [vazias, setVazias] = useState<Record<string, number>>({});
 
+  const [confirmFinal, setConfirmFinal] = useState(false);
+
   const startedRef = useRef<string | null>(null);
   const fotoRef = useRef<HTMLInputElement>(null);
   const [fotoItemId, setFotoItemId] = useState<string | null>(null);
@@ -261,7 +278,7 @@ function ConferenciaItens({
 
   const [itens, setItens] = useState<LinhaItem[]>([]);
 
-  const pendentes = pedidos.filter((p) => p.status === "pendente");
+  const pendentes = pedidos.filter((p) => p.status === "pendente" || p.status === "parcial");
   const fornecedorNome = one(pedido?.fornecedores)?.nome ?? one(pedidos.find((p) => p.id === pedidoId)?.fornecedores)?.nome ?? "—";
   const codigo = pedido?.codigo ?? pedidos.find((p) => p.id === pedidoId)?.codigo ?? "";
   const wiseId = (pedido as { wise_pedido_id?: string | null } | null)?.wise_pedido_id
@@ -282,7 +299,7 @@ function ConferenciaItens({
     if (!pedidoId || !user?.id) return;
     if (startedRef.current === pedidoId) return;
     if (!pedidoStatus) return;
-    if (pedidoStatus !== "pendente") return;
+    if (pedidoStatus !== "pendente" && pedidoStatus !== "parcial") return;
     if (conferencia?.status === "finalizada") return;
     startedRef.current = pedidoId;
     startMut.mutate(
@@ -295,15 +312,6 @@ function ConferenciaItens({
     if (!conferencia?.itens_conferencia) return;
     setItens(conferencia.itens_conferencia.map(mapToLinha));
   }, [conferencia]);
-
-  useEffect(() => {
-    const qtd = itens.reduce((a, it) => a + (it.recebido || 0), 0);
-    if (!tipos.length || !qtd) return;
-    setCheias((prev) => {
-      if (Object.values(prev).some((n) => n > 0)) return prev;
-      return { [tipos[0].sigla]: qtd };
-    });
-  }, [tipos, itens]);
 
   const update = (idx: number, v: number) => {
     if (readOnly) return;
@@ -346,15 +354,13 @@ function ConferenciaItens({
     };
   }, [itens]);
 
-  const rateioResumo = useMemo(() => {
+  const clienteResumo = useMemo(() => {
     const map: Record<string, { ped: number; rec: number }> = {};
     itens.forEach((it) => {
-      const fator = it.pedido > 0 ? it.recebido / it.pedido : 0;
-      it.rateio.forEach(([d, q]) => {
-        if (!map[d]) map[d] = { ped: 0, rec: 0 };
-        map[d].ped += Number(q);
-        map[d].rec += Number(q) * fator;
-      });
+      const nome = it.cliente ?? "Sem cliente";
+      if (!map[nome]) map[nome] = { ped: 0, rec: 0 };
+      map[nome].ped += it.pedido;
+      map[nome].rec += it.recebido;
     });
     return map;
   }, [itens]);
@@ -370,15 +376,32 @@ function ConferenciaItens({
         conferenciaId: conferencia.id,
         pedidoId,
         status,
-        itens: itens.map((it) =>
-          buildSavePayload(it, {
-            toleranciaPct: it.toleranciaPct ?? toleranciaPct,
-            toleranciaMin,
-            preco: it.preco,
-            fallback: fallbackPreco,
-          })
-        ),
-      });
+        itens: itens.map((it) => {
+            const saldoRow = (saldosItem as { item_pedido_id: string; recebido_acumulado: number }[])
+              .find((s) => s.item_pedido_id === it.itemPedidoId);
+            return buildSavePayload(it, {
+              toleranciaPct: it.toleranciaPct ?? toleranciaPct,
+              toleranciaMin,
+              preco: it.preco,
+              fallback: fallbackPreco,
+              jaRecebido: Number(saldoRow?.recebido_acumulado ?? 0),
+            });
+          }),
+        });
+      if (status === "finalizada" && conferencia?.id) {
+        await supabase.from("conferencia_caixas").delete().eq("conferencia_id", conferencia.id);
+        const caixaRows = tipos
+          .map((t) => ({
+            conferencia_id: conferencia.id,
+            tipo_caixa_sigla: t.sigla,
+            qtd_cheias: Number(cheias[t.sigla] ?? 0),
+            qtd_vazias: Number(vazias[t.sigla] ?? 0),
+          }))
+          .filter((r) => r.qtd_cheias > 0 || r.qtd_vazias > 0);
+        if (caixaRows.length) {
+          await supabase.from("conferencia_caixas").insert(caixaRows);
+        }
+      }
       if (status === "finalizada" && user && pedido?.fornecedor_id) {
         for (const t of tipos) {
           const c = Number(cheias[t.sigla] ?? 0);
@@ -436,13 +459,7 @@ function ConferenciaItens({
   const finalizar = () => {
     const saldoAberto = (saldosItem as { saldo: number }[]).some((s) => Number(s.saldo) > 0);
     if (stats.faltantes > 0 || saldoAberto) {
-      toast.warning("O restante fica pendente no pedido", {
-        description: "Finalizar esta entrega e deixar o saldo no pedido?",
-        action: {
-          label: "Finalizar entrega",
-          onClick: () => salvar("finalizada"),
-        },
-      });
+      setConfirmFinal(true);
       return;
     }
     salvar("finalizada");
@@ -590,16 +607,16 @@ function ConferenciaItens({
 
       <div className="card-base p-4 mb-5">
         <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-          Recebido × pedido por destinatário
+          Recebido × pedido por cliente
         </div>
         <div className="flex flex-wrap gap-2">
-          {Object.entries(rateioResumo).map(([d, q]) => {
+          {Object.entries(clienteResumo).map(([d, q]) => {
             const rec = Math.round(q.rec);
             const ok = rec === q.ped;
             return (
               <span
                 key={d}
-                className={`chip ${ok ? "chip-teal" : rec < q.ped ? "chip-danger" : "chip-danger"} text-sm`}
+                className={`chip ${ok ? "chip-teal" : rec < q.ped ? "chip-warn" : "chip-danger"} text-sm`}
               >
                 {d} · {rec}/{q.ped}
               </span>
@@ -631,8 +648,10 @@ function ConferenciaItens({
               const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
               const pct = it.toleranciaPct ?? toleranciaPct;
               const limite = Math.max((pct / 100) * it.pedido, toleranciaMin);
-              const div = it.recebido - it.pedido;
+              const totalApos = jaRecebido + it.recebido;
+              const gap = totalApos - it.pedido;
               const pendente = !it.conferido;
+              const dentroTol = Math.abs(Math.max(0, gap)) <= limite;
               return (
                 <tr key={it.id} className="border-t border-border">
                   <td className="px-4 py-3 font-semibold text-navy">{it.produto}</td>
@@ -646,16 +665,21 @@ function ConferenciaItens({
                       <NumberStepper value={it.recebido} onChange={(v) => update(idx, v)} />
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">{Math.max(0, saldo - (it.conferido ? it.recebido : 0))}</td>
-                  <td className="px-4 py-3 text-right text-xs text-muted-foreground">±{limite.toFixed(0)}</td>
+                  <td className="px-4 py-3 text-right font-semibold">{Math.max(0, it.pedido - totalApos)}</td>
+                  <td className="px-4 py-3 text-right text-xs text-muted-foreground">±{limite.toFixed(0)} un</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       {pendente && <span className="chip chip-muted">Pendente</span>}
-                      {!pendente && div === 0 && <span className="chip chip-ok">OK</span>}
-                      {!pendente && div < 0 && (
-                        <span className="chip chip-danger">Falta {Math.abs(div)}</span>
+                      {!pendente && gap === 0 && <span className="chip chip-ok">OK</span>}
+                      {!pendente && gap < 0 && (
+                        <span className="chip chip-warn">Saldo {Math.abs(gap)}</span>
                       )}
-                      {!pendente && div > 0 && <span className="chip chip-danger">Sobra {div}</span>}
+                      {!pendente && gap > 0 && dentroTol && (
+                        <span className="chip chip-info">Sobra {gap} · dentro da tolerância</span>
+                      )}
+                      {!pendente && gap > 0 && !dentroTol && (
+                        <span className="chip chip-danger">Sobra {gap} · acima da tolerância</span>
+                      )}
                       {it.qualidade && (
                         <span
                           className="chip"
@@ -805,6 +829,27 @@ function ConferenciaItens({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={confirmFinal} onOpenChange={setConfirmFinal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Finalizar esta entrega?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O restante fica pendente no pedido. Isso não é falta até o encerramento.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmFinal(false);
+                salvar("finalizada");
+              }}
+            >
+              Finalizar entrega
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

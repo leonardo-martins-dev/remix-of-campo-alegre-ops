@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert } from "lucide-react";
+import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { StatStrip } from "@/components/stat-strip";
@@ -30,13 +30,12 @@ import {
   useFillRate,
   useUpdatePedidoAdmin,
 } from "@/hooks/use-pedidos";
-import { sumRateio, rateioRestante, validateRateio } from "@/lib/rateio";
-import { useFornecedores, useProdutos, useDestinatarios } from "@/hooks/use-cadastros";
+import { useFornecedores, useProdutos, useDestinatarios, useClientes } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
 import { resolveIsAdmin } from "@/lib/roles";
 import { parsePedidosExcel, buildPedidosFromExcel } from "@/lib/excel";
 import { downloadWiseModelo } from "@/lib/excel-wise-pedidos";
-import { useImportWisePedidos } from "@/hooks/use-wise-pedidos";
+import { useImportWisePedidos, useSyncWisePedidos } from "@/hooks/use-wise-pedidos";
 import { usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { formatTime } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
@@ -46,15 +45,10 @@ export const Route = createFileRoute("/recebimento/")({
   head: () => ({ meta: [{ title: "Recebimento · Campo Alegre" }] }),
 });
 
-type ItemPedidoRateio = {
-  destinatario_id: string;
-  quantidade: number;
-  destinatarios: { nome: string } | null;
-};
-
 type ItemPedido = {
   id: string;
-  itens_pedido_rateio: ItemPedidoRateio[];
+  cliente_id?: string | null;
+  clientes?: { nome: string } | { nome: string }[] | null;
 };
 
 type PedidoDia = {
@@ -73,6 +67,8 @@ type PedidoDia = {
 type ManualItem = {
   produto_id: string;
   quantidade: number;
+  preco_unitario: string;
+  cliente_id: string;
   rateio: { destinatario_id: string; quantidade: number }[];
 };
 
@@ -120,15 +116,13 @@ function pedidoActionLink(p: PedidoDia) {
   );
 }
 
-function getRateioChips(p: PedidoDia): [string, number][] {
-  const map = new Map<string, number>();
+function getClienteChips(p: PedidoDia): string[] {
+  const names = new Set<string>();
   for (const item of p.itens_pedido ?? []) {
-    for (const r of item.itens_pedido_rateio ?? []) {
-      const nome = r.destinatarios?.nome ?? "?";
-      map.set(nome, (map.get(nome) ?? 0) + Number(r.quantidade));
-    }
+    const nome = Array.isArray(item.clientes) ? item.clientes[0]?.nome : item.clientes?.nome;
+    if (nome) names.add(nome);
   }
-  return [...map.entries()];
+  return [...names];
 }
 
 function origemLabel(o: string) {
@@ -152,9 +146,11 @@ function Page() {
   const { data: fornecedores = [] } = useFornecedores();
   const { data: produtos = [] } = useProdutos();
   const { data: destinatarios = [] } = useDestinatarios();
+  const { data: clientes = [] } = useClientes();
   const createManual = useCreatePedidoManual();
   const importPedidos = useImportPedidos();
   const importWise = useImportWisePedidos();
+  const syncWise = useSyncWisePedidos();
   const { data: pendencias = [] } = usePendenciasVinculo();
   const updatePedido = useUpdatePedidoAdmin();
   const canAdmin = isAdmin || resolveIsAdmin(profile, user);
@@ -162,7 +158,7 @@ function Page() {
   const [fornecedorId, setFornecedorId] = useState("");
   const [codigo, setCodigo] = useState("");
   const [manualItens, setManualItens] = useState<ManualItem[]>([
-    { produto_id: "", quantidade: 1, rateio: [{ destinatario_id: "", quantidade: 0 }] },
+    { produto_id: "", quantidade: 1, preco_unitario: "", cliente_id: "", rateio: [] },
   ]);
 
   const typedPedidos: PedidoDia[] = pedidos.map((p) => ({
@@ -211,6 +207,7 @@ function Page() {
           fornecedores,
           produtos: produtos.map((p) => ({ id: p.id, nome: p.nome })),
           destinatarios,
+          clientes,
         });
         toast.success(`${result.novos} novos · ${result.atualizados} atualizados · ${result.pendencias} pendências`);
         return;
@@ -230,7 +227,7 @@ function Page() {
   const resetManualForm = () => {
     setFornecedorId("");
     setCodigo("");
-    setManualItens([{ produto_id: "", quantidade: 1, rateio: [{ destinatario_id: "", quantidade: 0 }] }]);
+    setManualItens([{ produto_id: "", quantidade: 1, preco_unitario: "", cliente_id: "", rateio: [] }]);
   };
 
   const submitManual = async () => {
@@ -243,18 +240,13 @@ function Page() {
       .map((i) => ({
         produto_id: i.produto_id,
         quantidade: i.quantidade,
-        rateio: i.rateio.filter((r) => r.destinatario_id && r.quantidade > 0),
+        preco_unitario: i.preco_unitario ? Number(i.preco_unitario) : null,
+        cliente_id: i.cliente_id || null,
+        rateio: [] as { destinatario_id: string; quantidade: number }[],
       }));
     if (!itens.length) {
       toast.error("Adicione ao menos um item válido");
       return;
-    }
-    for (const item of itens) {
-      const v = validateRateio(item.quantidade, item.rateio);
-      if (!v.ok) {
-        toast.error(v.error);
-        return;
-      }
     }
     try {
       await createManual.mutateAsync({
@@ -275,7 +267,7 @@ function Page() {
     if (!fornecedorId || !codigo.trim()) return false;
     const itens = manualItens.filter((i) => i.produto_id && i.quantidade > 0);
     if (!itens.length) return false;
-    return itens.every((i) => validateRateio(i.quantidade, i.rateio).ok);
+    return itens.every((i) => i.quantidade > 0);
   }, [fornecedorId, codigo, manualItens]);
 
   return (
@@ -300,6 +292,32 @@ function Page() {
                 <ShieldAlert size={14} /> Liberações
               </Link>
             )}
+            <button
+              type="button"
+              disabled={syncWise.isPending}
+              onClick={async () => {
+                if (!user?.id) return;
+                try {
+                  const result = await syncWise.mutateAsync({
+                    created_by: user.id,
+                    fornecedores,
+                    produtos,
+                    destinatarios,
+                    clientes,
+                  });
+                  if (!result.novos && !result.atualizados) {
+                    toast.info(result.message ?? "Nenhum pedido na API. Use a importação por arquivo.");
+                  } else {
+                    toast.success(`${result.novos} novos · ${result.atualizados} atualizados · ${result.pendencias} pendências`);
+                  }
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Erro ao sincronizar Wise");
+                }
+              }}
+              className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+            >
+              <RefreshCw size={14} /> Sincronizar Wise
+            </button>
             <button
               type="button"
               disabled={importPedidos.isPending}
@@ -387,7 +405,7 @@ function Page() {
               <th className="text-left px-4 py-3 font-semibold">Pedido</th>
               <th className="text-left px-4 py-3 font-semibold">Fornecedor</th>
               <th className="text-left px-4 py-3 font-semibold">Itens</th>
-              <th className="text-left px-4 py-3 font-semibold">Rateio</th>
+              <th className="text-left px-4 py-3 font-semibold">Cliente</th>
               <th className="text-left px-4 py-3 font-semibold">Origem</th>
               <th className="text-left px-4 py-3 font-semibold">Chegada</th>
               <th className="text-left px-4 py-3 font-semibold">Status</th>
@@ -416,9 +434,9 @@ function Page() {
                 <td className="px-4 py-3 text-ink">{p.itens_pedido?.length ?? 0}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {getRateioChips(p).map(([d, q]) => (
+                    {getClienteChips(p).map((d) => (
                       <span key={d} className="chip chip-muted">
-                        {d} · {q}
+                        {d}
                       </span>
                     ))}
                   </div>
@@ -525,22 +543,23 @@ function Page() {
                         onChange={(e) => {
                           const qtd = Number(e.target.value) || 0;
                           setManualItens((prev) =>
-                            prev.map((it, i) => {
-                              if (i !== idx) return it;
-                              let rateio = it.rateio;
-                              if (sumRateio(rateio) > qtd) {
-                                let remaining = qtd;
-                                rateio = rateio.map((r) => {
-                                  if (!r.destinatario_id || r.quantidade <= 0) return r;
-                                  const q = Math.min(r.quantidade, remaining);
-                                  remaining -= q;
-                                  return { ...r, quantidade: q };
-                                });
-                              }
-                              return { ...it, quantidade: qtd, rateio };
-                            })
+                            prev.map((it, i) => (i === idx ? { ...it, quantidade: qtd } : it))
                           );
                         }}
+                      />
+                    </div>
+                    <div className="w-28 space-y-1">
+                      <Label className="text-xs">Preço un.</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={item.preco_unitario}
+                        onChange={(e) =>
+                          setManualItens((prev) =>
+                            prev.map((it, i) => (i === idx ? { ...it, preco_unitario: e.target.value } : it))
+                          )
+                        }
                       />
                     </div>
                     {manualItens.length > 1 && (
@@ -555,119 +574,26 @@ function Page() {
                     )}
                   </div>
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs">Rateio por destinatário</Label>
-                      {(() => {
-                        const sum = sumRateio(item.rateio);
-                        const ok = sum === item.quantidade || (sum === 0 && item.rateio.every((r) => !r.destinatario_id));
-                        return (
-                          <span className={`text-[10px] font-semibold ${ok ? "text-[var(--success)]" : "text-destructive"}`}>
-                            Rateado: {sum} / {item.quantidade}
-                          </span>
-                        );
-                      })()}
-                    </div>
-                    {item.rateio.map((r, ri) => (
-                      <div key={ri} className="flex gap-2 items-center">
-                        <Select
-                          value={r.destinatario_id || undefined}
-                          onValueChange={(v) =>
-                            setManualItens((prev) =>
-                              prev.map((it, i) =>
-                                i === idx
-                                  ? {
-                                      ...it,
-                                      rateio: it.rateio.map((rr, j) =>
-                                        j === ri ? { ...rr, destinatario_id: v } : rr
-                                      ),
-                                    }
-                                  : it
-                              )
-                            )
-                          }
-                        >
-                          <SelectTrigger className="flex-1">
-                            <SelectValue placeholder="Destinatário…" />
-                          </SelectTrigger>
-                          <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
-                            {destinatarios.map((d) => (
-                              <SelectItem key={d.id} value={d.id}>
-                                {d.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={rateioRestante(item.quantidade, item.rateio, ri)}
-                          className="w-24"
-                          value={r.quantidade || ""}
-                          onChange={(e) => {
-                            const max = rateioRestante(item.quantidade, item.rateio, ri);
-                            const q = Math.min(Number(e.target.value) || 0, max);
-                            setManualItens((prev) =>
-                              prev.map((it, i) =>
-                                i === idx
-                                  ? {
-                                      ...it,
-                                      rateio: it.rateio.map((rr, j) =>
-                                        j === ri ? { ...rr, quantidade: q } : rr
-                                      ),
-                                    }
-                                  : it
-                              )
-                            );
-                          }}
-                        />
-                        {(item.rateio.length > 1 ||
-                          (!r.destinatario_id && r.quantidade === 0)) && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="shrink-0"
-                            title="Remover linha de rateio"
-                            onClick={() =>
-                              setManualItens((prev) =>
-                                prev.map((it, i) =>
-                                  i === idx
-                                    ? {
-                                        ...it,
-                                        rateio:
-                                          it.rateio.length > 1
-                                            ? it.rateio.filter((_, j) => j !== ri)
-                                            : it.rateio,
-                                      }
-                                    : it
-                                )
-                              )
-                            }
-                          >
-                            <Trash2 size={14} />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
+                    <Label className="text-xs">Cliente (CNPJ / nome)</Label>
+                    <Select
+                      value={item.cliente_id || undefined}
+                      onValueChange={(v) =>
                         setManualItens((prev) =>
-                          prev.map((it, i) =>
-                            i === idx
-                              ? {
-                                  ...it,
-                                  rateio: [...it.rateio, { destinatario_id: "", quantidade: 0 }],
-                                }
-                              : it
-                          )
+                          prev.map((it, i) => (i === idx ? { ...it, cliente_id: v } : it))
                         )
                       }
                     >
-                      + Rateio
-                    </Button>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Cliente…" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
+                        {clientes.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.nome}{c.cnpj ? ` · ${c.cnpj}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               ))}
@@ -681,7 +607,9 @@ function Page() {
                     {
                       produto_id: "",
                       quantidade: 1,
-                      rateio: [{ destinatario_id: "", quantidade: 0 }],
+                      preco_unitario: "",
+                      cliente_id: "",
+                      rateio: [],
                     },
                   ])
                 }
