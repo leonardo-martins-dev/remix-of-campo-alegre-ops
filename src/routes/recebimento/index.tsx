@@ -38,7 +38,7 @@ import { parsePedidosExcel, buildPedidosFromExcel } from "@/lib/excel";
 import { downloadWiseModelo } from "@/lib/excel-wise-pedidos";
 import { useImportWisePedidos, useSyncWisePedidos } from "@/hooks/use-wise-pedidos";
 import { usePendenciasVinculo } from "@/hooks/use-pedidos";
-import { formatDateBRT, formatTime } from "@/lib/utils-date";
+import { formatDateBRT, formatTime, todayBRT } from "@/lib/utils-date";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -145,7 +145,9 @@ function origemLabel(o: string) {
 }
 
 function Page() {
-  const [tab, setTab] = useState<"todos" | "pendente" | "parcial" | "conferido" | "divergencia" | "aguardando_liberacao" | "aguardando_vinculo">("todos");
+  const [tab, setTab] = useState<"todos" | "pendente" | "parcial" | "conferido" | "divergencia" | "aguardando_liberacao" | "aguardando_vinculo" | "encerrado">("todos");
+  const [dataFiltro, setDataFiltro] = useState(todayBRT());
+  const [busca, setBusca] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [editPedido, setEditPedido] = useState<PedidoDia | null>(null);
   const [editCodigo, setEditCodigo] = useState("");
@@ -156,8 +158,8 @@ function Page() {
 
   const { user, profile, isAdmin } = useAuth();
   usePedidosRealtime();
-  const { data: pedidos = [], isLoading, error } = usePedidosDia();
-  const { data: fillRateData = [] } = useFillRate();
+  const { data: pedidos = [], isLoading, error } = usePedidosDia(dataFiltro);
+  const { data: fillRateData = [] } = useFillRate("today");
   const { data: fornecedores = [] } = useFornecedores();
   const { data: produtos = [] } = useProdutos();
   const { data: destinatarios = [] } = useDestinatarios();
@@ -182,7 +184,16 @@ function Page() {
     fornecedores: one(p.fornecedores),
     itens_pedido: (p.itens_pedido ?? []) as ItemPedido[],
   }));
-  const filtered = typedPedidos.filter((p) => tab === "todos" || p.status === tab);
+  const filtered = typedPedidos.filter((p) => {
+    if (tab !== "todos" && p.status !== tab) return false;
+    const q = busca.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      p.codigo.toLowerCase().includes(q) ||
+      (p.fornecedores?.nome ?? "").toLowerCase().includes(q) ||
+      getClienteChips(p).some((n) => n.toLowerCase().includes(q))
+    );
+  });
 
   const stats = useMemo(() => {
     const totalItens = typedPedidos.reduce((a, p) => a + (p.itens_pedido?.length ?? 0), 0);
@@ -362,7 +373,7 @@ function Page() {
 
       <StatStrip
         items={[
-          { label: "Pedidos hoje", value: isLoading ? "…" : String(typedPedidos.length) },
+          { label: `Pedidos em ${formatDateBRT(dataFiltro)}`, value: isLoading ? "…" : String(typedPedidos.length) },
           {
             label: "Itens a conferir",
             value: isLoading ? "…" : String(stats.itensPendentes),
@@ -393,8 +404,13 @@ function Page() {
         </div>
       )}
 
+      <div className="flex flex-wrap gap-3 mb-3">
+        <Input type="date" className="w-40" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value || todayBRT())} />
+        <Input className="w-64" placeholder="Buscar pedido, fornecedor ou cliente" value={busca} onChange={(e) => setBusca(e.target.value)} />
+      </div>
+
       <div className="card-base">
-        <div className="flex items-center gap-1 p-2 border-b border-border">
+        <div className="flex items-center gap-1 p-2 border-b border-border overflow-x-auto">
           {(
             [
               ["todos", "Todos"],
@@ -404,6 +420,7 @@ function Page() {
               ["conferido", "Recebidos"],
               ["aguardando_liberacao", "Aguard. liberação"],
               ["divergencia", "Com divergência"],
+              ["encerrado", "Encerrado"],
             ] as const
           ).map(([k, l]) => (
             <button
@@ -524,7 +541,7 @@ function Page() {
                     <SelectValue placeholder="Selecione…" />
                   </SelectTrigger>
                   <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
-                    {fornecedores.map((f) => (
+                    {fornecedores.filter((f) => f.ativo !== false).map((f) => (
                       <SelectItem key={f.id} value={f.id}>
                         {f.nome}
                       </SelectItem>
@@ -557,7 +574,7 @@ function Page() {
                           <SelectValue placeholder="Produto…" />
                         </SelectTrigger>
                         <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
-                          {produtos.map((pr) => (
+                          {produtos.filter((pr) => (pr as { ativo?: boolean }).ativo !== false).map((pr) => (
                             <SelectItem key={pr.id} value={pr.id}>
                               {pr.nome}
                             </SelectItem>

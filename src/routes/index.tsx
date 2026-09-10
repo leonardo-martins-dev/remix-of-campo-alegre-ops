@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Truck, Percent, Box, DollarSign, AlertCircle } from "lucide-react";
 import { KpiCard } from "@/components/kpi-card";
+import { formatBRL } from "@/lib/format";
 import { Donut, BarRow } from "@/components/charts";
 import { PageHeader } from "@/components/page-header";
 import { useDashboard, useAlertas } from "@/hooks/use-dashboard";
@@ -42,7 +43,7 @@ function Dashboard() {
         <KpiCard label="Cargas expedidas hoje" value={String(cargasExpedidas)} icon={Truck} />
         <Link to="/fornecedores" className="block">
           <KpiCard
-            label="Fill rate (itens / R$)"
+            label="Fill rate hoje (itens / R$)"
             value={`${fillRate.toFixed(0)}% / ${fillRateValor.toFixed(0)}%`}
             icon={Percent}
             positiveIsGood={false}
@@ -57,16 +58,16 @@ function Dashboard() {
         />
         <KpiCard
           label="Perda de caixas no mês"
-          value={`R$ ${(perdaCaixasMes ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`}
+          value={formatBRL(perdaCaixasMes ?? 0)}
           icon={AlertCircle}
           positiveIsGood={false}
         />
-        <KpiCard label="Quebra do dia" value={`R$ ${quebraDia.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`} icon={AlertCircle} positiveIsGood={false} />
+        <KpiCard label="Quebra do dia" value={formatBRL(quebraDia)} icon={AlertCircle} positiveIsGood={false} />
         <KpiCard label="Pendências de vínculo" value={String(pendenciasVinculo)} icon={AlertCircle} positiveIsGood={false} />
         <KpiCard label="Divergências hoje" value={`${divergenciasDia.todas} · ${divergenciasDia.acima} acima`} icon={AlertCircle} positiveIsGood={false} />
         <KpiCard
           label="Capital em caixas na rua"
-          value={`R$ ${capital.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`}
+          value={formatBRL(capital)}
           icon={DollarSign}
           positiveIsGood={false}
         />

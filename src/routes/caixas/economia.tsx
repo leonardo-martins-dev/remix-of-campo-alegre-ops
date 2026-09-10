@@ -325,7 +325,7 @@ function Page() {
                     <span className="chip chip-muted">{c.pior}</span>
                   </td>
                   <td className="px-3 py-3 text-right font-bold text-navy">
-                    R$ {c.custoPerda.toFixed(2)}
+                    {formatBRL(c.custoPerda)}
                   </td>
                   <td className="px-3 py-3 text-center">
                     <span
@@ -343,7 +343,7 @@ function Page() {
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => handleCobrar(c)}
-                      disabled={cobrandoId === c.cliente_id || cobradoIds.has(c.cliente_id)}
+                      disabled={c.perdidas <= 0 || cobrandoId === c.cliente_id || cobradoIds.has(c.cliente_id)}
                       className="h-7 px-3 rounded-md bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary hover:text-primary-foreground active:scale-95 transition disabled:opacity-50"
                     >
                       {cobrandoId === c.cliente_id

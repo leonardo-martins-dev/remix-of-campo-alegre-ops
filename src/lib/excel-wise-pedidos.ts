@@ -12,6 +12,7 @@ export type WisePedidoRow = {
   preco_unitario: number | null;
   loja: string;
   data_prevista: string | null;
+  familia: string;
 };
 
 export type WiseParseResult =
@@ -29,6 +30,7 @@ const COL = {
   preco: ["preco unitario", "preço unitário", "preco", "preço", "valor unitario", "vl unit"],
   loja: ["loja", "destinatario", "destinatário", "filial", "cliente"],
   data: ["data prevista", "data entrega", "previsao", "previsão", "data_prevista"],
+  familia: ["familia", "família", "familia produto", "grupo", "categoria"],
 };
 
 function asDate(value: unknown): string | null {
@@ -100,6 +102,7 @@ export function parseWisePedido(file: ArrayBuffer): WiseParseResult {
         : Number(pickColumn(r, COL.preco)),
       loja: String(pickColumn(r, COL.loja) ?? "").trim(),
       data_prevista: asDate(pickColumn(r, COL.data)),
+      familia: String(pickColumn(r, COL.familia) ?? "").trim(),
     });
   }
 
@@ -160,6 +163,7 @@ export type WiseBuildItem = {
   unidade: string;
   preco_unitario: number | null;
   cliente_id: string | null;
+  familia?: string;
   rateio: { destinatario_id: string | null; destinatario_nome: string; quantidade: number }[];
 };
 
@@ -228,11 +232,13 @@ export function buildWisePedidos(rows: WisePedidoRow[], maps: CadastroMaps): Wis
         unidade: row.unidade,
         preco_unitario: row.preco_unitario,
         cliente_id,
+        familia: row.familia,
         rateio: [],
       };
       ped.itens.push(item);
     }
     item.quantidade += row.quantidade || 0;
+    if (row.familia) item.familia = row.familia;
     if (row.preco_unitario != null) item.preco_unitario = row.preco_unitario;
     if (row.loja) {
       const existing = item.rateio.find((r) => r.destinatario_nome === row.loja || (dest_id && r.destinatario_id === dest_id));
@@ -257,6 +263,7 @@ export function downloadWiseModelo() {
       preco_unitario: 12.5,
       loja: "Campo Alegre",
       data_prevista: "2026-09-08",
+      familia: "Folhas",
     },
   ]);
   const wb = XLSX.utils.book_new();

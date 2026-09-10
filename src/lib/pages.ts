@@ -12,6 +12,7 @@ import {
   UserPlus,
   Warehouse,
   Handshake,
+  Shield,
   PackageCheck as ConferirIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -56,6 +57,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   UserPlus,
   Warehouse,
   Handshake,
+  Shield,
   PackageCheckConferir: ConferirIcon,
 };
 

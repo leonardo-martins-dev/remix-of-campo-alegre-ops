@@ -75,10 +75,10 @@ export function useResolverContagem() {
       itens?: { tipo_caixa_sigla: string; diferenca: number }[];
     }) => {
       if (payload.acao === "mantida") {
-        const { error } = await supabase
-          .from("contagens_caixa")
-          .update({ status: "mantida", observacao: payload.motivo ?? null })
-          .eq("id", payload.contagemId);
+        const { error } = await supabase.rpc("manter_inventario", {
+          p_contagem_id: payload.contagemId,
+          p_observacao: payload.motivo ?? null,
+        });
         if (error) throw error;
         return;
       }

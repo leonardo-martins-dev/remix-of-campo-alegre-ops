@@ -110,7 +110,8 @@ function PhoneFrame() {
     });
   }, [offline, user]);
 
-  const cliente = clientes[clienteIdx];
+  const clientesAtivos = clientes.filter((c) => c.ativo !== false);
+  const cliente = clientesAtivos[clienteIdx];
   const saldoCliente = useMemo(() => {
     const base = emptyCaixas(tipos);
     if (!cliente) return base;
@@ -230,7 +231,7 @@ function PhoneFrame() {
     </div>
   );
 
-  if (!clientes.length) {
+  if (!clientesAtivos.length) {
     return <p className="text-sm text-muted-foreground">Cadastre clientes em Gestão.</p>;
   }
 
@@ -266,7 +267,7 @@ function PhoneFrame() {
             </button>
             {open && (
               <div className="mt-2 rounded-2xl overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
-                {clientes.map((c, i) => (
+                {clientesAtivos.map((c, i) => (
                   <button
                     key={c.id}
                     onClick={() => {

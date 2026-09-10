@@ -25,7 +25,7 @@ function Page() {
   const { data: faltas = [] } = useFaltas({ period, divergencia: "all" });
   const { data: quebras = [] } = useQuebras({ from, to });
   const { data: saldos = [] } = useSaldosCaixa();
-  const { data: fillRows = [] } = useFillRate();
+  const { data: fillRows = [] } = useFillRate(period);
   const { data: alvo = 95 } = useConfigValor("alvo_fill_rate", 95);
   const { data: benchQ = 2 } = useConfigValor("benchmark_quebra_fornecedor", 2);
   const [fichaId, setFichaId] = useState<string | null>(null);

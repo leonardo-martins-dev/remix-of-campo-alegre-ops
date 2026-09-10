@@ -13,7 +13,7 @@ export function useDashboard() {
       const monthStart = `${date.slice(0, 7)}-01`;
       const [cargas, fillRate, saldo, configs, saldosAll, quebras, pend, divs, perdasMes, lastInv] = await Promise.all([
         supabase.from("cargas").select("status").eq("data_carga", date),
-        supabase.from("v_fill_rate_fornecedor").select("*"),
+        supabase.from("v_fill_rate_pedido").select("*").gte("data_pedido", date).lte("data_pedido", date),
         supabase.from("v_saldo_caixas_cliente").select("*"),
         supabase.from("tipos_caixa").select("id, sigla, custo_unitario"),
         supabase.from("v_saldos_caixa").select("*"),
@@ -67,12 +67,13 @@ export function useDashboard() {
         if (c.status in statusCounts) statusCounts[c.status as keyof typeof statusCounts]++;
       });
 
-      const fillAvg =
-        (fillRate.data ?? []).reduce((a: number, f: { fill_rate: number }) => a + (f.fill_rate ?? 0), 0) /
-        Math.max(1, (fillRate.data ?? []).length);
-      const fillValorAvg =
-        (fillRate.data ?? []).reduce((a: number, f: { fill_rate?: number; fill_rate_valor?: number }) => a + (f.fill_rate_valor ?? f.fill_rate ?? 0), 0) /
-        Math.max(1, (fillRate.data ?? []).length);
+      const fillRows = fillRate.data ?? [];
+      const fillItens = fillRows.reduce((a: number, f: { total_itens?: number }) => a + Number(f.total_itens ?? 0), 0);
+      const fillOk = fillRows.reduce((a: number, f: { itens_completos?: number }) => a + Number(f.itens_completos ?? 0), 0);
+      const fillPedido = fillRows.reduce((a: number, f: { valor_pedido?: number }) => a + Number(f.valor_pedido ?? 0), 0);
+      const fillRecebido = fillRows.reduce((a: number, f: { valor_recebido?: number }) => a + Number(f.valor_recebido ?? 0), 0);
+      const fillAvg = fillItens ? (fillOk / fillItens) * 100 : 0;
+      const fillValorAvg = fillPedido ? (fillRecebido / fillPedido) * 100 : 0;
 
       return {
         cargasExpedidas: statusCounts.concluida,

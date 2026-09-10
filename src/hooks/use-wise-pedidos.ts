@@ -149,6 +149,29 @@ async function upsertWisePedidos(
         .eq("produto_id", item.produto_id)
         .maybeSingle();
 
+      if (item.familia && item.produto_id) {
+        const famName = item.familia.trim();
+        let { data: fam } = await supabase
+          .from("familias_produto")
+          .select("id")
+          .ilike("nome", famName)
+          .maybeSingle();
+        if (!fam) {
+          const { data: createdFam } = await supabase
+            .from("familias_produto")
+            .insert({ nome: famName })
+            .select("id")
+            .maybeSingle();
+          fam = createdFam;
+        }
+        if (fam?.id) {
+          const { data: prod } = await supabase.from("produtos").select("familia_id").eq("id", item.produto_id).maybeSingle();
+          if (!prod?.familia_id) {
+            await supabase.from("produtos").update({ familia_id: fam.id }).eq("id", item.produto_id);
+          }
+        }
+      }
+
       if (existingItem && conferidos.has(existingItem.id)) continue;
 
       let itemId = existingItem?.id;

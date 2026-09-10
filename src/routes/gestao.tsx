@@ -7,16 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/lib/auth";
 import {
   useFornecedores,
@@ -26,12 +16,14 @@ import {
   useCaminhoes,
   useRotas,
   useDestinatarios,
+  useFamilias,
   useConfiguracoes,
   useCadastroMutations,
   useUpdateConfiguracao,
   useDestinatarioClienteMap,
   useSaveDestinatarioClienteMap,
 } from "@/hooks/use-cadastros";
+import { configLabel, statusLabel } from "@/lib/labels";
 import { useCreateTipoCaixa, useDeleteTipoCaixa, useTiposCaixa, useUpdateTipoCaixa } from "@/hooks/use-tipos-caixa";
 import { useAliases, usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { useResolverPendencia } from "@/hooks/use-wise-pedidos";
@@ -112,6 +104,7 @@ function CadastrosPanel() {
         <CadastroTable key={table} label={label} table={table} placeholder={placeholder} useData={hook} />
       ))}
       <ProdutosTable />
+      <FamiliasPanel />
       <MapeamentoExpedicao />
     </div>
   );
@@ -186,7 +179,7 @@ function MapeamentoExpedicao() {
   );
 }
 
-type CadastroRow = { id: string; nome?: string; placa?: string; cnpj?: string | null };
+type CadastroRow = { id: string; nome?: string; placa?: string; cnpj?: string | null; ativo?: boolean };
 
 function CadastroTable({
   label,
@@ -200,11 +193,13 @@ function CadastroTable({
   useData: () => { data?: CadastroRow[]; isLoading: boolean };
 }) {
   const { data = [], isLoading } = useData();
-  const { insert, remove } = useCadastroMutations(table, ["cadastros", table]);
+  const { insert, update } = useCadastroMutations(table, ["cadastros", table]);
   const [nome, setNome] = useState("");
   const [cnpj, setCnpj] = useState("");
   const [touched, setTouched] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState("");
+  const [editCnpj, setEditCnpj] = useState("");
 
   const emptyLabel = table === "caminhoes" ? "Informe a placa" : "Informe um nome";
 
@@ -222,10 +217,10 @@ function CadastroTable({
     }
     insert.mutate(
       table === "caminhoes"
-        ? { placa: nome.trim().toUpperCase() }
+        ? { placa: nome.trim().toUpperCase(), ativo: true }
         : table === "clientes"
-          ? { nome: nome.trim(), cnpj: cnpj.replace(/\D/g, "") || null }
-          : { nome: nome.trim() },
+          ? { nome: nome.trim(), cnpj: cnpj.replace(/\D/g, "") || null, ativo: true }
+          : { nome: nome.trim(), ativo: true },
       {
         onSuccess: () => {
           setNome("");
@@ -274,53 +269,123 @@ function CadastroTable({
         {isLoading ? <p className="text-xs text-muted-foreground">Carregando...</p> : (
           <ul className="space-y-1 text-sm">
             {data.map((row) => (
-              <li key={row.id} className="flex justify-between items-center py-1 border-b border-border">
-                <span>
-                  {rowLabel(row)}
-                  {table === "clientes" && row.cnpj ? (
-                    <span className="text-muted-foreground"> · {row.cnpj}</span>
-                  ) : null}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive h-7"
-                  onClick={() => setDeleteId(row.id)}
-                >
-                  Excluir
-                </Button>
+              <li key={row.id} className={`flex justify-between items-center py-1 border-b border-border gap-2 ${row.ativo === false ? "opacity-50" : ""}`}>
+                {editId === row.id ? (
+                  <div className="flex flex-wrap gap-2 flex-1">
+                    <Input
+                      className="h-8"
+                      value={editNome}
+                      onChange={(e) => setEditNome(e.target.value)}
+                    />
+                    {table === "clientes" && (
+                      <Input className="h-8 w-36" value={editCnpj} onChange={(e) => setEditCnpj(e.target.value)} />
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const payload: Record<string, unknown> = { id: row.id };
+                        if (table === "caminhoes") payload.placa = editNome.trim().toUpperCase();
+                        else payload.nome = editNome.trim();
+                        if (table === "clientes") payload.cnpj = editCnpj.replace(/\D/g, "") || null;
+                        update.mutate(payload as { id: string }, {
+                          onSuccess: () => { toast.success("Atualizado"); setEditId(null); },
+                          onError: (e) => toast.error(e.message),
+                        });
+                      }}
+                    >
+                      Salvar
+                    </Button>
+                  </div>
+                ) : (
+                  <span>
+                    {rowLabel(row)}
+                    {table === "clientes" && row.cnpj ? (
+                      <span className="text-muted-foreground"> · {row.cnpj}</span>
+                    ) : null}
+                    {row.ativo === false ? <span className="text-muted-foreground"> · inativo</span> : null}
+                  </span>
+                )}
+                <div className="flex gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7"
+                    onClick={() => {
+                      setEditId(row.id);
+                      setEditNome(table === "caminhoes" ? row.placa ?? "" : row.nome ?? "");
+                      setEditCnpj(row.cnpj ?? "");
+                    }}
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7"
+                    onClick={() =>
+                      update.mutate(
+                        { id: row.id, ativo: row.ativo === false },
+                        {
+                          onSuccess: () => toast.success(row.ativo === false ? "Reativado" : "Inativado"),
+                          onError: (e) => toast.error(e.message),
+                        }
+                      )
+                    }
+                  >
+                    {row.ativo === false ? "Reativar" : "Inativar"}
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
         )}
-        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir registro?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta ação não pode ser desfeita.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => {
-                  if (!deleteId) return;
-                  remove.mutate(deleteId, {
-                    onSuccess: () => {
-                      toast.success("Removido");
-                      setDeleteId(null);
-                    },
-                    onError: (e) => toast.error(e.message),
-                  });
+      </CardContent>
+    </Card>
+  );
+}
+
+function FamiliasPanel() {
+  const { data: familias = [] } = useFamilias();
+  const { insert, update } = useCadastroMutations("familias_produto", ["cadastros", "familias"]);
+  const [nome, setNome] = useState("");
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Famílias de produto</CardTitle></CardHeader>
+      <CardContent>
+        <form
+          className="flex flex-wrap gap-2 mb-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!nome.trim()) return;
+            insert.mutate(
+              { nome: nome.trim(), ordem: (familias as { ordem?: number }[]).length + 1 },
+              {
+                onSuccess: () => { toast.success("Família cadastrada"); setNome(""); },
+                onError: (err) => toast.error(err.message),
+              }
+            );
+          }}
+        >
+          <Input placeholder="Nome da família" value={nome} onChange={(e) => setNome(e.target.value)} />
+          <Button type="submit">Adicionar</Button>
+        </form>
+        <ul className="text-sm space-y-1">
+          {(familias as { id: string; nome: string }[]).map((f) => (
+            <li key={f.id} className="flex justify-between border-b border-border py-1">
+              <span>{f.nome}</span>
+              <Input
+                className="h-8 w-48"
+                defaultValue={f.nome}
+                onBlur={(e) => {
+                  const next = e.target.value.trim();
+                  if (!next || next === f.nome) return;
+                  update.mutate({ id: f.id, nome: next }, { onSuccess: () => toast.success("Família atualizada") });
                 }}
-              >
-                Excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              />
+            </li>
+          ))}
+        </ul>
       </CardContent>
     </Card>
   );
@@ -328,12 +393,16 @@ function CadastroTable({
 
 function ProdutosTable() {
   const { data = [], isLoading } = useProdutos();
-  const { insert, remove } = useCadastroMutations("produtos", ["cadastros", "produtos"]);
+  const { data: familias = [] } = useFamilias();
+  const { insert, update } = useCadastroMutations("produtos", ["cadastros", "produtos"]);
   const [nome, setNome] = useState("");
   const [codigo, setCodigo] = useState("");
   const [unidades, setUnidades] = useState("");
+  const [familiaId, setFamiliaId] = useState("");
   const [touched, setTouched] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState("");
+  const [editFamilia, setEditFamilia] = useState("");
 
   const showError = touched && !nome.trim();
 
@@ -350,12 +419,15 @@ function ProdutosTable() {
         unidade: "un",
         codigo: codigo.trim() || null,
         unidades_por_caixa: unidades ? Number(unidades) : null,
+        familia_id: familiaId || null,
+        ativo: true,
       },
       {
         onSuccess: () => {
           setNome("");
           setCodigo("");
           setUnidades("");
+          setFamiliaId("");
           setTouched(false);
           toast.success("Produto cadastrado");
         },
@@ -387,6 +459,12 @@ function ProdutosTable() {
               value={codigo}
               onChange={(e) => setCodigo(e.target.value)}
             />
+            <select className="h-9 rounded-md border px-2 text-sm" value={familiaId} onChange={(e) => setFamiliaId(e.target.value)}>
+              <option value="">Família…</option>
+              {(familias as { id: string; nome: string }[]).map((f) => (
+                <option key={f.id} value={f.id}>{f.nome}</option>
+              ))}
+            </select>
             <Input
               className="w-28"
               type="number"
@@ -405,51 +483,41 @@ function ProdutosTable() {
         </form>
         {!isLoading && (
           <ul className="space-y-1 text-sm">
-            {(data as { id: string; nome: string; codigo?: string | null; unidades_por_caixa?: number | null }[]).map((row) => (
-              <li key={row.id} className="flex justify-between py-1 border-b border-border">
-                <span>
-                  {row.nome}
-                  {row.codigo ? <span className="text-muted-foreground"> · {row.codigo}</span> : null}
-                  {row.unidades_por_caixa ? <span className="text-muted-foreground"> · {row.unidades_por_caixa} un/cx</span> : null}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive h-7"
-                  onClick={() => setDeleteId(row.id)}
-                >
-                  Excluir
-                </Button>
+            {(data as { id: string; nome: string; codigo?: string | null; unidades_por_caixa?: number | null; familia_id?: string | null; ativo?: boolean; familias_produto?: { nome: string } | { nome: string }[] | null }[]).map((row) => {
+              const fam = Array.isArray(row.familias_produto) ? row.familias_produto[0]?.nome : row.familias_produto?.nome;
+              return (
+              <li key={row.id} className={`flex justify-between items-center py-1 border-b border-border gap-2 ${row.ativo === false ? "opacity-50" : ""}`}>
+                {editId === row.id ? (
+                  <div className="flex flex-wrap gap-2 flex-1">
+                    <Input className="h-8" value={editNome} onChange={(e) => setEditNome(e.target.value)} />
+                    <select className="h-8 rounded-md border px-2" value={editFamilia} onChange={(e) => setEditFamilia(e.target.value)}>
+                      <option value="">Sem família</option>
+                      {(familias as { id: string; nome: string }[]).map((f) => (
+                        <option key={f.id} value={f.id}>{f.nome}</option>
+                      ))}
+                    </select>
+                    <Button size="sm" onClick={() => update.mutate({ id: row.id, nome: editNome.trim(), familia_id: editFamilia || null }, { onSuccess: () => { toast.success("Atualizado"); setEditId(null); } })}>Salvar</Button>
+                  </div>
+                ) : (
+                  <span>
+                    {row.nome}
+                    {row.codigo ? <span className="text-muted-foreground"> · {row.codigo}</span> : null}
+                    {fam ? <span className="text-muted-foreground"> · {fam}</span> : null}
+                    {row.unidades_por_caixa ? <span className="text-muted-foreground"> · {row.unidades_por_caixa} un/cx</span> : null}
+                    {row.ativo === false ? <span className="text-muted-foreground"> · inativo</span> : null}
+                  </span>
+                )}
+                <div className="flex gap-1 shrink-0">
+                  <Button variant="ghost" size="sm" className="h-7" onClick={() => { setEditId(row.id); setEditNome(row.nome); setEditFamilia(row.familia_id ?? ""); }}>Editar</Button>
+                  <Button variant="ghost" size="sm" className="h-7" onClick={() => update.mutate({ id: row.id, ativo: row.ativo === false }, { onSuccess: () => toast.success(row.ativo === false ? "Reativado" : "Inativado") })}>
+                    {row.ativo === false ? "Reativar" : "Inativar"}
+                  </Button>
+                </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
-        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir produto?</AlertDialogTitle>
-              <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => {
-                  if (!deleteId) return;
-                  remove.mutate(deleteId, {
-                    onSuccess: () => {
-                      toast.success("Removido");
-                      setDeleteId(null);
-                    },
-                    onError: (e) => toast.error(e.message),
-                  });
-                }}
-              >
-                Excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </CardContent>
     </Card>
   );
@@ -488,8 +556,31 @@ function TiposCaixaPanel() {
         </form>
         <ul className="text-sm space-y-2">
           {tipos.map((t) => (
-            <li key={t.id} className="flex flex-wrap items-center gap-2 border-b py-2">
-              <span className="font-medium w-28">{t.sigla} · {t.nome}</span>
+            <li key={t.id} className={`flex flex-wrap items-center gap-2 border-b py-2 ${t.ativo ? "" : "opacity-50"}`}>
+              <Input
+                className="w-16"
+                defaultValue={t.sigla}
+                onBlur={(e) => {
+                  const siglaNext = e.target.value.trim().toUpperCase();
+                  if (!siglaNext || siglaNext === t.sigla) return;
+                  update.mutate({ id: t.id, sigla: siglaNext }, {
+                    onSuccess: () => toast.success("Sigla atualizada"),
+                    onError: (err) => toast.error(err.message),
+                  });
+                }}
+              />
+              <Input
+                className="w-36"
+                defaultValue={t.nome}
+                onBlur={(e) => {
+                  const nomeNext = e.target.value.trim();
+                  if (!nomeNext || nomeNext === t.nome) return;
+                  update.mutate({ id: t.id, nome: nomeNext }, {
+                    onSuccess: () => toast.success("Nome atualizado"),
+                    onError: (err) => toast.error(err.message),
+                  });
+                }}
+              />
               <Input
                 className="w-28"
                 defaultValue={t.custo_unitario}
@@ -620,7 +711,7 @@ function AberturaPanel() {
 }
 
 function MotivosPanel() {
-  const { data: motivos = [] } = useMotivosAjuste();
+  const { data: motivos = [] } = useMotivosAjuste(true);
   const save = useSaveMotivoAjuste();
   const [nome, setNome] = useState("");
   const [sentido, setSentido] = useState("saida");
@@ -663,10 +754,19 @@ function MotivosPanel() {
         </Button>
         <ul className="text-sm space-y-1">
           {motivos.map((m) => (
-            <li key={m.id} className="border-t border-border pt-1">
-              {m.nome} · {m.sentido} · {m.natureza}
-              {m.entra_em_custo ? " · custo" : ""}
-              {m.exige_posicao_contraria ? " · transferência" : ""}
+            <li key={m.id} className={`flex justify-between items-center border-t border-border pt-1 ${m.ativo ? "" : "opacity-50"}`}>
+              <span>
+                {m.nome} · {statusLabel(m.sentido)} · {statusLabel(m.natureza)}
+                {m.entra_em_custo ? " · custo" : ""}
+                {m.exige_posicao_contraria ? " · transferência" : ""}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => save.mutate({ ...m, ativo: !m.ativo }, { onSuccess: () => toast.success(m.ativo ? "Inativado" : "Reativado") })}
+              >
+                {m.ativo ? "Inativar" : "Reativar"}
+              </Button>
             </li>
           ))}
         </ul>
@@ -685,7 +785,7 @@ function ConfigPanel() {
       <CardContent className="space-y-4">
         {configs.map((c: { id: string; chave: string; valor: unknown; descricao: string | null }) => (
           <div key={c.id} className="space-y-1">
-            <Label>{c.chave}</Label>
+            <Label>{configLabel(c.chave)}</Label>
             {c.descricao && <p className="text-[10px] text-muted-foreground">{c.descricao}</p>}
             <Input
               defaultValue={String(c.valor ?? "").replace(/"/g, "")}

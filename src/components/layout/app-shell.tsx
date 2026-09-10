@@ -25,7 +25,7 @@ export function AppShell() {
   const { data: alertas = [] } = useAlertas();
 
   const isTv = pathname.startsWith("/expedicao/tv");
-  const isMobile = pathname.startsWith("/caixas/retorno") || pathname.startsWith("/caixas/galpao") || pathname.startsWith("/caixas/fornecedor") || pathname === "/fornecedor";
+  const isMobile = pathname.startsWith("/caixas/retorno") || pathname.startsWith("/caixas/inventario") || pathname.startsWith("/caixas/galpao") || pathname.startsWith("/caixas/fornecedor") || pathname === "/fornecedor";
   const isFornecedor = profile?.role === "fornecedor";
 
   const hasGestaoInSidebar = pages.some((p) => p.slug === "gestao");
@@ -200,7 +200,6 @@ export function AppShell() {
                       }}
                     >
                       <span className="font-semibold text-xs">{a.title}</span>
-                      <span className="text-[10px] text-muted-foreground">{a.desc}</span>
                     </DropdownMenuItem>
                   ))
                 )}

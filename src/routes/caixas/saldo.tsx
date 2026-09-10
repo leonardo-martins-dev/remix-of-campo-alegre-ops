@@ -15,7 +15,8 @@ import { useAuth } from "@/lib/auth";
 import { useFornecedores } from "@/hooks/use-cadastros";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { capitalNaRua, computeFifoAging, tipoColor } from "@/lib/caixas-map";
+import { capitalNaRua, computeFifoAging, taxaRetornoHonesta, tipoColor } from "@/lib/caixas-map";
+import { statusLabel } from "@/lib/labels";
 import { formatDateBRT } from "@/lib/utils-date";
 import {
   Dialog,
@@ -147,7 +148,7 @@ function Page() {
   const taxaRetorno = useMemo(() => {
     const env = clientes.reduce((a, c) => a + Object.values(c.byTipo).reduce((b, q) => b + q.env, 0), 0);
     const ret = clientes.reduce((a, c) => a + Object.values(c.byTipo).reduce((b, q) => b + q.ret, 0), 0);
-    return env ? (ret / env) * 100 : 0;
+    return taxaRetornoHonesta(env, ret);
   }, [clientes]);
 
   const handleCustoSave = async (tipo: TipoCaixa) => {
@@ -280,13 +281,17 @@ function Page() {
                   <td className="px-3 py-2 text-right font-bold">{s.saldo}</td>
                   {aba === "fornecedor" && (
                     <td className="px-4 py-2 text-right">
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-primary-dark hover:underline"
-                        onClick={() => handleCobrarFornecedor(s.ref_id, s.tipo_caixa, Math.max(0, s.saldo))}
-                      >
-                        Cobrar
-                      </button>
+                      {s.saldo > 0 ? (
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-primary-dark hover:underline"
+                          onClick={() => handleCobrarFornecedor(s.ref_id, s.tipo_caixa, s.saldo)}
+                        >
+                          Cobrar
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -342,7 +347,12 @@ function Page() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <KpiCard label="Total em aberto" value={totais.total.toString()} icon={Box} positiveIsGood={false} />
-        <KpiCard label="Taxa de retorno" value={`${taxaRetorno.toFixed(1)}%`} icon={RotateCcw} />
+        <KpiCard
+          label={taxaRetorno.overflow ? `Retorno ${taxaRetorno.label}` : "Taxa de retorno"}
+          value={taxaRetorno.overflow ? `${taxaRetorno.pct.toFixed(0)}%` : `${taxaRetorno.pct.toFixed(1)}%`}
+          icon={RotateCcw}
+          positiveIsGood
+        />
         <KpiCard label="Clientes com saldo" value={clientes.length.toString()} icon={Users} />
         <KpiCard
           label="Capital na rua"
@@ -513,7 +523,7 @@ function Page() {
                 {movimentacoes.map((m) => (
                   <tr key={m.id} className="border-t border-border">
                     <td className="py-2 text-muted-foreground">{m.data_movimento}</td>
-                    <td className="py-2 capitalize">{m.tipo}</td>
+                    <td className="py-2">{statusLabel(m.natureza || m.tipo)}</td>
                     <td className="py-2 text-center font-semibold">{m.tipo_caixa}</td>
                     <td className="py-2 text-right font-bold">{m.quantidade}</td>
                   </tr>

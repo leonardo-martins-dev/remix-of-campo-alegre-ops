@@ -12,15 +12,13 @@ export type MotivoAjuste = {
   ativo: boolean;
 };
 
-export function useMotivosAjuste() {
+export function useMotivosAjuste(includeInactive = false) {
   return useQuery({
-    queryKey: ["motivos-ajuste-caixa"],
+    queryKey: ["motivos-ajuste-caixa", includeInactive],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("motivos_ajuste_caixa")
-        .select("*")
-        .eq("ativo", true)
-        .order("nome");
+      let q = supabase.from("motivos_ajuste_caixa").select("*").order("nome");
+      if (!includeInactive) q = q.eq("ativo", true);
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as MotivoAjuste[];
     },
@@ -49,7 +47,7 @@ export function useContagensCaixa(posicaoId?: string | null) {
     queryFn: async () => {
       let q = supabase
         .from("contagens_caixa")
-        .select("*, posicoes_caixa(id, tipo, ref_id), profiles:contado_por(nome), contagem_caixa_itens(*)")
+        .select("*, posicoes_caixa(id, tipo, ref_id), profiles:contado_por(nome), conciliador:conciliado_por(nome), motivos_ajuste_caixa(nome), contagem_caixa_itens(*)")
         .order("created_at", { ascending: false })
         .limit(40);
       if (posicaoId) q = q.eq("posicao_id", posicaoId);

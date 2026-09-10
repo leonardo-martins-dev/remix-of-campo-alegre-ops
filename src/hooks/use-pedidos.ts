@@ -238,6 +238,7 @@ export function useFaltas(filters: FaltasFilters = {}) {
         .select(`
           id, quantidade_recebida, divergencia, quantidade_divergencia, tem_problema_qualidade,
           dentro_tolerancia, valor_divergencia, estimado,
+          conferencias(id, numero, finalizada_em, observacoes),
           itens_pedido(
             id, quantidade_pedida, preco_unitario,
             produtos(nome, unidade),
@@ -286,7 +287,35 @@ export function useFaltas(filters: FaltasFilters = {}) {
       const saldoMap = new Map((saldos ?? []).map((s) => [s.item_pedido_id, Number(s.recebido_acumulado)]));
       const autorMap = new Map((autores ?? []).map((a) => [a.id, a.nome]));
 
-      return filtered.map((row) => {
+      const byItem = new Map<string, (typeof filtered)[number]>();
+      for (const row of filtered) {
+        const ip = one(row.itens_pedido);
+        const itemId = ip?.id as string | undefined;
+        if (!itemId) continue;
+        const ped = one(ip?.pedidos_recebimento) as { status?: string } | null;
+        const conf = one((row as { conferencias?: { observacoes?: string | null; numero?: number | null; finalizada_em?: string | null } | { observacoes?: string | null; numero?: number | null; finalizada_em?: string | null }[] }).conferencias);
+        const existing = byItem.get(itemId);
+        if (!existing) {
+          byItem.set(itemId, row);
+          continue;
+        }
+        const exConf = one((existing as { conferencias?: { observacoes?: string | null; numero?: number | null; finalizada_em?: string | null } | { observacoes?: string | null; numero?: number | null; finalizada_em?: string | null }[] }).conferencias);
+        const rowEnc = (conf?.observacoes ?? "").startsWith("encerramento:");
+        const exEnc = (exConf?.observacoes ?? "").startsWith("encerramento:");
+        if (ped?.status === "encerrado") {
+          if (rowEnc && !exEnc) byItem.set(itemId, row);
+        } else if (!rowEnc && exEnc) {
+          byItem.set(itemId, row);
+        } else {
+          const rowN = Number(conf?.numero ?? 0);
+          const exN = Number(exConf?.numero ?? 0);
+          if (rowN > exN || ((conf?.finalizada_em ?? "") > (exConf?.finalizada_em ?? "") && rowN === exN)) {
+            byItem.set(itemId, row);
+          }
+        }
+      }
+
+      return [...byItem.values()].map((row) => {
         const ip = one(row.itens_pedido);
         const ped = one(ip?.pedidos_recebimento) as {
           encerrado_em?: string | null;
@@ -380,13 +409,53 @@ export function useUpdatePedidoAdmin() {
   });
 }
 
-export function useFillRate() {
+export function useFillRate(period: "today" | "week" | "month" = "week") {
+  const { from, to } = dateRangeBRT(period);
   return useQuery({
-    queryKey: ["fill-rate"],
+    queryKey: ["fill-rate", period],
     queryFn: async () => {
-      const { data, error } = await supabase.from("v_fill_rate_fornecedor").select("*");
+      const { data, error } = await supabase
+        .from("v_fill_rate_pedido")
+        .select("*")
+        .gte("data_pedido", from)
+        .lte("data_pedido", to);
       if (error) throw error;
-      return data ?? [];
+      const byForn = new Map<
+        string,
+        {
+          fornecedor_id: string;
+          fornecedor: string;
+          total_itens: number;
+          itens_completos: number;
+          valor_pedido: number;
+          valor_recebido: number;
+          fill_rate: number;
+          fill_rate_valor: number;
+        }
+      >();
+      for (const row of data ?? []) {
+        const id = String(row.fornecedor_id);
+        const cur = byForn.get(id) ?? {
+          fornecedor_id: id,
+          fornecedor: String(row.fornecedor ?? ""),
+          total_itens: 0,
+          itens_completos: 0,
+          valor_pedido: 0,
+          valor_recebido: 0,
+          fill_rate: 0,
+          fill_rate_valor: 0,
+        };
+        cur.total_itens += Number(row.total_itens ?? 0);
+        cur.itens_completos += Number(row.itens_completos ?? 0);
+        cur.valor_pedido += Number(row.valor_pedido ?? 0);
+        cur.valor_recebido += Number(row.valor_recebido ?? 0);
+        byForn.set(id, cur);
+      }
+      return [...byForn.values()].map((r) => ({
+        ...r,
+        fill_rate: r.total_itens ? Math.round((r.itens_completos / r.total_itens) * 1000) / 10 : 0,
+        fill_rate_valor: r.valor_pedido ? Math.round((r.valor_recebido / r.valor_pedido) * 1000) / 10 : 0,
+      }));
     },
   });
 }

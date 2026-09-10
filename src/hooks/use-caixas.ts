@@ -98,12 +98,17 @@ export function useMovimentacoesCliente(clienteId: string | null) {
     queryKey: ["movimentacoes", clienteId],
     enabled: !!clienteId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("movimentacoes_caixa")
-        .select("*")
-        .eq("cliente_id", clienteId!)
-        .order("created_at", { ascending: false })
-        .limit(50);
+      const { data: pos } = await supabase
+        .from("posicoes_caixa")
+        .select("id")
+        .eq("tipo", "cliente")
+        .eq("ref_id", clienteId!)
+        .maybeSingle();
+      let q = supabase.from("movimentacoes_caixa").select("*").order("created_at", { ascending: false }).limit(50);
+      q = pos?.id
+        ? q.or(`origem_posicao_id.eq.${pos.id},destino_posicao_id.eq.${pos.id}`)
+        : q.eq("cliente_id", clienteId!);
+      const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },
@@ -116,11 +121,20 @@ export function useMovimentacoesTrend(clienteId: string) {
     queryFn: async () => {
       const since = new Date();
       since.setDate(since.getDate() - 14);
-      const { data, error } = await supabase
+      const { data: pos } = await supabase
+        .from("posicoes_caixa")
+        .select("id")
+        .eq("tipo", "cliente")
+        .eq("ref_id", clienteId)
+        .maybeSingle();
+      let q = supabase
         .from("movimentacoes_caixa")
-        .select("data_movimento, tipo, quantidade")
-        .eq("cliente_id", clienteId)
+        .select("data_movimento, tipo, natureza, quantidade")
         .gte("data_movimento", since.toISOString().slice(0, 10));
+      q = pos?.id
+        ? q.or(`origem_posicao_id.eq.${pos.id},destino_posicao_id.eq.${pos.id}`)
+        : q.eq("cliente_id", clienteId);
+      const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },
@@ -219,9 +233,21 @@ export function useRegistrarPerda() {
       quantidade: number;
       registrado_por: string;
     }) => {
+      const { data: pos } = await supabase
+        .from("posicoes_caixa")
+        .select("id")
+        .eq("tipo", "cliente")
+        .eq("ref_id", payload.cliente_id)
+        .maybeSingle();
       const { error } = await supabase.from("movimentacoes_caixa").insert({
-        ...payload,
+        cliente_id: payload.cliente_id,
+        tipo_caixa: payload.tipo_caixa,
+        quantidade: payload.quantidade,
+        registrado_por: payload.registrado_por,
         tipo: "perda",
+        natureza: "perda",
+        origem_posicao_id: pos?.id ?? null,
+        documento_tipo: "avulso",
         data_movimento: todayBRT(),
       });
       if (error) throw error;

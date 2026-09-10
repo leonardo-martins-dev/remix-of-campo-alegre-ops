@@ -71,6 +71,27 @@ export type SaldoPosicao = {
   saldo: number;
 };
 
+/** Taxa de retorno honesta: nunca passa de 100% em silêncio. */
+export function taxaRetornoHonesta(enviadas: number, retornadas: number): {
+  pct: number;
+  overflow: boolean;
+  enviadas: number;
+  retornadas: number;
+  label: string;
+} {
+  const env = Number(enviadas) || 0;
+  const ret = Number(retornadas) || 0;
+  const overflow = ret > env && env > 0;
+  const pct = env <= 0 ? 0 : (Math.min(ret, env) / env) * 100;
+  return {
+    pct,
+    overflow,
+    enviadas: env,
+    retornadas: ret,
+    label: env <= 0 ? "0 / 0" : `${ret} / ${env}`,
+  };
+}
+
 /** Capital na rua = clientes + fornecedores. Galpão nunca entra. */
 export function capitalNaRua(
   saldos: SaldoPosicao[],
