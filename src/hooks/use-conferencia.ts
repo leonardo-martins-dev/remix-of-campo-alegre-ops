@@ -4,22 +4,35 @@ import { supabase } from "@/lib/supabase";
 import { ensureUserProfile } from "@/lib/ensure-profile";
 import { nowISO, todayBRT } from "@/lib/utils-date";
 
+const CONFERENCIA_SELECT = `
+  *,
+  itens_conferencia(
+    id, quantidade_recebida, conferido, divergencia, quantidade_divergencia,
+    tem_problema_qualidade, quantidade_qualidade, foto_url,
+    dentro_tolerancia, valor_divergencia, estimado, tolerancia_pct_aplicada,
+    itens_pedido(id, quantidade_pedida, preco_unitario, unidade, cliente_id, clientes(nome), produtos(nome, unidade, tipo_caixa_padrao_id, tolerancia_pct))
+  )
+`;
+
 export function useConferencia(pedidoId: string | null) {
   return useQuery({
     queryKey: ["conferencia", pedidoId],
     enabled: !!pedidoId,
     queryFn: async () => {
+      const { data: aberta, error: openErr } = await supabase
+        .from("conferencias")
+        .select(CONFERENCIA_SELECT)
+        .eq("pedido_id", pedidoId!)
+        .in("status", ["em_andamento", "parcial"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openErr) throw openErr;
+      if (aberta) return aberta;
+
       const { data, error } = await supabase
         .from("conferencias")
-        .select(`
-          *,
-          itens_conferencia(
-            id, quantidade_recebida, conferido, divergencia, quantidade_divergencia,
-            tem_problema_qualidade, quantidade_qualidade, foto_url,
-            dentro_tolerancia, valor_divergencia, estimado, tolerancia_pct_aplicada,
-            itens_pedido(id, quantidade_pedida, preco_unitario, unidade, cliente_id, clientes(nome), produtos(nome, unidade, tipo_caixa_padrao_id, tolerancia_pct))
-          )
-        `)
+        .select(CONFERENCIA_SELECT)
         .eq("pedido_id", pedidoId!)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -72,9 +85,18 @@ export function useStartConferencia() {
         throw new Error("Pedido encerrado. Apenas administradores podem reabrir.");
       }
 
+      const { data: lastNum } = await supabase
+        .from("conferencias")
+        .select("numero")
+        .eq("pedido_id", pedidoId)
+        .order("numero", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const numero = (Number(lastNum?.numero) || 0) + 1;
+
       const { data: conf, error: cErr } = await supabase
         .from("conferencias")
-        .insert({ pedido_id: pedidoId, conferente_id: conferenteId, status: "em_andamento" })
+        .insert({ pedido_id: pedidoId, conferente_id: conferenteId, status: "em_andamento", numero })
         .select()
         .single();
       if (cErr) {

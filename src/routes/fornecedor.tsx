@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
-import { useConfirmarMovimento, useMovimentosFornecedor, useRegistrarMovimentoFornecedor } from "@/hooks/use-ledger";
+import { useConfirmarMovimento, useMovimentosFornecedor, usePosicoes, useRegistrarMovimentoFornecedor, useSaldosCaixa } from "@/hooks/use-ledger";
+import { useRegistrarInventario } from "@/hooks/use-inventario";
 import { enqueueFornecedorMov, getFornecedorQueue, removeFornecedorFromQueue } from "@/lib/offline-queue";
 import { NumberStepper } from "@/components/number-stepper";
 
@@ -26,6 +27,12 @@ function Page() {
   const [tipo, setTipo] = useState("");
   const [qtd, setQtd] = useState(0);
   const [contest, setContest] = useState<Record<string, number>>({});
+  const [inv, setInv] = useState<Record<string, number>>({});
+  const { data: posicoes = [] } = usePosicoes();
+  const { data: saldosInv = [] } = useSaldosCaixa();
+  const registrarInv = useRegistrarInventario();
+  const posForn = (posicoes as { id: string; tipo: string; ref_id: string | null }[])
+    .find((p) => p.tipo === "fornecedor" && p.ref_id === fornecedorId);
 
   useEffect(() => {
     async function flush() {
@@ -105,6 +112,46 @@ function Page() {
         <NumberStepper value={qtd} onChange={setQtd} />
         <Button className="min-h-11 w-full" onClick={handleReg}>Registrar movimento</Button>
       </div>
+      {posForn && (
+        <div className="mt-8 rounded-xl border p-4 space-y-3">
+          <h3 className="font-semibold">Inventário no meu pátio</h3>
+          <p className="text-xs text-muted-foreground">Contagem cega — o saldo do sistema não muda até Campo Alegre conciliar.</p>
+          {tipos.map((t) => (
+            <div key={t.id} className="flex items-center justify-between gap-3">
+              <span className="text-sm">{t.sigla}</span>
+              <NumberStepper value={inv[t.sigla] ?? 0} onChange={(n) => setInv((s) => ({ ...s, [t.sigla]: n }))} />
+            </div>
+          ))}
+          <Button
+            className="min-h-11 w-full"
+            disabled={registrarInv.isPending}
+            onClick={async () => {
+              if (!user) return;
+              const calc: Record<string, number> = {};
+              for (const s of saldosInv as { posicao_id: string; tipo_caixa: string; saldo: number }[]) {
+                if (s.posicao_id === posForn.id) calc[s.tipo_caixa] = Number(s.saldo ?? 0);
+              }
+              try {
+                await registrarInv.mutateAsync({
+                  posicao_id: posForn.id,
+                  origem: "fornecedor",
+                  contado_por: user.id,
+                  itens: tipos.map((t) => ({
+                    tipo_caixa: t.sigla,
+                    qtd_contada: Number(inv[t.sigla] ?? 0),
+                    qtd_calculada: Number(calc[t.sigla] ?? 0),
+                  })),
+                });
+                toast.success("Contagem enviada");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Erro ao registrar inventário");
+              }
+            }}
+          >
+            Enviar contagem
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

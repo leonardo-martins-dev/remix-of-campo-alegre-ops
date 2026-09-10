@@ -7,6 +7,13 @@ export function todayBRT(): string {
   return formatInTimeZone(new Date(), TZ_BRASILIA, "yyyy-MM-dd");
 }
 
+/** Soma dias a uma data YYYY-MM-DD no calendário de Brasília. */
+export function addDaysBRT(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, (m ?? 1) - 1, (d ?? 1) + days, 15, 0, 0));
+  return formatInTimeZone(dt, TZ_BRASILIA, "yyyy-MM-dd");
+}
+
 /** @deprecated Use todayBRT() */
 export function todayISO(): string {
   return todayBRT();
@@ -23,6 +30,10 @@ export function formatTimeBRT(iso: string | null | undefined): string {
 
 export function formatDateBRT(iso: string | null | undefined): string {
   if (!iso) return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  }
   return formatInTimeZone(new Date(iso), TZ_BRASILIA, "dd/MM/yyyy");
 }
 

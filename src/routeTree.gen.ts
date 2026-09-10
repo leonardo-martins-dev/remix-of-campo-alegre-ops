@@ -27,6 +27,7 @@ import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
 import { Route as CaixasEconomiaRouteImport } from './routes/caixas/economia'
 import { Route as CaixasGalpaoRouteImport } from './routes/caixas/galpao'
+import { Route as CaixasInventarioRouteImport } from './routes/caixas/inventario'
 import { Route as CaixasFornecedorRouteImport } from './routes/caixas/fornecedor'
 import { Route as FornecedorRouteImport } from './routes/fornecedor'
 import { Route as FornecedoresRouteImport } from './routes/fornecedores'
@@ -128,6 +129,11 @@ const CaixasGalpaoRoute = CaixasGalpaoRouteImport.update({
   path: '/caixas/galpao',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CaixasInventarioRoute = CaixasInventarioRouteImport.update({
+  id: '/caixas/inventario',
+  path: '/caixas/inventario',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CaixasFornecedorRoute = CaixasFornecedorRouteImport.update({
   id: '/caixas/fornecedor',
   path: '/caixas/fornecedor',
@@ -185,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
+  '/caixas/inventario': typeof CaixasInventarioRoute
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/fornecedor': typeof FornecedorRoute
   '/fornecedores': typeof FornecedoresRoute
@@ -214,6 +221,7 @@ export interface FileRoutesByTo {
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
+  '/caixas/inventario': typeof CaixasInventarioRoute
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/fornecedor': typeof FornecedorRoute
   '/fornecedores': typeof FornecedoresRoute
@@ -244,6 +252,7 @@ export interface FileRoutesById {
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
+  '/caixas/inventario': typeof CaixasInventarioRoute
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/fornecedor': typeof FornecedorRoute
   '/fornecedores': typeof FornecedoresRoute
@@ -275,6 +284,7 @@ export interface FileRouteTypes {
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/caixas/galpao'
+    | '/caixas/inventario'
     | '/caixas/fornecedor'
     | '/fornecedor'
     | '/fornecedores'
@@ -304,6 +314,7 @@ export interface FileRouteTypes {
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/caixas/galpao'
+    | '/caixas/inventario'
     | '/caixas/fornecedor'
     | '/fornecedor'
     | '/fornecedores'
@@ -333,6 +344,7 @@ export interface FileRouteTypes {
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/caixas/galpao'
+    | '/caixas/inventario'
     | '/caixas/fornecedor'
     | '/fornecedor'
     | '/fornecedores'
@@ -363,6 +375,7 @@ export interface RootRouteChildren {
   CaixasRetornoRoute: typeof CaixasRetornoRoute
   CaixasSaldoRoute: typeof CaixasSaldoRoute
   CaixasGalpaoRoute: typeof CaixasGalpaoRoute
+  CaixasInventarioRoute: typeof CaixasInventarioRoute
   CaixasFornecedorRoute: typeof CaixasFornecedorRoute
   FornecedorRoute: typeof FornecedorRoute
   FornecedoresRoute: typeof FornecedoresRoute
@@ -510,6 +523,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CaixasGalpaoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/caixas/inventario': {
+      id: '/caixas/inventario'
+      path: '/caixas/inventario'
+      fullPath: '/caixas/inventario'
+      preLoaderRoute: typeof CaixasInventarioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/caixas/fornecedor': {
       id: '/caixas/fornecedor'
       path: '/caixas/fornecedor'
@@ -597,6 +617,7 @@ const rootRouteChildren: RootRouteChildren = {
   CaixasRetornoRoute: CaixasRetornoRoute,
   CaixasSaldoRoute: CaixasSaldoRoute,
   CaixasGalpaoRoute: CaixasGalpaoRoute,
+  CaixasInventarioRoute: CaixasInventarioRoute,
   CaixasFornecedorRoute: CaixasFornecedorRoute,
   FornecedorRoute: FornecedorRoute,
   FornecedoresRoute: FornecedoresRoute,

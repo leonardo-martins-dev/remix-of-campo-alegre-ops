@@ -55,6 +55,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]);
     setProfile(p);
     setPages(pg);
+    if (resolveIsAdmin(p, user)) {
+      supabase.rpc("encerrar_pedidos_vencidos").then(({ error }) => {
+        if (error && error.code !== "PGRST202") {
+          console.warn("encerrar_pedidos_vencidos:", error.message);
+        }
+      });
+    }
   }, []);
 
   useEffect(() => {

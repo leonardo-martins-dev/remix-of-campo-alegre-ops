@@ -15,7 +15,8 @@ import { useAuth } from "@/lib/auth";
 import { useFornecedores } from "@/hooks/use-cadastros";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { computeFifoAging, tipoColor } from "@/lib/caixas-map";
+import { capitalNaRua, computeFifoAging, tipoColor } from "@/lib/caixas-map";
+import { formatDateBRT } from "@/lib/utils-date";
 import {
   Dialog,
   DialogContent,
@@ -115,20 +116,33 @@ function Page() {
 
   const totais = useMemo(() => {
     const byTipo: Record<string, number> = {};
-    let capital = 0;
-    let total = 0;
     for (const t of tipos) {
-      const sClientes = clientes.reduce((a, c) => a + qtyOf(c, t.sigla).saldo, 0);
-      const sOutros = (saldosAll as { posicao_tipo: string; tipo_caixa: string; saldo: number }[])
-        .filter((s) => s.tipo_caixa === t.sigla && s.posicao_tipo !== "cliente")
-        .reduce((a, s) => a + Number(s.saldo ?? 0), 0);
-      const s = sClientes + sOutros;
-      byTipo[t.sigla] = sClientes;
-      capital += s * (custoById[t.sigla] ?? 0);
-      total += s;
+      byTipo[t.sigla] = clientes.reduce((a, c) => a + qtyOf(c, t.sigla).saldo, 0);
     }
-    return { byTipo, capital, total };
+    const rua = capitalNaRua(
+      saldosAll as { posicao_tipo: string; tipo_caixa: string; saldo: number }[],
+      custoById
+    );
+    return { byTipo, capital: rua.valor, total: rua.qty };
   }, [clientes, tipos, custoById, saldosAll]);
+
+  const { data: lastInvGalpao } = useQuery({
+    queryKey: ["last-inventario-galpao"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("contagens_caixa")
+        .select("conciliado_em, created_at, posicoes_caixa(tipo)")
+        .eq("status", "conciliada")
+        .order("conciliado_em", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      const row = (data ?? []).find((c) => {
+        const pos = Array.isArray(c.posicoes_caixa) ? c.posicoes_caixa[0] : c.posicoes_caixa;
+        return (pos as { tipo?: string } | null)?.tipo === "galpao";
+      });
+      return row?.conciliado_em ?? row?.created_at ?? null;
+    },
+  });
 
   const taxaRetorno = useMemo(() => {
     const env = clientes.reduce((a, c) => a + Object.values(c.byTipo).reduce((b, q) => b + q.env, 0), 0);
@@ -335,6 +349,11 @@ function Page() {
           value={formatBRL(totais.capital)}
           icon={Clock}
           positiveIsGood={false}
+        />
+        <KpiCard
+          label="Último inventário (galpão)"
+          value={lastInvGalpao ? formatDateBRT(lastInvGalpao) : "—"}
+          icon={Box}
         />
       </div>
 

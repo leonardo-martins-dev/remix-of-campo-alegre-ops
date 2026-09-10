@@ -2,14 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { todayISO } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
-import { computeFifoAging } from "@/lib/caixas-map";
+import { capitalNaRua, computeFifoAging } from "@/lib/caixas-map";
+import { addDaysBRT, todayBRT } from "@/lib/utils-date";
 
 export function useDashboard() {
   const date = todayISO();
   return useQuery({
     queryKey: ["dashboard", date],
     queryFn: async () => {
-      const [cargas, fillRate, saldo, configs, saldosAll, quebras, pend, divs] = await Promise.all([
+      const monthStart = `${date.slice(0, 7)}-01`;
+      const [cargas, fillRate, saldo, configs, saldosAll, quebras, pend, divs, perdasMes, lastInv] = await Promise.all([
         supabase.from("cargas").select("status").eq("data_carga", date),
         supabase.from("v_fill_rate_fornecedor").select("*"),
         supabase.from("v_saldo_caixas_cliente").select("*"),
@@ -18,6 +20,8 @@ export function useDashboard() {
         supabase.from("quebra_itens").select("valor, quebras!inner(registrado_em)").gte("quebras.registrado_em", `${date}T00:00:00`),
         supabase.from("pendencias_vinculo").select("id", { count: "exact", head: true }).eq("status", "aberta"),
         supabase.from("itens_conferencia").select("dentro_tolerancia, conferencias!inner(finalizada_em)").gte("conferencias.finalizada_em", `${date}T00:00:00`).not("divergencia", "is", null),
+        supabase.from("movimentacoes_caixa").select("quantidade, tipo_caixa, data_movimento").eq("natureza", "perda").gte("data_movimento", monthStart),
+        supabase.from("contagens_caixa").select("conciliado_em, created_at, posicoes_caixa(tipo)").eq("status", "conciliada").order("conciliado_em", { ascending: false }).limit(5),
       ]);
 
       const custos: Record<string, number> = {};
@@ -38,15 +42,25 @@ export function useDashboard() {
         acima: (divs.data ?? []).filter((d: { dentro_tolerancia: boolean | null }) => d.dentro_tolerancia === false).length,
       };
 
-      let caixasAbertas = 0;
-      let capital = 0;
+      const rua = capitalNaRua(
+        (saldosAll.data ?? []) as { posicao_tipo: string; tipo_caixa: string; saldo: number }[],
+        custos
+      );
+      let caixasAbertas = rua.qty;
+      const capital = rua.valor;
       const porCliente: Record<string, number> = {};
 
       (saldo.data ?? []).forEach((row: { cliente: string; tipo_caixa: string; saldo: number }) => {
-        caixasAbertas += row.saldo ?? 0;
-        capital += (row.saldo ?? 0) * (custos[row.tipo_caixa] ?? 0);
         porCliente[row.cliente] = (porCliente[row.cliente] ?? 0) + (row.saldo ?? 0);
       });
+
+      const perdaCaixasMes = (perdasMes.data ?? []).reduce((a: number, r: { quantidade: number; tipo_caixa: string }) => {
+        return a + Number(r.quantidade ?? 0) * (custos[r.tipo_caixa] ?? 0);
+      }, 0);
+      const lastInvGalpao = (lastInv.data ?? []).find((c: { posicoes_caixa?: { tipo?: string } | { tipo?: string }[] }) => {
+        const pos = Array.isArray(c.posicoes_caixa) ? c.posicoes_caixa[0] : c.posicoes_caixa;
+        return pos?.tipo === "galpao";
+      }) as { conciliado_em?: string | null; created_at?: string } | undefined;
 
       const statusCounts = { concluida: 0, carregando: 0, aguardando: 0 };
       (cargas.data ?? []).forEach((c: { status: string }) => {
@@ -72,6 +86,8 @@ export function useDashboard() {
         pendenciasVinculo: pend.count ?? 0,
         divergenciasDia,
         capital,
+        perdaCaixasMes,
+        lastInventarioGalpao: lastInvGalpao?.conciliado_em ?? lastInvGalpao?.created_at ?? null,
         statusCounts,
         topClientes: Object.entries(porCliente)
           .map(([nome, abertas]) => ({ nome, abertas }))
@@ -117,39 +133,43 @@ export function useAlertas() {
   return useQuery({
     queryKey: ["alertas"],
     queryFn: async () => {
-      const [{ data: configs }, { data: saldo }, { data: cargas }, { data: tipos }, { data: pend }, { data: parciais }, { count: contestacoes }, { data: movs }, { data: lastCount }] = await Promise.all([
-        supabase.from("configuracoes").select("chave, valor").in("chave", ["aging_critico_dias", "aging_alerta_dias", "lembrete_contagem_dias", "benchmark_quebra_fornecedor", "dias_confirmacao_fornecedor"]),
+      const [{ data: configs }, { data: saldo }, { data: cargas }, { data: tipos }, { data: pend }, { data: parciais }, { count: contestacoes }, { data: movs }, { data: lastCount }, { data: vencendo }, { data: lastInvAll }] = await Promise.all([
+        supabase.from("configuracoes").select("chave, valor").in("chave", ["aging_critico_dias", "aging_alerta_dias", "lembrete_contagem_dias", "benchmark_quebra_fornecedor", "dias_confirmacao_fornecedor", "dias_encerrar_pedido", "lembrete_inventario_galpao_dias", "lembrete_inventario_cliente_dias", "lembrete_inventario_fornecedor_dias", "dias_conciliar_inventario"]),
         supabase.from("v_saldo_caixas_cliente").select("*"),
         supabase.from("cargas").select("codigo, status, clientes(nome), hora_inicio").eq("status", "aguardando"),
         supabase.from("tipos_caixa").select("id, sigla, custo_unitario"),
         supabase.from("pendencias_vinculo").select("id, nome_externo").eq("status", "aberta").limit(5),
-        supabase.from("pedidos_recebimento").select("codigo").eq("status", "parcial").limit(5),
+        supabase.from("pedidos_recebimento").select("codigo, data_prevista, status").in("status", ["parcial", "pendente"]).limit(20),
         supabase.from("movimentacoes_caixa").select("id", { count: "exact", head: true }).eq("confirmacao_status", "contestado"),
         supabase.from("movimentacoes_caixa").select("data_movimento, quantidade, tipo_caixa, tipo, natureza, cliente_id, fornecedor_id, confirmacao_status, created_at").limit(2000),
-        supabase.from("contagens_galpao").select("created_at").order("created_at", { ascending: false }).limit(1),
+        supabase.from("contagens_caixa").select("created_at, conciliado_em, status, posicoes_caixa(tipo)").order("created_at", { ascending: false }).limit(30),
+        supabase.from("pedidos_recebimento").select("codigo, data_prevista").in("status", ["parcial", "pendente"]),
+        supabase.from("contagens_caixa").select("created_at, status, posicao_id").eq("status", "pendente").limit(20),
       ]);
 
       const critico = Number(configs?.find((c) => c.chave === "aging_critico_dias")?.valor ?? 10);
       const alertaDias = Number(configs?.find((c) => c.chave === "aging_alerta_dias")?.valor ?? 7);
       const lembreteContagem = Number(configs?.find((c) => c.chave === "lembrete_contagem_dias")?.valor ?? 7);
       const diasConf = Number(configs?.find((c) => c.chave === "dias_confirmacao_fornecedor")?.valor ?? 3);
+      const diasEncerrar = Number(configs?.find((c) => c.chave === "dias_encerrar_pedido")?.valor ?? 1);
+      const diasConciliar = Number(configs?.find((c) => c.chave === "dias_conciliar_inventario")?.valor ?? 2);
       const custos: Record<string, number> = {};
-      (tipos ?? []).forEach((t: { id: string; custo_unitario: number }) => {
+      (tipos ?? []).forEach((t: { id: string; sigla?: string; custo_unitario: number }) => {
         custos[t.id] = t.custo_unitario;
+        if (t.sigla) custos[t.sigla] = t.custo_unitario;
       });
 
       const danger: { tone: "danger" | "warn" | "info"; title: string; desc: string; href?: string }[] = [];
       const warn: { tone: "danger" | "warn" | "info"; title: string; desc: string; href?: string }[] = [];
 
       const porCliente: Record<string, number> = {};
-      let totalCaixas = 0;
-      let capital = 0;
-
       (saldo ?? []).forEach((r: { cliente: string; tipo_caixa: string; saldo: number }) => {
         porCliente[r.cliente] = (porCliente[r.cliente] ?? 0) + r.saldo;
-        totalCaixas += r.saldo ?? 0;
-        capital += (r.saldo ?? 0) * (custos[r.tipo_caixa] ?? 0);
       });
+      const { data: saldosAlert } = await supabase.from("v_saldos_caixa").select("posicao_tipo, tipo_caixa, saldo");
+      const rua = capitalNaRua((saldosAlert ?? []) as { posicao_tipo: string; tipo_caixa: string; saldo: number }[], custos);
+      const totalCaixas = rua.qty;
+      const capital = rua.valor;
 
       Object.entries(porCliente).forEach(([cliente, total]) => {
         if (total < 0) {
@@ -181,22 +201,26 @@ export function useAlertas() {
         }
       });
 
-      if (lastCount?.[0]?.created_at) {
-        const days = Math.floor((Date.now() - new Date(lastCount[0].created_at).getTime()) / 86_400_000);
+      const lastGalpao = (lastCount ?? []).find((c: { posicoes_caixa?: { tipo?: string } | { tipo?: string }[] }) => {
+        const pos = Array.isArray(c.posicoes_caixa) ? c.posicoes_caixa[0] : c.posicoes_caixa;
+        return pos?.tipo === "galpao";
+      }) as { created_at?: string } | undefined;
+      if (lastGalpao?.created_at) {
+        const days = Math.floor((Date.now() - new Date(lastGalpao.created_at).getTime()) / 86_400_000);
         if (days >= lembreteContagem) {
           warn.push({
             tone: "warn",
-            title: `Contagem do galpão há ${days} dias`,
+            title: `Inventário do galpão há ${days} dias`,
             desc: `Lembrete a cada ${lembreteContagem} dias.`,
-            href: "/caixas/galpao",
+            href: "/caixas/inventario",
           });
         }
       } else {
         warn.push({
           tone: "info",
-          title: "Nenhuma contagem do galpão",
+          title: "Nenhum inventário do galpão",
           desc: "Faça a primeira contagem cega.",
-          href: "/caixas/galpao",
+          href: "/caixas/inventario",
         });
       }
 
@@ -242,8 +266,40 @@ export function useAlertas() {
       (pend ?? []).forEach((p: { nome_externo: string }) => {
         warn.push({ tone: "warn", title: `Pendência de vínculo: ${p.nome_externo}`, desc: "Resolver em Configurações → Vínculos.", href: "/gestao" });
       });
-      (parciais ?? []).forEach((p: { codigo: string }) => {
-        warn.push({ tone: "warn", title: `Pedido ${p.codigo} com saldo`, desc: "Encerrar em Liberações quando a falta for definitiva.", href: "/recebimento/liberacoes" });
+      const hoje = todayBRT();
+      (parciais ?? []).forEach((p: { codigo: string; data_prevista?: string | null; status?: string }) => {
+        if (p.status === "parcial") {
+          warn.push({ tone: "warn", title: `Pedido ${p.codigo} com saldo`, desc: "Encerrar na listagem quando a falta for definitiva.", href: "/recebimento" });
+        }
+        if (p.data_prevista) {
+          const limite = addDaysBRT(p.data_prevista, diasEncerrar);
+          if (limite <= hoje) {
+            danger.push({
+              tone: "danger",
+              title: `Pedido ${p.codigo} vencido para encerrar`,
+              desc: `Data prevista ${p.data_prevista} + ${diasEncerrar} dia(s).`,
+              href: "/recebimento",
+            });
+          } else if (addDaysBRT(p.data_prevista, Math.max(0, diasEncerrar - 1)) <= hoje) {
+            warn.push({
+              tone: "warn",
+              title: `Pedido ${p.codigo} próximo do encerramento`,
+              desc: `Encerra em ${limite}.`,
+              href: "/recebimento",
+            });
+          }
+        }
+      });
+      (lastInvAll ?? []).forEach((c: { created_at: string }) => {
+        const days = Math.floor((Date.now() - new Date(c.created_at).getTime()) / 86_400_000);
+        if (days >= diasConciliar) {
+          warn.push({
+            tone: "warn",
+            title: `Inventário pendente há ${days} dias`,
+            desc: `Concilie em até ${diasConciliar} dias.`,
+            href: "/caixas/inventario",
+          });
+        }
       });
       if ((contestacoes ?? 0) > 0) {
         danger.push({ tone: "danger", title: `${contestacoes} movimento(s) contestado(s)`, desc: "Revise no extrato do fornecedor.", href: "/caixas/fornecedor" });

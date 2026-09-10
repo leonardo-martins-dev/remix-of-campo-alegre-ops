@@ -289,29 +289,35 @@ function ConferenciaItens({
   const conferenteNome = profile?.nome ?? "—";
   const pedidoStatus = pedido?.status ?? pedidos.find((p) => p.id === pedidoId)?.status;
   const aguardandoLiberacao = pedidoStatus === "aguardando_liberacao" || pedidoStatus === "divergencia";
-  const pedidoEncerrado =
-    pedidoStatus === "encerrado" ||
-    pedidoStatus === "aguardando_liberacao" ||
-    pedidoStatus === "divergencia";
-  const readOnly = conferencia?.status === "finalizada" && pedidoEncerrado;
+  const conferenciaAberta =
+    conferencia?.status === "em_andamento" || conferencia?.status === "parcial";
+  const readOnly = conferencia?.status === "finalizada";
 
   useEffect(() => {
     if (!pedidoId || !user?.id) return;
-    if (startedRef.current === pedidoId) return;
     if (!pedidoStatus) return;
+    if (isLoading) return;
     if (pedidoStatus !== "pendente" && pedidoStatus !== "parcial") return;
-    if (conferencia?.status === "finalizada") return;
-    startedRef.current = pedidoId;
+    if (conferenciaAberta) {
+      startedRef.current = `open:${pedidoId}:${conferencia?.id}`;
+      return;
+    }
+    const startKey = `start:${pedidoId}:${conferencia?.id ?? "none"}`;
+    if (startedRef.current === startKey) return;
+    startedRef.current = startKey;
     startMut.mutate(
       { pedidoId, conferenteId: user.id, user },
       { onError: (e) => toast.error(e.message) }
     );
-  }, [pedidoId, user, pedidoStatus, conferencia?.status]);
+  }, [pedidoId, user, pedidoStatus, conferencia?.id, conferenciaAberta, isLoading]);
 
   useEffect(() => {
     if (!conferencia?.itens_conferencia) return;
+    if (conferencia.status === "finalizada" && (pedidoStatus === "pendente" || pedidoStatus === "parcial")) {
+      return;
+    }
     setItens(conferencia.itens_conferencia.map(mapToLinha));
-  }, [conferencia]);
+  }, [conferencia, pedidoStatus]);
 
   const update = (idx: number, v: number) => {
     if (readOnly) return;
@@ -325,7 +331,13 @@ function ConferenciaItens({
   const conferirIgualPedido = (idx: number) => {
     if (readOnly) return;
     setItens((prev) =>
-      prev.map((it, i) => (i === idx ? { ...it, recebido: it.pedido, conferido: true } : it))
+      prev.map((it, i) => {
+        if (i !== idx) return it;
+        const saldoRow = (saldosItem as { item_pedido_id: string; recebido_acumulado: number }[])
+          .find((s) => s.item_pedido_id === it.itemPedidoId);
+        const ja = Number(saldoRow?.recebido_acumulado ?? 0);
+        return { ...it, recebido: Math.max(0, it.pedido - ja), conferido: true };
+      })
     );
   };
 
@@ -343,16 +355,32 @@ function ConferenciaItens({
   const stats = useMemo(() => {
     const total = itens.length;
     const conferidos = itens.filter((i) => i.conferido).length;
-    const divergencias = itens.filter((i) => i.conferido && i.recebido !== i.pedido).length;
     const faltantes = total - conferidos;
+    let divergencias = 0;
+    let comSaldo = 0;
+    let sobraUn = 0;
+    for (const it of itens) {
+      const saldoRow = (saldosItem as { item_pedido_id: string; recebido_acumulado: number }[])
+        .find((s) => s.item_pedido_id === it.itemPedidoId);
+      const ja = Number(saldoRow?.recebido_acumulado ?? 0);
+      const gap = ja + it.recebido - it.pedido;
+      const pct = it.toleranciaPct ?? toleranciaPct;
+      const limite = Math.max((pct / 100) * it.pedido, toleranciaMin);
+      const acimaTol = gap > 0 && Math.abs(gap) > limite;
+      if (it.conferido && (acimaTol || it.qualidade?.ativo)) divergencias += 1;
+      if (it.conferido && gap < 0) comSaldo += 1;
+      if (it.conferido && gap > 0) sobraUn += gap;
+    }
     return {
       total,
       conferidos,
       divergencias,
+      comSaldo,
+      sobraUn,
       faltantes,
       progresso: total ? Math.round((conferidos / total) * 100) : 0,
     };
-  }, [itens]);
+  }, [itens, saldosItem, toleranciaPct, toleranciaMin]);
 
   const clienteResumo = useMemo(() => {
     const map: Record<string, { ped: number; rec: number }> = {};
@@ -598,10 +626,11 @@ function ConferenciaItens({
         </span>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
         <MiniStat label="Itens" value={stats.total.toString()} />
         <MiniStat label="Conferidos" value={`${stats.conferidos}/${stats.total}`} tone="ok" />
         <MiniStat label="Divergências" value={stats.divergencias.toString()} tone="danger" />
+        <MiniStat label="Itens com saldo" value={stats.comSaldo.toString()} tone="warn" />
         <MiniStat label="Progresso" value={`${stats.progresso}%`} tone="info" />
       </div>
 
@@ -834,7 +863,11 @@ function ConferenciaItens({
           <AlertDialogHeader>
             <AlertDialogTitle>Finalizar esta entrega?</AlertDialogTitle>
             <AlertDialogDescription>
-              O restante fica pendente no pedido. Isso não é falta até o encerramento.
+              {stats.comSaldo > 0
+                ? "Restante pendente, não é falta até encerrar."
+                : stats.sobraUn > 0
+                  ? `${stats.sobraUn} un a mais nesta entrega.`
+                  : "Confirme para finalizar esta entrega."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

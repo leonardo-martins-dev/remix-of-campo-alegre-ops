@@ -10,6 +10,9 @@ import { useTiposCaixa, useUpdateTipoCaixa, type TipoCaixa } from "@/hooks/use-t
 import { useAuth } from "@/lib/auth";
 import { exportToExcel } from "@/lib/excel";
 import { parseCustoValor, shouldSaveCusto } from "@/lib/custo-unitario";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { formatBRL } from "@/lib/format";
 
 export const Route = createFileRoute("/caixas/economia")({
   component: Page,
@@ -88,6 +91,18 @@ function Page() {
   }, 0);
 
   const pior = [...dados].sort((a, b) => b.custoPerda - a.custoPerda)[0];
+
+  const { data: perdaCampo = 0 } = useQuery({
+    queryKey: ["perda-campo-alegre", custoById],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("movimentacoes_caixa")
+        .select("quantidade, tipo_caixa")
+        .eq("natureza", "perda");
+      if (error) throw error;
+      return (data ?? []).reduce((a, r) => a + Number(r.quantidade ?? 0) * (custoById[r.tipo_caixa] ?? 0), 0);
+    },
+  });
 
   const handleCustoSave = async (tipo: TipoCaixa) => {
     const valor = parseCustoValor(tipo, draftCustos);
@@ -223,7 +238,13 @@ function Page() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+        <KpiCard
+          label="Campo Alegre (natureza perda)"
+          value={formatBRL(perdaCampo)}
+          icon={DollarSign}
+          positiveIsGood={false}
+        />
         <KpiCard
           label="Perda estimada"
           value={`R$ ${perdaTotal.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`}

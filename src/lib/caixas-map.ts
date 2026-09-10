@@ -65,6 +65,28 @@ export function tipoColor(index: number): string {
   return TIPO_COLORS[index % TIPO_COLORS.length];
 }
 
+export type SaldoPosicao = {
+  posicao_tipo: string;
+  tipo_caixa: string;
+  saldo: number;
+};
+
+/** Capital na rua = clientes + fornecedores. Galpão nunca entra. */
+export function capitalNaRua(
+  saldos: SaldoPosicao[],
+  custos: Record<string, number>
+): { qty: number; valor: number } {
+  let qty = 0;
+  let valor = 0;
+  for (const s of saldos) {
+    if (s.posicao_tipo !== "cliente" && s.posicao_tipo !== "fornecedor") continue;
+    const n = Number(s.saldo ?? 0);
+    qty += n;
+    valor += n * (custos[s.tipo_caixa] ?? 0);
+  }
+  return { qty, valor };
+}
+
 export type AgingRow = {
   partnerKind: "cliente" | "fornecedor";
   partnerId: string;

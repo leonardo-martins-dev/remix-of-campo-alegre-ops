@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { todayBRT } from "@/lib/utils-date";
+import { addDaysBRT, todayBRT } from "@/lib/utils-date";
 import { normalizeKey } from "@/lib/normalize";
 import {
   applyAliases,
@@ -69,6 +69,15 @@ async function upsertWisePedidos(
     .single();
   if (loteErr) throw loteErr;
 
+  const { data: cfgDias } = await supabase
+    .from("configuracoes")
+    .select("valor")
+    .eq("chave", "dias_entrega_prevista")
+    .maybeSingle();
+  const diasPrev = Number(typeof cfgDias?.valor === "string" ? parseFloat(cfgDias.valor) : cfgDias?.valor);
+  const diasEntrega = Number.isFinite(diasPrev) ? diasPrev : 1;
+  const emissao = todayBRT();
+
   let novos = 0;
   let atualizados = 0;
   let itens = 0;
@@ -95,8 +104,8 @@ async function upsertWisePedidos(
           fornecedor_id: fornecedorId,
           origem: "wisetec",
           wise_pedido_id: ped.wise_pedido_id,
-          data_prevista: ped.data_prevista,
-          data_pedido: todayBRT(),
+          data_prevista: ped.data_prevista || addDaysBRT(emissao, diasEntrega),
+          data_pedido: emissao,
           status,
           importacao_id: lote.id,
           created_by,
@@ -113,7 +122,7 @@ async function upsertWisePedidos(
       await supabase
         .from("pedidos_recebimento")
         .update({
-          data_prevista: ped.data_prevista,
+          data_prevista: ped.data_prevista || addDaysBRT(emissao, diasEntrega),
           importacao_id: lote.id,
           status: hasPend ? "aguardando_vinculo" : existing.status === "pendente" || existing.status === "aguardando_vinculo" ? status : existing.status,
         })

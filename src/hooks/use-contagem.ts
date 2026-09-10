@@ -6,13 +6,20 @@ export function useContagensGalpao() {
   return useQuery({
     queryKey: ["contagens-galpao"],
     queryFn: async () => {
+      const { data: galpao } = await supabase.from("posicoes_caixa").select("id").eq("tipo", "galpao").maybeSingle();
+      if (!galpao) return [];
       const { data, error } = await supabase
-        .from("contagens_galpao")
-        .select("*, profiles:contado_por(nome), contagem_galpao_itens(*)")
+        .from("contagens_caixa")
+        .select("*, profiles:contado_por(nome), contagem_caixa_itens(*)")
+        .eq("posicao_id", galpao.id)
         .order("created_at", { ascending: false })
         .limit(30);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map((c) => {
+        const itens = ((c as { contagem_caixa_itens?: { tipo_caixa: string; qtd_contada: number; qtd_calculada: number; diferenca: number }[] }).contagem_caixa_itens ?? [])
+          .map((it) => ({ ...it, tipo_caixa_sigla: it.tipo_caixa }));
+        return { ...c, contagem_galpao_itens: itens };
+      });
     },
   });
 }
@@ -24,16 +31,24 @@ export function useRegistrarContagem() {
       contado_por: string;
       itens: { tipo_caixa_sigla: string; qtd_contada: number; qtd_calculada: number }[];
     }) => {
+      const { data: galpao } = await supabase.from("posicoes_caixa").select("id").eq("tipo", "galpao").maybeSingle();
+      if (!galpao) throw new Error("Posição do galpão não encontrada");
       const { data: contagem, error } = await supabase
-        .from("contagens_galpao")
-        .insert({ data: todayBRT(), contado_por: payload.contado_por, status: "pendente" })
+        .from("contagens_caixa")
+        .insert({
+          posicao_id: galpao.id,
+          origem: "interna",
+          data: todayBRT(),
+          contado_por: payload.contado_por,
+          status: "pendente",
+        })
         .select()
         .single();
       if (error) throw error;
-      const { error: iErr } = await supabase.from("contagem_galpao_itens").insert(
+      const { error: iErr } = await supabase.from("contagem_caixa_itens").insert(
         payload.itens.map((it) => ({
           contagem_id: contagem.id,
-          tipo_caixa_sigla: it.tipo_caixa_sigla,
+          tipo_caixa: it.tipo_caixa_sigla,
           qtd_contada: it.qtd_contada,
           qtd_calculada: it.qtd_calculada,
           diferenca: it.qtd_contada - it.qtd_calculada,
@@ -42,7 +57,10 @@ export function useRegistrarContagem() {
       if (iErr) throw iErr;
       return contagem;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["contagens-galpao"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["contagens-galpao"] });
+      qc.invalidateQueries({ queryKey: ["contagens-caixa"] });
+    },
   });
 }
 
@@ -56,37 +74,33 @@ export function useResolverContagem() {
       userId: string;
       itens?: { tipo_caixa_sigla: string; diferenca: number }[];
     }) => {
-      if (payload.acao === "conciliada" && payload.itens) {
-        const { data: galpao } = await supabase.from("posicoes_caixa").select("id").eq("tipo", "galpao").maybeSingle();
-        if (!galpao) throw new Error("Posição do galpão não encontrada");
-        for (const it of payload.itens) {
-          if (!it.diferenca) continue;
-          const dest = it.diferenca > 0 ? galpao.id : null;
-          const orig = it.diferenca < 0 ? galpao.id : null;
-          await supabase.from("movimentacoes_caixa").insert({
-            tipo: "ajuste",
-            natureza: "ajuste",
-            tipo_caixa: it.tipo_caixa_sigla,
-            quantidade: Math.abs(it.diferenca),
-            destino_posicao_id: dest,
-            origem_posicao_id: orig,
-            registrado_por: payload.userId,
-            observacoes: payload.motivo ?? "Ajuste de contagem",
-            data_movimento: todayBRT(),
-            documento_tipo: "contagem",
-            documento_id: payload.contagemId,
-            confirmacao_status: "nao_aplicavel",
-          });
-        }
+      if (payload.acao === "mantida") {
+        const { error } = await supabase
+          .from("contagens_caixa")
+          .update({ status: "mantida", observacao: payload.motivo ?? null })
+          .eq("id", payload.contagemId);
+        if (error) throw error;
+        return;
       }
-      const { error } = await supabase
-        .from("contagens_galpao")
-        .update({ status: payload.acao, observacao: payload.motivo ?? null })
-        .eq("id", payload.contagemId);
+      const { data: motivos } = await supabase
+        .from("motivos_ajuste_caixa")
+        .select("id")
+        .eq("natureza", "ajuste")
+        .eq("exige_posicao_contraria", false)
+        .limit(1);
+      const motivoId = motivos?.[0]?.id;
+      if (!motivoId) throw new Error("Cadastre um motivo de ajuste em Configurações");
+      const { error } = await supabase.rpc("conciliar_inventario", {
+        p_contagem_id: payload.contagemId,
+        p_motivo_id: motivoId,
+        p_observacao: payload.motivo ?? "Ajuste de contagem",
+        p_posicao_contraria_id: null,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contagens-galpao"] });
+      qc.invalidateQueries({ queryKey: ["contagens-caixa"] });
       qc.invalidateQueries({ queryKey: ["saldos-caixa"] });
     },
   });

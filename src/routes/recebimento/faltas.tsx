@@ -8,7 +8,7 @@ import { Percent, TrendingDown, AlertTriangle, DollarSign } from "lucide-react";
 import { useFaltas, useConfigValor } from "@/hooks/use-pedidos";
 import { useFornecedores } from "@/hooks/use-cadastros";
 import { exportToExcel } from "@/lib/excel";
-import { todayBRT } from "@/lib/utils-date";
+import { formatDateBRT, todayBRT } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import {
   Select,
@@ -66,6 +66,10 @@ function Page() {
         valor_divergencia?: number;
         estimado?: boolean;
         dentro_tolerancia?: boolean | null;
+        recebido_acumulado?: number;
+        encerrado_em?: string | null;
+        encerrado_por_nome?: string | null;
+        motivo_encerramento?: string | null;
         itens_pedido?: unknown;
       };
       const f = rec;
@@ -74,7 +78,7 @@ function Page() {
       const prod = one(ip?.produtos);
       const forn = one(ped?.fornecedores);
       const pedido = Number(ip?.quantidade_pedida ?? 0);
-      const recebido = Number(f.quantidade_recebida);
+      const recebido = Number(f.recebido_acumulado ?? f.quantidade_recebida);
       const falta = Math.max(0, pedido - recebido);
       const qtd = f.quantidade_divergencia > 0 ? Number(f.quantidade_divergencia) : falta;
       const preco = Number((ip as { preco_unitario?: number } | null)?.preco_unitario) || valorUnitario;
@@ -94,6 +98,9 @@ function Page() {
         preco,
         tipo: f.divergencia ?? (f.tem_problema_qualidade ? "qualidade" : "falta"),
         dentro_tolerancia: f.dentro_tolerancia ?? null,
+        encerrado_em: f.encerrado_em ?? null,
+        encerrado_por_nome: f.encerrado_por_nome ?? null,
+        motivo_encerramento: f.motivo_encerramento ?? null,
       };
     }).filter((row) => {
       if (tolFiltro === "acima") return row.dentro_tolerancia === false;
@@ -103,13 +110,17 @@ function Page() {
   }, [faltas, valorUnitario, tolFiltro]);
 
   const resumoFiltrado = useMemo(() => {
-    const map = new Map<string, { fornecedor: string; itens: number; qty: number; impacto: number }>();
+    const map = new Map<string, { fornecedor: string; itens: number; qty: number; impacto: number; encerrados: string[] }>();
     for (const f of faltasComImpacto) {
       const key = f.fornecedor_id ?? f.fornecedor;
-      const cur = map.get(key) ?? { fornecedor: f.fornecedor, itens: 0, qty: 0, impacto: 0 };
+      const cur = map.get(key) ?? { fornecedor: f.fornecedor, itens: 0, qty: 0, impacto: 0, encerrados: [] };
       cur.itens += 1;
       cur.qty += f.falta;
       cur.impacto += f.impacto;
+      if (f.encerrado_em) {
+        const chip = `encerrado em ${formatDateBRT(f.encerrado_em)} por ${f.encerrado_por_nome ?? "—"} — ${f.motivo_encerramento ?? "—"}`;
+        if (!cur.encerrados.includes(chip)) cur.encerrados.push(chip);
+      }
       map.set(key, cur);
     }
     return [...map.values()].sort((a, b) => b.impacto - a.impacto);
@@ -134,6 +145,9 @@ function Page() {
         "Impacto R$": i.impacto.toFixed(2),
         Estimado: i.estimado ? "sim" : "nao",
         Tolerancia: i.dentro_tolerancia === false ? "acima" : i.dentro_tolerancia === true ? "dentro" : "",
+        Encerrado: i.encerrado_em
+          ? `encerrado em ${formatDateBRT(i.encerrado_em)} por ${i.encerrado_por_nome ?? "—"} — ${i.motivo_encerramento ?? ""}`
+          : "",
       }))
     );
   };
@@ -253,6 +267,7 @@ function Page() {
                 <th className="text-left px-4 py-3">Fornecedor</th>
                 <th className="text-right px-4 py-3">Itens</th>
                 <th className="text-right px-4 py-3">Qtd divergência</th>
+                <th className="text-left px-4 py-3">Encerramento</th>
                 <th className="text-right px-4 py-3">Impacto R$</th>
               </tr>
             </thead>
@@ -262,6 +277,13 @@ function Page() {
                   <td className="px-4 py-3 font-semibold text-navy">{r.fornecedor}</td>
                   <td className="px-4 py-3 text-right">{r.itens}</td>
                   <td className="px-4 py-3 text-right">{r.qty.toFixed(1)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {r.encerrados.map((e) => (
+                        <span key={e} className="chip chip-muted text-xs">{e}</span>
+                      ))}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-right font-bold">R$ {r.impacto.toFixed(2)}</td>
                 </tr>
               ))}
@@ -279,6 +301,7 @@ function Page() {
                 <th className="text-right px-4 py-3">Pedido</th>
                 <th className="text-right px-4 py-3">Recebido</th>
                 <th className="text-right px-4 py-3">Divergência</th>
+                <th className="text-left px-4 py-3">Encerramento</th>
                 <th className="text-right px-4 py-3">Impacto</th>
               </tr>
             </thead>
@@ -292,6 +315,13 @@ function Page() {
                   <td className="px-4 py-3 text-right">{i.recebido}</td>
                   <td className="px-4 py-3 text-right">
                     <span className="chip chip-danger text-xs">{i.tipo} · {i.falta}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {i.encerrado_em && (
+                      <span className="chip chip-muted text-xs">
+                        encerrado em {formatDateBRT(i.encerrado_em)} por {i.encerrado_por_nome ?? "—"} — {i.motivo_encerramento ?? "—"}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right font-bold">R$ {i.impacto.toFixed(2)}</td>
                 </tr>

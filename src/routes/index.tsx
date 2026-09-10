@@ -31,7 +31,7 @@ function Dashboard() {
     );
   }
 
-  const { cargasExpedidas, fillRate, fillRateValor, caixasAbertas, caixasClientes, caixasFornecedores, caixasGalpao, capital, statusCounts, topClientes, quebraDia, pendenciasVinculo, divergenciasDia } = data;
+  const { cargasExpedidas, fillRate, fillRateValor, caixasClientes, caixasFornecedores, caixasGalpao, capital, perdaCaixasMes, lastInventarioGalpao, statusCounts, topClientes, quebraDia, pendenciasVinculo, divergenciasDia } = data;
   const totalCargas = statusCounts.concluida + statusCounts.carregando + statusCounts.aguardando;
   const maxAbertas = Math.max(1, ...topClientes.map((c) => c.abertas));
 
@@ -50,7 +50,17 @@ function Dashboard() {
         </Link>
         <KpiCard label="Com supermercados" value={String(caixasClientes)} icon={Box} positiveIsGood={false} />
         <KpiCard label="Com fornecedores" value={String(caixasFornecedores)} icon={Box} positiveIsGood={false} />
-        <KpiCard label="No galpão" value={String(caixasGalpao)} icon={Box} />
+        <KpiCard
+          label={lastInventarioGalpao ? `No galpão · inv. ${String(lastInventarioGalpao).slice(0, 10)}` : "No galpão"}
+          value={String(caixasGalpao)}
+          icon={Box}
+        />
+        <KpiCard
+          label="Perda de caixas no mês"
+          value={`R$ ${(perdaCaixasMes ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`}
+          icon={AlertCircle}
+          positiveIsGood={false}
+        />
         <KpiCard label="Quebra do dia" value={`R$ ${quebraDia.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`} icon={AlertCircle} positiveIsGood={false} />
         <KpiCard label="Pendências de vínculo" value={String(pendenciasVinculo)} icon={AlertCircle} positiveIsGood={false} />
         <KpiCard label="Divergências hoje" value={`${divergenciasDia.todas} · ${divergenciasDia.acima} acima`} icon={AlertCircle} positiveIsGood={false} />

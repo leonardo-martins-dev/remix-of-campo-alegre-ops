@@ -2,8 +2,14 @@ import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { validateRateio } from "@/lib/rateio";
-import { dateRangeBRT, todayBRT } from "@/lib/utils-date";
+import { addDaysBRT, dateRangeBRT, todayBRT } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
+
+async function fetchConfigNum(chave: string, fallback: number): Promise<number> {
+  const { data } = await supabase.from("configuracoes").select("valor").eq("chave", chave).maybeSingle();
+  const v = typeof data?.valor === "string" ? parseFloat(data.valor) : Number(data?.valor);
+  return Number.isFinite(v) ? v : fallback;
+}
 
 function assertItensRateio(
   itens: { produto_id: string; quantidade: number; rateio: { destinatario_id: string; quantidade: number }[] }[]
@@ -112,13 +118,16 @@ export function useCreatePedidoManual() {
       const precisaRateio = payload.itens.some((i) => !i.cliente_id && i.rateio.length);
       if (precisaRateio) assertItensRateio(payload.itens);
 
+      const dias = await fetchConfigNum("dias_entrega_prevista", 1);
+      const emissao = todayBRT();
       const { data: pedido, error: pErr } = await supabase
         .from("pedidos_recebimento")
         .insert({
           codigo: payload.codigo,
           fornecedor_id: payload.fornecedor_id,
           origem: "manual",
-          data_pedido: todayBRT(),
+          data_pedido: emissao,
+          data_prevista: addDaysBRT(emissao, dias),
           hora_chegada: new Date().toISOString(),
           status: "pendente",
           created_by: payload.created_by,
@@ -168,13 +177,16 @@ export function useImportPedidos() {
       for (const p of pedidos) {
         assertItensRateio(p.itens);
 
+        const dias = await fetchConfigNum("dias_entrega_prevista", 1);
+        const emissao = todayBRT();
         const { data: pedido, error: pErr } = await supabase
           .from("pedidos_recebimento")
           .insert({
             codigo: p.codigo,
             fornecedor_id: p.fornecedor_id,
             origem: "excel",
-            data_pedido: todayBRT(),
+            data_pedido: emissao,
+            data_prevista: addDaysBRT(emissao, dias),
             hora_chegada: new Date().toISOString(),
             status: "pendente",
             created_by: p.created_by,
@@ -227,9 +239,9 @@ export function useFaltas(filters: FaltasFilters = {}) {
           id, quantidade_recebida, divergencia, quantidade_divergencia, tem_problema_qualidade,
           dentro_tolerancia, valor_divergencia, estimado,
           itens_pedido(
-            quantidade_pedida, preco_unitario,
+            id, quantidade_pedida, preco_unitario,
             produtos(nome, unidade),
-            pedidos_recebimento(codigo, data_pedido, status, fornecedor_id, fornecedores(id, nome))
+            pedidos_recebimento(codigo, data_pedido, status, fornecedor_id, encerrado_em, encerrado_por, motivo_encerramento, fornecedores(id, nome))
           )
         `)
         .not("divergencia", "is", null);
@@ -241,7 +253,7 @@ export function useFaltas(filters: FaltasFilters = {}) {
       const { data, error } = await q;
       if (error) throw error;
 
-      return (data ?? []).filter((row) => {
+      const filtered = (data ?? []).filter((row) => {
         const ip = one(row.itens_pedido);
         const ped = one(ip?.pedidos_recebimento);
         if (!ped) return false;
@@ -249,6 +261,45 @@ export function useFaltas(filters: FaltasFilters = {}) {
         if (fornecedorId && ped.fornecedor_id !== fornecedorId) return false;
         if (ped.status === "parcial" || ped.status === "pendente" || ped.status === "aguardando_vinculo") return false;
         return true;
+      });
+
+      const itemIds = filtered
+        .map((row) => one(row.itens_pedido)?.id as string | undefined)
+        .filter((id): id is string => !!id);
+      const encerradoIds = [
+        ...new Set(
+          filtered
+            .map((row) => (one(one(row.itens_pedido)?.pedidos_recebimento) as { encerrado_por?: string | null } | null)?.encerrado_por)
+            .filter((id): id is string => !!id)
+        ),
+      ];
+
+      const [{ data: saldos }, { data: autores }] = await Promise.all([
+        itemIds.length
+          ? supabase.from("v_saldo_item_pedido").select("item_pedido_id, recebido_acumulado").in("item_pedido_id", itemIds)
+          : Promise.resolve({ data: [] as { item_pedido_id: string; recebido_acumulado: number }[] }),
+        encerradoIds.length
+          ? supabase.from("profiles").select("id, nome").in("id", encerradoIds)
+          : Promise.resolve({ data: [] as { id: string; nome: string }[] }),
+      ]);
+
+      const saldoMap = new Map((saldos ?? []).map((s) => [s.item_pedido_id, Number(s.recebido_acumulado)]));
+      const autorMap = new Map((autores ?? []).map((a) => [a.id, a.nome]));
+
+      return filtered.map((row) => {
+        const ip = one(row.itens_pedido);
+        const ped = one(ip?.pedidos_recebimento) as {
+          encerrado_em?: string | null;
+          encerrado_por?: string | null;
+          motivo_encerramento?: string | null;
+        } | null;
+        return {
+          ...row,
+          recebido_acumulado: ip?.id ? saldoMap.get(ip.id) ?? 0 : 0,
+          encerrado_em: ped?.encerrado_em ?? null,
+          encerrado_por_nome: ped?.encerrado_por ? autorMap.get(ped.encerrado_por) ?? null : null,
+          motivo_encerramento: ped?.motivo_encerramento ?? null,
+        };
       });
     },
   });
@@ -319,6 +370,7 @@ export function useUpdatePedidoAdmin() {
       pedidoId: string;
       codigo?: string;
       fornecedor_id?: string;
+      data_prevista?: string | null;
     }) => {
       const { pedidoId, ...fields } = payload;
       const { error } = await supabase.from("pedidos_recebimento").update(fields).eq("id", pedidoId);

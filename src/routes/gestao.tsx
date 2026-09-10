@@ -36,6 +36,7 @@ import { useCreateTipoCaixa, useDeleteTipoCaixa, useTiposCaixa, useUpdateTipoCai
 import { useAliases, usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { useResolverPendencia } from "@/hooks/use-wise-pedidos";
 import { usePosicoes, useSaldosAbertura } from "@/hooks/use-ledger";
+import { useMotivosAjuste, useSaveMotivoAjuste } from "@/hooks/use-inventario";
 
 export const Route = createFileRoute("/gestao")({
   component: Page,
@@ -69,6 +70,7 @@ function Page() {
           <TabsTrigger value="caixas">Tipos de caixa</TabsTrigger>
           <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
           <TabsTrigger value="abertura">Saldos de abertura</TabsTrigger>
+          <TabsTrigger value="motivos">Motivos</TabsTrigger>
           <TabsTrigger value="config">Parâmetros</TabsTrigger>
         </TabsList>
         <TabsContent value="cadastros" className="mt-4">
@@ -82,6 +84,9 @@ function Page() {
         </TabsContent>
         <TabsContent value="abertura" className="mt-4">
           <AberturaPanel />
+        </TabsContent>
+        <TabsContent value="motivos" className="mt-4">
+          <MotivosPanel />
         </TabsContent>
         <TabsContent value="config" className="mt-4">
           <ConfigPanel />
@@ -609,6 +614,62 @@ function AberturaPanel() {
         }, { onSuccess: () => toast.success("Abertura lançada"), onError: (e) => toast.error(e.message) })}>
           Lançar abertura
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MotivosPanel() {
+  const { data: motivos = [] } = useMotivosAjuste();
+  const save = useSaveMotivoAjuste();
+  const [nome, setNome] = useState("");
+  const [sentido, setSentido] = useState("saida");
+  const [natureza, setNatureza] = useState("ajuste");
+  const [custo, setCusto] = useState(false);
+  const [contraria, setContraria] = useState(false);
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Motivos de ajuste de caixa</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Input placeholder="Nome do motivo" value={nome} onChange={(e) => setNome(e.target.value)} />
+          <select className="h-9 rounded-md border px-2" value={sentido} onChange={(e) => setSentido(e.target.value)}>
+            <option value="entrada">Entrada</option>
+            <option value="saida">Saída</option>
+            <option value="transferencia">Transferência</option>
+          </select>
+          <select className="h-9 rounded-md border px-2" value={natureza} onChange={(e) => setNatureza(e.target.value)}>
+            <option value="ajuste">Ajuste</option>
+            <option value="perda">Perda</option>
+          </select>
+          <label className="text-sm flex items-center gap-2">
+            <input type="checkbox" checked={custo} onChange={(e) => setCusto(e.target.checked)} /> Entra em custo
+          </label>
+          <label className="text-sm flex items-center gap-2">
+            <input type="checkbox" checked={contraria} onChange={(e) => setContraria(e.target.checked)} /> Exige posição contrária
+          </label>
+        </div>
+        <Button
+          onClick={() => {
+            if (!nome.trim()) return;
+            save.mutate(
+              { nome: nome.trim(), sentido, natureza, entra_em_custo: custo, exige_posicao_contraria: contraria },
+              { onSuccess: () => { toast.success("Motivo salvo"); setNome(""); } }
+            );
+          }}
+        >
+          Adicionar motivo
+        </Button>
+        <ul className="text-sm space-y-1">
+          {motivos.map((m) => (
+            <li key={m.id} className="border-t border-border pt-1">
+              {m.nome} · {m.sentido} · {m.natureza}
+              {m.entra_em_custo ? " · custo" : ""}
+              {m.exige_posicao_contraria ? " · transferência" : ""}
+            </li>
+          ))}
+        </ul>
       </CardContent>
     </Card>
   );

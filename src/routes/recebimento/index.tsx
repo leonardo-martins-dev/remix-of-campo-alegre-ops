@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert, RefreshCw } from "lucide-react";
+import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert, RefreshCw, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { StatStrip } from "@/components/stat-strip";
@@ -29,6 +29,7 @@ import {
   useImportPedidos,
   useFillRate,
   useUpdatePedidoAdmin,
+  useEncerrarPedido,
 } from "@/hooks/use-pedidos";
 import { useFornecedores, useProdutos, useDestinatarios, useClientes } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
@@ -37,7 +38,18 @@ import { parsePedidosExcel, buildPedidosFromExcel } from "@/lib/excel";
 import { downloadWiseModelo } from "@/lib/excel-wise-pedidos";
 import { useImportWisePedidos, useSyncWisePedidos } from "@/hooks/use-wise-pedidos";
 import { usePendenciasVinculo } from "@/hooks/use-pedidos";
-import { formatTime } from "@/lib/utils-date";
+import { formatDateBRT, formatTime } from "@/lib/utils-date";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { one } from "@/lib/embed";
 
 export const Route = createFileRoute("/recebimento/")({
@@ -137,6 +149,9 @@ function Page() {
   const [manualOpen, setManualOpen] = useState(false);
   const [editPedido, setEditPedido] = useState<PedidoDia | null>(null);
   const [editCodigo, setEditCodigo] = useState("");
+  const [editPrevista, setEditPrevista] = useState("");
+  const [encerrarId, setEncerrarId] = useState<string | null>(null);
+  const [encerrarMotivo, setEncerrarMotivo] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { user, profile, isAdmin } = useAuth();
@@ -153,6 +168,7 @@ function Page() {
   const syncWise = useSyncWisePedidos();
   const { data: pendencias = [] } = usePendenciasVinculo();
   const updatePedido = useUpdatePedidoAdmin();
+  const encerrarPedido = useEncerrarPedido();
   const canAdmin = isAdmin || resolveIsAdmin(profile, user);
 
   const [fornecedorId, setFornecedorId] = useState("");
@@ -408,6 +424,7 @@ function Page() {
               <th className="text-left px-4 py-3 font-semibold">Cliente</th>
               <th className="text-left px-4 py-3 font-semibold">Origem</th>
               <th className="text-left px-4 py-3 font-semibold">Chegada</th>
+              <th className="text-left px-4 py-3 font-semibold">Prevista</th>
               <th className="text-left px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3" />
             </tr>
@@ -415,14 +432,14 @@ function Page() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                   Carregando pedidos…
                 </td>
               </tr>
             )}
             {!isLoading && filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                   Nenhum pedido encontrado
                 </td>
               </tr>
@@ -449,16 +466,30 @@ function Page() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-ink">{formatTime(p.hora_chegada)}</td>
+                <td className="px-4 py-3 text-ink">{formatDateBRT(p.data_prevista)}</td>
                 <td className="px-4 py-3">{statusChip(p.status)}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
                     {pedidoActionLink(p)}
-                    {canAdmin && p.status === "conferido" && (
+                    {canAdmin && p.status === "parcial" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEncerrarId(p.id);
+                          setEncerrarMotivo("");
+                        }}
+                        className="inline-flex items-center gap-1 text-xs text-destructive hover:underline"
+                      >
+                        <Ban size={12} /> Encerrar pedido
+                      </button>
+                    )}
+                    {canAdmin && (p.status === "conferido" || p.status === "pendente" || p.status === "parcial") && (
                       <button
                         type="button"
                         onClick={() => {
                           setEditPedido(p);
                           setEditCodigo(p.codigo);
+                          setEditPrevista(p.data_prevista ?? "");
                         }}
                         className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-navy"
                       >
@@ -639,6 +670,8 @@ function Page() {
           <div className="space-y-3">
             <Label>Código do pedido</Label>
             <Input value={editCodigo} onChange={(e) => setEditCodigo(e.target.value)} />
+            <Label>Data prevista</Label>
+            <Input type="date" value={editPrevista} onChange={(e) => setEditPrevista(e.target.value)} />
           </div>
           <DialogFooter>
             <DialogClose asChild>
@@ -653,6 +686,7 @@ function Page() {
                   await updatePedido.mutateAsync({
                     pedidoId: editPedido.id,
                     codigo: editCodigo.trim(),
+                    data_prevista: editPrevista || null,
                   });
                   toast.success("Pedido atualizado");
                   setEditPedido(null);
@@ -666,6 +700,45 @@ function Page() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!encerrarId} onOpenChange={(open) => !open && setEncerrarId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Encerrar com falta definitiva?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O saldo restante vira falta no pedido. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            placeholder="Motivo do encerramento (obrigatório)"
+            value={encerrarMotivo}
+            onChange={(e) => setEncerrarMotivo(e.target.value)}
+            rows={3}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!encerrarId) return;
+                const motivo = encerrarMotivo.trim();
+                if (!motivo) {
+                  toast.error("Observação obrigatória para encerrar com falta");
+                  return;
+                }
+                try {
+                  await encerrarPedido.mutateAsync({ pedidoId: encerrarId, motivo });
+                  toast.success("Pedido encerrado com falta definitiva");
+                  setEncerrarId(null);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Erro ao encerrar");
+                }
+              }}
+            >
+              Encerrar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
