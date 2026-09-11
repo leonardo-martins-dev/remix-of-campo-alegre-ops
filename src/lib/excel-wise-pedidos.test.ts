@@ -57,6 +57,7 @@ assert(alface.pedido === "30296", `pedido ${alface.pedido}`);
 assert(alface.codigo_produto === "5", `codigo ${alface.codigo_produto}`);
 assert(alface.quantidade === 6000, `qtde ${alface.quantidade}`);
 assert(alface.preco_unitario === 1, `unit ${alface.preco_unitario}`);
+assert(alface.unidade === "un", `unidade ${alface.unidade}`);
 assert(alface.data_prevista === "2026-09-11", `data ${alface.data_prevista}`);
 
 const brocolis = htmlParsed.rows.find((r) => r.codigo_produto === "20");

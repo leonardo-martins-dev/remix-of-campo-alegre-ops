@@ -299,6 +299,7 @@ export function parseWisePedido(file: ArrayBuffer): WiseParseResult {
       }
     }
 
+    const unidadeRaw = String(pickField(r, COL.unidade) ?? "").trim();
     parsed.push({
       pedido,
       codigo_fornecedor: String(pickField(r, COL.codigoFornecedor) ?? "").trim(),
@@ -306,7 +307,8 @@ export function parseWisePedido(file: ArrayBuffer): WiseParseResult {
       codigo_produto: String(pickField(r, COL.codigoProduto) ?? "").trim(),
       produto,
       quantidade: qtdParsed.value,
-      unidade: String(pickField(r, COL.unidade) ?? "").trim(),
+      // Exportação Wise não traz unidade — padrão UN (conferência).
+      unidade: unidadeRaw || "un",
       preco_unitario,
       loja: String(pickField(r, COL.loja) ?? "").trim(),
       data_prevista: asDate(pickField(r, COL.data)),

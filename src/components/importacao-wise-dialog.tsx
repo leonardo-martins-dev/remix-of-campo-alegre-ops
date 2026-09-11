@@ -117,8 +117,20 @@ export function ImportacaoWiseDialog({
           <Stat label="Linhas com erro" value={preview.ignoradas.length} />
           <Stat label="Itens sem preço" value={preview.semPreco} />
           <Stat label="Unidade vazia" value={preview.unidadeVazia} />
-          <Stat label="Fornecedores a vincular" value={counts.forn.size} />
+          <Stat label="Fornecedores novos" value={preview.fornecedoresCriados.length} />
         </div>
+        {preview.fornecedoresCriados.length > 0 && (
+          <div className="rounded-md bg-secondary/60 p-3 text-sm">
+            <p className="font-medium">
+              {preview.fornecedoresCriados.length} fornecedor(es) cadastrado(s) automaticamente a partir do Wise.
+            </p>
+            <ul className="mt-2 max-h-40 overflow-auto text-xs text-muted-foreground space-y-0.5">
+              {preview.fornecedoresCriados.map((nome) => (
+                <li key={nome}>{nome}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {preview.unidadeVazia > 0 && (
           <p className="text-xs text-muted-foreground">Há itens sem unidade. A conferência usa UN/PC/KG — preencha ou deixe vazio para completar depois.</p>
         )}

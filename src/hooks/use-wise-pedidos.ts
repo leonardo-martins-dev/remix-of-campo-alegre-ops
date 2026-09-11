@@ -33,6 +33,7 @@ export type ImportPreview = {
   semPreco: number;
   unidadeVazia: number;
   existentes: string[];
+  fornecedoresCriados: string[];
   arquivoAnterior: { created_at: string; pedidos_novos: number; arquivo: string } | null;
 };
 
@@ -88,6 +89,37 @@ function toRpcPedidos(pedidos: WiseBuildPedido[]) {
   }));
 }
 
+/** Cria no cadastro os fornecedores do Wise que ainda não existem (por nome). */
+async function ensureFornecedoresCadastro(
+  nomes: string[],
+  existentes: { id: string; nome: string }[]
+): Promise<{ fornecedores: { id: string; nome: string }[]; criados: string[] }> {
+  const byKey = new Map(existentes.map((f) => [normalizeKey(f.nome), f]));
+  const faltando: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of nomes) {
+    const nome = raw.trim();
+    if (!nome) continue;
+    const key = normalizeKey(nome);
+    if (seen.has(key) || byKey.has(key)) continue;
+    seen.add(key);
+    faltando.push(nome);
+  }
+  if (!faltando.length) return { fornecedores: existentes, criados: [] };
+
+  const { data, error } = await supabase
+    .from("fornecedores")
+    .insert(faltando.map((nome) => ({ nome, ativo: true })))
+    .select("id, nome");
+  if (error) throw new Error(error.message || "Erro ao cadastrar fornecedores da importação");
+
+  const criados = (data ?? []).map((f) => f.nome);
+  return {
+    fornecedores: [...existentes, ...(data ?? [])],
+    criados,
+  };
+}
+
 export async function buildImportPreview(payload: {
   file: ArrayBuffer;
   filename: string;
@@ -100,8 +132,15 @@ export async function buildImportPreview(payload: {
   if (!parsed.ok) throw new Error(parsed.error);
 
   const { data: aliases } = await supabase.from("aliases").select("tipo, nome_externo, codigo_externo, entidade_id");
+
+  const nomesForn = parsed.rows.map((r) => r.fornecedor).filter(Boolean);
+  const { fornecedores, criados: fornecedoresCriados } = await ensureFornecedoresCadastro(
+    nomesForn,
+    payload.fornecedores
+  );
+
   const maps = mapsFromCadastros(
-    payload.fornecedores,
+    fornecedores,
     payload.produtos,
     payload.destinatarios,
     payload.clientes ?? [],
@@ -142,6 +181,7 @@ export async function buildImportPreview(payload: {
     semPreco,
     unidadeVazia,
     existentes: (existing ?? []).map((e) => e.wise_pedido_id),
+    fornecedoresCriados,
     arquivoAnterior: prev ?? null,
   };
 }
@@ -171,8 +211,14 @@ async function confirmImport(preview: ImportPreview): Promise<ImportWiseResult> 
 }
 
 export function usePreviewWiseImport() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: buildImportPreview,
+    onSuccess: (preview) => {
+      if (preview.fornecedoresCriados.length) {
+        qc.invalidateQueries({ queryKey: ["cadastros", "fornecedores"] });
+      }
+    },
   });
 }
 
@@ -184,6 +230,7 @@ export function useConfirmWiseImport() {
       qc.invalidateQueries({ queryKey: ["pedidos"] });
       qc.invalidateQueries({ queryKey: ["pendencias-vinculo"] });
       qc.invalidateQueries({ queryKey: ["importacoes"] });
+      qc.invalidateQueries({ queryKey: ["cadastros", "fornecedores"] });
     },
   });
 }
@@ -239,8 +286,12 @@ export function useSyncWisePedidos() {
         };
       }
       const { data: aliases } = await supabase.from("aliases").select("tipo, nome_externo, codigo_externo, entidade_id");
+      const { fornecedores, criados } = await ensureFornecedoresCadastro(
+        rows.map((r) => r.fornecedor).filter(Boolean),
+        payload.fornecedores
+      );
       const maps = mapsFromCadastros(
-        payload.fornecedores,
+        fornecedores,
         payload.produtos,
         payload.destinatarios,
         payload.clientes,
@@ -258,6 +309,7 @@ export function useSyncWisePedidos() {
         semPreco: pedidos.reduce((n, p) => n + p.itens.filter((i) => i.preco_unitario == null).length, 0),
         unidadeVazia: 0,
         existentes: [],
+        fornecedoresCriados: criados,
         arquivoAnterior: null,
       };
       const upserted = await confirmImport(preview);
