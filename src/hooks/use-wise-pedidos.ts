@@ -1,24 +1,42 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { addDaysBRT, todayBRT } from "@/lib/utils-date";
 import { normalizeKey } from "@/lib/normalize";
 import {
   applyAliases,
   buildWisePedidos,
+  hashArquivo,
   parseWisePedido,
   type AliasRow,
+  type LinhaIgnorada,
   type WiseBuildPedido,
 } from "@/lib/excel-wise-pedidos";
 
 export type ImportWiseResult = {
+  lote_id?: string;
   novos: number;
   atualizados: number;
   itens: number;
   pendencias: number;
   ignoradas: { motivo: string }[];
+  status?: string;
 };
 
-function mapsFromCadastros(
+export type ImportPreview = {
+  hash: string;
+  filename: string;
+  formato: string;
+  sheet?: string;
+  linhasLidas: number;
+  pedidos: WiseBuildPedido[];
+  ignoradas: LinhaIgnorada[];
+  semItens: boolean;
+  semPreco: number;
+  unidadeVazia: number;
+  existentes: string[];
+  arquivoAnterior: { created_at: string; pedidos_novos: number; arquivo: string } | null;
+};
+
+export function mapsFromCadastros(
   fornecedores: { id: string; nome: string }[],
   produtos: { id: string; nome: string; codigo?: string | null }[],
   destinatarios: { id: string; nome: string }[],
@@ -51,203 +69,119 @@ function mapsFromCadastros(
   );
 }
 
-async function upsertWisePedidos(
-  pedidos: WiseBuildPedido[],
-  created_by: string,
-  filename: string,
-  formato: string
-): Promise<ImportWiseResult> {
-  const { data: lote, error: loteErr } = await supabase
-    .from("importacoes_pedido")
-    .insert({
-      arquivo: filename,
-      formato,
-      usuario_id: created_by,
-      status: "ok",
-    })
-    .select()
-    .single();
-  if (loteErr) throw loteErr;
+function toRpcPedidos(pedidos: WiseBuildPedido[]) {
+  return pedidos.map((p) => ({
+    wise_pedido_id: p.wise_pedido_id,
+    fornecedor_id: p.fornecedor_id,
+    fornecedor_nome: p.fornecedor_nome,
+    codigo_fornecedor: p.codigo_fornecedor,
+    data_prevista: p.data_prevista,
+    itens: p.itens.map((i) => ({
+      produto_id: i.produto_id,
+      produto_nome: i.produto_nome,
+      codigo_produto: i.codigo_produto,
+      quantidade: i.quantidade,
+      unidade: i.unidade,
+      preco_unitario: i.preco_unitario,
+    })),
+    pendencias: p.pendencias.filter((pen) => pen.tipo === "fornecedor" || pen.tipo === "produto"),
+  }));
+}
 
-  const { data: cfgDias } = await supabase
-    .from("configuracoes")
-    .select("valor")
-    .eq("chave", "dias_entrega_prevista")
+export async function buildImportPreview(payload: {
+  file: ArrayBuffer;
+  filename: string;
+  fornecedores: { id: string; nome: string }[];
+  produtos: { id: string; nome: string; codigo?: string | null }[];
+  destinatarios: { id: string; nome: string }[];
+  clientes?: { id: string; nome: string; cnpj?: string | null }[];
+}): Promise<ImportPreview> {
+  const parsed = parseWisePedido(payload.file);
+  if (!parsed.ok) throw new Error(parsed.error);
+
+  const { data: aliases } = await supabase.from("aliases").select("tipo, nome_externo, codigo_externo, entidade_id");
+  const maps = mapsFromCadastros(
+    payload.fornecedores,
+    payload.produtos,
+    payload.destinatarios,
+    payload.clientes ?? [],
+    (aliases ?? []) as AliasRow[]
+  );
+  const pedidos = buildWisePedidos(parsed.rows, maps);
+  const ids = pedidos.map((p) => p.wise_pedido_id);
+  const { data: existing } = ids.length
+    ? await supabase.from("pedidos_recebimento").select("wise_pedido_id").in("wise_pedido_id", ids)
+    : { data: [] as { wise_pedido_id: string }[] };
+
+  const hash = await hashArquivo(payload.file);
+  const { data: prev } = await supabase
+    .from("importacoes_pedido")
+    .select("created_at, pedidos_novos, arquivo")
+    .eq("arquivo_hash", hash)
+    .in("status", ["ok", "parcial"])
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
-  const diasPrev = Number(typeof cfgDias?.valor === "string" ? parseFloat(cfgDias.valor) : cfgDias?.valor);
-  const diasEntrega = Number.isFinite(diasPrev) ? diasPrev : 1;
-  const emissao = todayBRT();
 
-  let novos = 0;
-  let atualizados = 0;
-  let itens = 0;
-  let pendencias = 0;
-  const ignoradas: { motivo: string }[] = [];
+  const semPreco = pedidos.reduce((n, p) => n + p.itens.filter((i) => i.preco_unitario == null).length, 0);
+  const unidadeVazia = pedidos.reduce((n, p) => n + p.itens.filter((i) => !i.unidade).length, 0);
 
-  for (const ped of pedidos) {
-    const hasPend = ped.pendencias.length > 0 || !ped.fornecedor_id;
-    const { data: existing } = await supabase
-      .from("pedidos_recebimento")
-      .select("id, status")
-      .eq("wise_pedido_id", ped.wise_pedido_id)
-      .maybeSingle();
+  return {
+    hash,
+    filename: payload.filename,
+    formato: payload.filename.toLowerCase().endsWith(".csv") ? "csv" : "xlsx",
+    sheet: parsed.sheet,
+    linhasLidas: parsed.rows.length + parsed.ignoradas.length,
+    pedidos,
+    ignoradas: parsed.ignoradas,
+    semItens: parsed.rows.length === 0 || pedidos.every((p) => p.itens.length === 0),
+    semPreco,
+    unidadeVazia,
+    existentes: (existing ?? []).map((e) => e.wise_pedido_id),
+    arquivoAnterior: prev ?? null,
+  };
+}
 
-    const status = hasPend ? "aguardando_vinculo" : "pendente";
-    let pedidoId = existing?.id;
-    const fornecedorId = ped.fornecedor_id ?? null;
-
-    if (!existing) {
-      const { data: created, error } = await supabase
-        .from("pedidos_recebimento")
-        .insert({
-          codigo: ped.wise_pedido_id,
-          fornecedor_id: fornecedorId,
-          origem: "wisetec",
-          wise_pedido_id: ped.wise_pedido_id,
-          data_prevista: ped.data_prevista || addDaysBRT(emissao, diasEntrega),
-          data_pedido: emissao,
-          status,
-          importacao_id: lote.id,
-          created_by,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      pedidoId = created.id;
-      novos++;
-    } else {
-      if (["conferido", "recebido", "encerrado", "aguardando_liberacao"].includes(existing.status)) {
-        ignoradas.push({ motivo: `Pedido ${ped.wise_pedido_id}: já possui entrega conferida — itens conferidos preservados` });
-      }
-      await supabase
-        .from("pedidos_recebimento")
-        .update({
-          data_prevista: ped.data_prevista || addDaysBRT(emissao, diasEntrega),
-          importacao_id: lote.id,
-          status: hasPend ? "aguardando_vinculo" : existing.status === "pendente" || existing.status === "aguardando_vinculo" ? status : existing.status,
-        })
-        .eq("id", existing.id);
-      atualizados++;
-    }
-
-    if (!pedidoId) continue;
-
-    const conferidos = new Set<string>();
-    const { data: confItens } = await supabase
-      .from("itens_conferencia")
-      .select("item_pedido_id, conferido, conferencias!inner(pedido_id, status)")
-      .eq("conferencias.pedido_id", pedidoId)
-      .eq("conferido", true);
-    (confItens ?? []).forEach((r: { item_pedido_id: string }) => conferidos.add(r.item_pedido_id));
-
-    for (const item of ped.itens) {
-      if (!item.produto_id) continue;
-      const { data: existingItem } = await supabase
-        .from("itens_pedido")
-        .select("id")
-        .eq("pedido_id", pedidoId)
-        .eq("produto_id", item.produto_id)
-        .maybeSingle();
-
-      if (item.familia && item.produto_id) {
-        const famName = item.familia.trim();
-        let { data: fam } = await supabase
-          .from("familias_produto")
-          .select("id")
-          .ilike("nome", famName)
-          .maybeSingle();
-        if (!fam) {
-          const { data: createdFam } = await supabase
-            .from("familias_produto")
-            .insert({ nome: famName })
-            .select("id")
-            .maybeSingle();
-          fam = createdFam;
-        }
-        if (fam?.id) {
-          const { data: prod } = await supabase.from("produtos").select("familia_id").eq("id", item.produto_id).maybeSingle();
-          if (!prod?.familia_id) {
-            await supabase.from("produtos").update({ familia_id: fam.id }).eq("id", item.produto_id);
-          }
-        }
-      }
-
-      if (existingItem && conferidos.has(existingItem.id)) continue;
-
-      let itemId = existingItem?.id;
-      const clienteId = item.cliente_id ?? null;
-      if (existingItem) {
-        await supabase
-          .from("itens_pedido")
-          .update({
-            quantidade_pedida: item.quantidade,
-            preco_unitario: item.preco_unitario,
-            unidade: item.unidade,
-            cliente_id: clienteId,
-          })
-          .eq("id", existingItem.id);
-      } else {
-        const { data: created, error } = await supabase
-          .from("itens_pedido")
-          .insert({
-            pedido_id: pedidoId,
-            produto_id: item.produto_id,
-            quantidade_pedida: item.quantidade,
-            preco_unitario: item.preco_unitario,
-            unidade: item.unidade,
-            cliente_id: clienteId,
-          })
-          .select("id")
-          .single();
-        if (error) throw error;
-        itemId = created.id;
-      }
-      itens++;
-      if (!itemId) continue;
-    }
-
-    for (const pen of ped.pendencias) {
-      const { data: already } = await supabase
-        .from("pendencias_vinculo")
-        .select("id, ocorrencias")
-        .eq("pedido_id", pedidoId)
-        .eq("tipo", pen.tipo)
-        .eq("nome_externo", pen.nome)
-        .eq("status", "aberta")
-        .maybeSingle();
-      if (already) {
-        await supabase
-          .from("pendencias_vinculo")
-          .update({ ocorrencias: Number(already.ocorrencias ?? 1) + 1, importacao_id: lote.id })
-          .eq("id", already.id);
-      } else {
-        pendencias++;
-        await supabase.from("pendencias_vinculo").insert({
-          importacao_id: lote.id,
-          pedido_id: pedidoId,
-          tipo: pen.tipo,
-          nome_externo: pen.nome,
-          codigo_externo: pen.codigo ?? null,
-          ocorrencias: 1,
-          status: "aberta",
-        });
-      }
-    }
+async function confirmImport(preview: ImportPreview): Promise<ImportWiseResult> {
+  const { data, error } = await supabase.rpc("importar_pedidos_wise", {
+    p_arquivo: preview.filename,
+    p_formato: preview.formato,
+    p_hash: preview.hash,
+    p_pedidos: toRpcPedidos(preview.pedidos),
+    p_ignoradas: preview.ignoradas.map((i) => ({ motivo: i.motivo })),
+  });
+  if (error) {
+    console.error("importar_pedidos_wise", error);
+    throw new Error(error.message || "Erro ao gravar importação");
   }
+  const row = data as ImportWiseResult;
+  return {
+    lote_id: row.lote_id,
+    novos: Number(row.novos ?? 0),
+    atualizados: Number(row.atualizados ?? 0),
+    itens: Number(row.itens ?? 0),
+    pendencias: Number(row.pendencias ?? 0),
+    ignoradas: Array.isArray(row.ignoradas) ? row.ignoradas : [],
+    status: row.status,
+  };
+}
 
-  await supabase
-    .from("importacoes_pedido")
-    .update({
-      pedidos_novos: novos,
-      pedidos_atualizados: atualizados,
-      itens,
-      pendencias,
-      linhas_ignoradas: ignoradas.length,
-      ignoradas_motivo: ignoradas,
-    })
-    .eq("id", lote.id);
+export function usePreviewWiseImport() {
+  return useMutation({
+    mutationFn: buildImportPreview,
+  });
+}
 
-  return { novos, atualizados, itens, pendencias, ignoradas };
+export function useConfirmWiseImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: confirmImport,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pedidos"] });
+      qc.invalidateQueries({ queryKey: ["pendencias-vinculo"] });
+      qc.invalidateQueries({ queryKey: ["importacoes"] });
+    },
+  });
 }
 
 export function useImportWisePedidos() {
@@ -262,24 +196,8 @@ export function useImportWisePedidos() {
       destinatarios: { id: string; nome: string }[];
       clientes?: { id: string; nome: string; cnpj?: string | null }[];
     }): Promise<ImportWiseResult> => {
-      const parsed = parseWisePedido(payload.file);
-      if (!parsed.ok) throw new Error(parsed.error);
-
-      const { data: aliases } = await supabase.from("aliases").select("tipo, nome_externo, codigo_externo, entidade_id");
-      const maps = mapsFromCadastros(
-        payload.fornecedores,
-        payload.produtos,
-        payload.destinatarios,
-        payload.clientes ?? [],
-        (aliases ?? []) as AliasRow[]
-      );
-      const pedidos = buildWisePedidos(parsed.rows, maps);
-      return upsertWisePedidos(
-        pedidos,
-        payload.created_by,
-        payload.filename,
-        payload.filename.toLowerCase().endsWith(".csv") ? "csv" : "xlsx"
-      );
+      const preview = await buildImportPreview(payload);
+      return confirmImport(preview);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pedidos"] });
@@ -325,7 +243,20 @@ export function useSyncWisePedidos() {
         (aliases ?? []) as AliasRow[]
       );
       const pedidos = buildWisePedidos(rows, maps);
-      const upserted = await upsertWisePedidos(pedidos, payload.created_by, "sync-wise-api", "api");
+      const preview: ImportPreview = {
+        hash: "sync-wise-api",
+        filename: "sync-wise-api",
+        formato: "api",
+        linhasLidas: rows.length,
+        pedidos,
+        ignoradas: [],
+        semItens: pedidos.every((p) => !p.itens.length),
+        semPreco: pedidos.reduce((n, p) => n + p.itens.filter((i) => i.preco_unitario == null).length, 0),
+        unidadeVazia: 0,
+        existentes: [],
+        arquivoAnterior: null,
+      };
+      const upserted = await confirmImport(preview);
       return { ...upserted, source: result?.source ?? "api", probed: result?.probed ?? [] };
     },
     onSuccess: () => {
@@ -342,11 +273,42 @@ export function useImportacoes() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("importacoes_pedido")
-        .select("*, profiles:usuario_id(nome)")
+        .select("*, profiles:usuario_id(nome), desfeita:desfeita_por(nome)")
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(50);
       if (error) throw error;
       return data ?? [];
+    },
+  });
+}
+
+export function useDesfazerImportacao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (importacaoId: string) => {
+      const { data, error } = await supabase.rpc("desfazer_importacao", { p_importacao_id: importacaoId });
+      if (error) throw new Error(error.message);
+      return data as { removidos: number; mantidos: { codigo: string; motivo: string }[]; pendencias_removidas: number };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pedidos"] });
+      qc.invalidateQueries({ queryKey: ["pendencias-vinculo"] });
+      qc.invalidateQueries({ queryKey: ["importacoes"] });
+    },
+  });
+}
+
+export function useLimparPendenciasLote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (importacaoId: string) => {
+      const { data, error } = await supabase.rpc("limpar_pendencias_importacao", { p_importacao_id: importacaoId });
+      if (error) throw new Error(error.message);
+      return Number(data ?? 0);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pendencias-vinculo"] });
+      qc.invalidateQueries({ queryKey: ["importacoes"] });
     },
   });
 }
@@ -371,7 +333,10 @@ export function useResolverPendencia() {
       if (payload.acao === "criar") {
         const table = payload.tipo === "fornecedor" ? "fornecedores" : payload.tipo === "produto" ? "produtos" : "destinatarios";
         const row: Record<string, unknown> = { nome: payload.criarNome ?? payload.nomeExterno };
-        if (payload.tipo === "produto") row.unidade = "cx";
+        if (payload.tipo === "produto") {
+          row.unidade = "UN";
+          if (payload.codigoExterno) row.codigo = payload.codigoExterno;
+        }
         const { data, error } = await supabase.from(table).insert(row).select("id").single();
         if (error) throw error;
         entidadeId = data.id;
@@ -409,14 +374,37 @@ export function useResolverPendencia() {
         .select("pedido_id")
         .single();
 
+      if (pend?.pedido_id && entidadeId && payload.acao !== "dispensar") {
+        if (payload.tipo === "produto") {
+          const { data: loose } = await supabase
+            .from("itens_pedido")
+            .select("id, nome_externo, codigo_externo")
+            .eq("pedido_id", pend.pedido_id)
+            .is("produto_id", null);
+          const ids = (loose ?? [])
+            .filter((i) => i.nome_externo === payload.nomeExterno || (payload.codigoExterno && i.codigo_externo === payload.codigoExterno))
+            .map((i) => i.id);
+          if (ids.length) {
+            await supabase.from("itens_pedido").update({ produto_id: entidadeId }).in("id", ids);
+          }
+        }
+        if (payload.tipo === "fornecedor") {
+          await supabase.from("pedidos_recebimento").update({ fornecedor_id: entidadeId }).eq("id", pend.pedido_id);
+        }
+      }
+
       if (pend?.pedido_id) {
         const { count } = await supabase
           .from("pendencias_vinculo")
           .select("id", { count: "exact", head: true })
           .eq("pedido_id", pend.pedido_id)
+          .eq("tipo", "fornecedor")
           .eq("status", "aberta");
         if (!count) {
-          await supabase.from("pedidos_recebimento").update({ status: "pendente" }).eq("id", pend.pedido_id);
+          const { data: ped } = await supabase.from("pedidos_recebimento").select("status, fornecedor_id").eq("id", pend.pedido_id).maybeSingle();
+          if (ped?.status === "aguardando_vinculo" && ped.fornecedor_id) {
+            await supabase.from("pedidos_recebimento").update({ status: "pendente" }).eq("id", pend.pedido_id);
+          }
         }
       }
     },
@@ -425,6 +413,34 @@ export function useResolverPendencia() {
       qc.invalidateQueries({ queryKey: ["aliases"] });
       qc.invalidateQueries({ queryKey: ["pedidos"] });
       qc.invalidateQueries({ queryKey: ["cadastros"] });
+      qc.invalidateQueries({ queryKey: ["conferencia"] });
+    },
+  });
+}
+
+export function useAliasRapido() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      tipo: "fornecedor" | "produto";
+      nomeExterno: string;
+      codigoExterno?: string | null;
+      entidadeId: string;
+    }) => {
+      const { error } = await supabase.from("aliases").upsert(
+        {
+          tipo: payload.tipo,
+          nome_externo: payload.nomeExterno,
+          codigo_externo: payload.codigoExterno ?? null,
+          entidade_id: payload.entidadeId,
+          origem: "wise",
+        },
+        { onConflict: "tipo,origem,nome_externo" }
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["aliases"] });
     },
   });
 }

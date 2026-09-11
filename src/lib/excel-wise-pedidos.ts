@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { normalizeKey, pickColumn } from "./normalize";
+import { parseBrNumber } from "./parse-br-number";
 
 export type WisePedidoRow = {
   pedido: string;
@@ -13,10 +14,18 @@ export type WisePedidoRow = {
   loja: string;
   data_prevista: string | null;
   familia: string;
+  linha?: number;
+};
+
+export type LinhaIgnorada = {
+  linha: number;
+  coluna: string;
+  valor: string;
+  motivo: string;
 };
 
 export type WiseParseResult =
-  | { ok: true; rows: WisePedidoRow[]; columns: string[] }
+  | { ok: true; rows: WisePedidoRow[]; columns: string[]; ignoradas: LinhaIgnorada[]; sheet: string }
   | { ok: false; error: string; columns: string[] };
 
 const COL = {
@@ -53,9 +62,31 @@ function asDate(value: unknown): string | null {
   return s || null;
 }
 
+function pickSheetName(names: string[]): string {
+  const pedido = names.find((n) => {
+    const k = normalizeKey(n);
+    return k === "pedido" || k === "pedido wise";
+  });
+  if (pedido) return pedido;
+  const data = names.find((n) => {
+    const k = normalizeKey(n);
+    return !k.includes("como preencher") && !k.includes("instrucao") && !k.includes("instrucoes");
+  });
+  return data ?? names[0];
+}
+
+function rawLabel(raw: unknown): string {
+  if (raw == null) return "";
+  return String(raw);
+}
+
 export function parseWisePedido(file: ArrayBuffer): WiseParseResult {
   const wb = XLSX.read(file, { type: "array", cellDates: true });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
+  if (!wb.SheetNames.length) {
+    return { ok: false, error: "Arquivo sem abas.", columns: [] };
+  }
+  const sheetName = pickSheetName(wb.SheetNames);
+  const sheet = wb.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
   const columns = rows[0] ? Object.keys(rows[0]) : [];
 
@@ -70,7 +101,7 @@ export function parseWisePedido(file: ArrayBuffer): WiseParseResult {
   if (!hasQtd) {
     return {
       ok: false,
-      error: `Coluna de quantidade ausente. Colunas lidas: ${columns.join(", ") || "(nenhuma)"}`,
+      error: `Coluna de quantidade ausente. Colunas lidas: ${columns.join(", ") || "(nenhuma)"}. Este arquivo parece ser só cabeçalho (exportação Wise sem itens).`,
       columns,
     };
   }
@@ -83,30 +114,65 @@ export function parseWisePedido(file: ArrayBuffer): WiseParseResult {
   }
 
   const parsed: WisePedidoRow[] = [];
-  for (const r of rows) {
+  const ignoradas: LinhaIgnorada[] = [];
+
+  rows.forEach((r, idx) => {
+    const linha = idx + 2;
     const pedido = String(pickColumn(r, COL.pedido) ?? "").trim();
     const fornecedor = String(pickColumn(r, COL.fornecedor) ?? "").trim();
     const produto = String(pickColumn(r, COL.produto) ?? "").trim();
-    const quantidade = Number(pickColumn(r, COL.quantidade) ?? 0);
-    if (!pedido && !fornecedor && !produto) continue;
+    if (!pedido && !fornecedor && !produto) return;
+
+    if (!pedido) {
+      ignoradas.push({ linha, coluna: "pedido", valor: "", motivo: `Linha ${linha}: pedido vazio` });
+      return;
+    }
+
+    const qtdRaw = pickColumn(r, COL.quantidade);
+    const qtdParsed = parseBrNumber(qtdRaw);
+    if (!qtdParsed.ok || qtdParsed.value <= 0) {
+      ignoradas.push({
+        linha,
+        coluna: "quantidade",
+        valor: rawLabel(qtdRaw),
+        motivo: `Linha ${linha}: quantidade '${rawLabel(qtdRaw)}' não é um número válido (zero, vazia ou inválida)`,
+      });
+      return;
+    }
+
+    const precoRaw = pickColumn(r, COL.preco);
+    let preco_unitario: number | null = null;
+    if (precoRaw != null && precoRaw !== "") {
+      const precoParsed = parseBrNumber(precoRaw);
+      if (!precoParsed.ok || precoParsed.value < 0) {
+        ignoradas.push({
+          linha,
+          coluna: "preco_unitario",
+          valor: rawLabel(precoRaw),
+          motivo: `Linha ${linha}: preco_unitario '${rawLabel(precoRaw)}' não é um número`,
+        });
+        return;
+      }
+      preco_unitario = precoParsed.value;
+    }
+
     parsed.push({
       pedido,
       codigo_fornecedor: String(pickColumn(r, COL.codigoFornecedor) ?? "").trim(),
       fornecedor,
       codigo_produto: String(pickColumn(r, COL.codigoProduto) ?? "").trim(),
       produto,
-      quantidade,
-      unidade: String(pickColumn(r, COL.unidade) ?? "cx").trim() || "cx",
-      preco_unitario: pickColumn(r, COL.preco) == null || pickColumn(r, COL.preco) === ""
-        ? null
-        : Number(pickColumn(r, COL.preco)),
+      quantidade: qtdParsed.value,
+      unidade: String(pickColumn(r, COL.unidade) ?? "").trim(),
+      preco_unitario,
       loja: String(pickColumn(r, COL.loja) ?? "").trim(),
       data_prevista: asDate(pickColumn(r, COL.data)),
       familia: String(pickColumn(r, COL.familia) ?? "").trim(),
+      linha,
     });
-  }
+  });
 
-  return { ok: true, rows: parsed, columns };
+  return { ok: true, rows: parsed, columns, ignoradas, sheet: sheetName };
 }
 
 export type CadastroMaps = {
@@ -132,7 +198,7 @@ export function applyAliases(maps: CadastroMaps, aliases: AliasRow[]): CadastroM
     fornecedorByCode: new Map(maps.fornecedorByCode),
     produtoByName: new Map(maps.produtoByName),
     produtoByCode: new Map(maps.produtoByCode),
-      destinatarioByName: new Map(maps.destinatarioByName),
+    destinatarioByName: new Map(maps.destinatarioByName),
     clienteByName: new Map(maps.clienteByName),
     clienteByCnpj: new Map(maps.clienteByCnpj),
   };
@@ -167,6 +233,8 @@ export type WiseBuildItem = {
   rateio: { destinatario_id: string | null; destinatario_nome: string; quantidade: number }[];
 };
 
+export type WisePendencia = { tipo: "fornecedor" | "produto"; nome: string; codigo?: string };
+
 export type WiseBuildPedido = {
   wise_pedido_id: string;
   fornecedor_id: string | null;
@@ -174,7 +242,7 @@ export type WiseBuildPedido = {
   codigo_fornecedor: string;
   data_prevista: string | null;
   itens: WiseBuildItem[];
-  pendencias: { tipo: "fornecedor" | "produto" | "destinatario"; nome: string; codigo?: string }[];
+  pendencias: WisePendencia[];
 };
 
 export function buildWisePedidos(rows: WisePedidoRow[], maps: CadastroMaps): WiseBuildPedido[] {
@@ -208,21 +276,22 @@ export function buildWisePedidos(rows: WisePedidoRow[], maps: CadastroMaps): Wis
       });
     }
     const ped = byPedido.get(row.pedido)!;
-    if (!ped.fornecedor_id && !fornecedor_id) {
-      if (row.fornecedor && !ped.pendencias.some((p) => p.tipo === "fornecedor" && p.nome === row.fornecedor)) {
+    if (!ped.fornecedor_id && fornecedor_id) ped.fornecedor_id = fornecedor_id;
+    if (!ped.fornecedor_id && row.fornecedor) {
+      if (!ped.pendencias.some((p) => p.tipo === "fornecedor" && p.nome === row.fornecedor)) {
         ped.pendencias.push({ tipo: "fornecedor", nome: row.fornecedor, codigo: row.codigo_fornecedor });
       }
     }
-    if (!produto_id) {
-      ped.pendencias.push({ tipo: "produto", nome: row.produto || row.codigo_produto, codigo: row.codigo_produto });
-    }
-    if (row.loja && !cliente_id && !dest_id) {
-      if (!ped.pendencias.some((p) => p.tipo === "destinatario" && p.nome === row.loja)) {
-        ped.pendencias.push({ tipo: "destinatario", nome: row.loja });
+    if (!produto_id && (row.produto || row.codigo_produto)) {
+      const nome = row.produto || row.codigo_produto;
+      if (!ped.pendencias.some((p) => p.tipo === "produto" && p.nome === nome)) {
+        ped.pendencias.push({ tipo: "produto", nome, codigo: row.codigo_produto });
       }
     }
 
-    let item = ped.itens.find((i) => (produto_id && i.produto_id === produto_id) || (!produto_id && i.produto_nome === row.produto));
+    let item = ped.itens.find(
+      (i) => (produto_id && i.produto_id === produto_id) || (!produto_id && i.produto_nome === row.produto && i.codigo_produto === row.codigo_produto)
+    );
     if (!item) {
       item = {
         produto_id,
@@ -240,6 +309,7 @@ export function buildWisePedidos(rows: WisePedidoRow[], maps: CadastroMaps): Wis
     item.quantidade += row.quantidade || 0;
     if (row.familia) item.familia = row.familia;
     if (row.preco_unitario != null) item.preco_unitario = row.preco_unitario;
+    if (row.unidade) item.unidade = row.unidade;
     if (row.loja) {
       const existing = item.rateio.find((r) => r.destinatario_nome === row.loja || (dest_id && r.destinatario_id === dest_id));
       if (existing) existing.quantidade += row.quantidade || 0;
@@ -251,22 +321,68 @@ export function buildWisePedidos(rows: WisePedidoRow[], maps: CadastroMaps): Wis
 }
 
 export function downloadWiseModelo() {
-  const ws = XLSX.utils.json_to_sheet([
+  const pedidos = [
     {
       pedido: "W-2026-1001",
-      codigo_fornecedor: "F001",
-      fornecedor: "Horta Verde",
-      codigo_produto: "ALF-01",
-      produto: "Alface Crespa",
-      quantidade: 40,
-      unidade: "cx",
-      preco_unitario: 12.5,
-      loja: "Campo Alegre",
+      codigo_fornecedor: "",
+      fornecedor: "CARLA PIEDADE (MARCIO HENRIQUE DE OLIVEIRA)",
+      codigo_produto: "956",
+      produto: "SALADA TROPICAL HIG",
+      quantidade: "40",
+      unidade: "UN",
+      preco_unitario: "12,50",
       data_prevista: "2026-09-08",
-      familia: "Folhas",
+      familia: "1 · Alfaces/folhas",
     },
-  ]);
+    {
+      pedido: "W-2026-1001",
+      codigo_fornecedor: "",
+      fornecedor: "CARLA PIEDADE (MARCIO HENRIQUE DE OLIVEIRA)",
+      codigo_produto: "312",
+      produto: "ALFACE CRESPA",
+      quantidade: "1.234,50",
+      unidade: "UN",
+      preco_unitario: "2,50",
+      data_prevista: "2026-09-08",
+      familia: "1 · Alfaces/folhas",
+    },
+    {
+      pedido: "W-2026-1002",
+      codigo_fornecedor: "",
+      fornecedor: "HORTIFRUTI VALE VERDE",
+      codigo_produto: "880",
+      produto: "COUVE MANTEIGA",
+      quantidade: "80",
+      unidade: "UN",
+      preco_unitario: "3,20",
+      data_prevista: "2026-09-09",
+      familia: "4 · Couve/ervas",
+    },
+  ];
+  const ws = XLSX.utils.json_to_sheet(pedidos);
+  const instrucoes = [
+    { coluna: "pedido", obrigatorio: "sim", formato: "texto", exemplo: "W-2026-1001", notas: "Nº do pedido no Wise. Também aceita: nº pedido, numero pedido, codigo." },
+    { coluna: "quantidade", obrigatorio: "sim", formato: "1.234,50 ou 1234.50 ou 1234", exemplo: "1.234,50", notas: "Também aceita qtd, qtde, caixas, qty. Zero/vazia/inválida ignora a linha." },
+    { coluna: "fornecedor", obrigatorio: "não", formato: "nome como no Wise", exemplo: "CARLA PIEDADE (MARCIO HENRIQUE DE OLIVEIRA)", notas: "Sem fornecedor o pedido fica aguardando vínculo. Código de fornecedor é opcional e costuma vir vazio no Wise." },
+    { coluna: "codigo_fornecedor", obrigatorio: "não", formato: "texto", exemplo: "", notas: "A lista de compra do Wise não traz este campo." },
+    { coluna: "produto", obrigatorio: "não", formato: "descrição", exemplo: "SALADA TROPICAL HIG", notas: "Também aceita descricao, item. Sem cadastro o item entra como 'a vincular'." },
+    { coluna: "codigo_produto", obrigatorio: "não", formato: "numérico do Wise", exemplo: "956", notas: "Também aceita sku. No Wise o produto é numérico." },
+    { coluna: "unidade", obrigatorio: "não", formato: "UN / PC / KG", exemplo: "UN", notas: "Conferência é na unidade do pedido, não em caixas. Vazio não assume cx — a prévia avisa." },
+    { coluna: "preco_unitario", obrigatorio: "não", formato: "2,50 ou 2.50", exemplo: "12,50", notas: "Sem preço o item fica estimado na falta/quebra." },
+    { coluna: "data_prevista", obrigatorio: "não", formato: "AAAA-MM-DD ou DD/MM/AAAA", exemplo: "2026-09-08", notas: "Se vazio, usa o parâmetro dias_entrega_prevista." },
+    { coluna: "familia", obrigatorio: "não", formato: "família do Wise (1 a 7)", exemplo: "1 · Alfaces/folhas", notas: "Não use Folhas/Frutos/Raízes." },
+    { coluna: "(loja)", obrigatorio: "não lida para compra", formato: "—", exemplo: "", notas: "Rateio por loja saiu da compra. Se a coluna existir, é ignorada para vínculo." },
+  ];
+  const wsHelp = XLSX.utils.json_to_sheet(instrucoes);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Pedido Wise");
+  XLSX.utils.book_append_sheet(wb, ws, "Pedido");
+  XLSX.utils.book_append_sheet(wb, wsHelp, "Como preencher");
   XLSX.writeFile(wb, "modelo-pedido-wise.xlsx");
+}
+
+export async function hashArquivo(buf: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }

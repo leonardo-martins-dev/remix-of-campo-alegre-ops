@@ -71,6 +71,7 @@ type LinhaItem = {
   foto_url: string | null;
   preco?: number | null;
   toleranciaPct?: number | null;
+  aVincular?: boolean;
 };
 
 function Page() {
@@ -160,9 +161,11 @@ function mapToLinha(
       id?: string;
       quantidade_pedida: number;
       preco_unitario?: number | null;
+      nome_externo?: string | null;
+      produto_id?: string | null;
       produtos: { nome: string; unidade: string; tolerancia_pct?: number | null } | { nome: string; unidade: string; tolerancia_pct?: number | null }[] | null;
       clientes?: { nome: string } | { nome: string }[] | null;
-    } | { id?: string; quantidade_pedida: number; preco_unitario?: number | null; produtos: unknown; clientes?: unknown }[] | null;
+    } | { id?: string; quantidade_pedida: number; preco_unitario?: number | null; nome_externo?: string | null; produto_id?: string | null; produtos: unknown; clientes?: unknown }[] | null;
   }
 ): LinhaItem {
   const ip = one(ic.itens_pedido);
@@ -170,8 +173,9 @@ function mapToLinha(
   return {
     id: ic.id,
     itemPedidoId: ip?.id,
-    produto: prod?.nome ?? "—",
+    produto: prod?.nome ?? (ip as { nome_externo?: string | null })?.nome_externo ?? "—",
     unid: (ip as { unidade?: string | null })?.unidade || prod?.unidade || "un",
+    aVincular: !(ip as { produto_id?: string | null })?.produto_id,
     pedido: Number(ip?.quantidade_pedida ?? 0),
     cliente: one(ip?.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? null,
     recebido: Number(ic.quantidade_recebida),
@@ -353,13 +357,14 @@ function ConferenciaItens({
   };
 
   const stats = useMemo(() => {
-    const total = itens.length;
-    const conferidos = itens.filter((i) => i.conferido).length;
+    const contaveis = itens.filter((i) => !i.aVincular);
+    const total = contaveis.length;
+    const conferidos = contaveis.filter((i) => i.conferido).length;
     const faltantes = total - conferidos;
     let divergencias = 0;
     let comSaldo = 0;
     let sobraUn = 0;
-    for (const it of itens) {
+    for (const it of contaveis) {
       const saldoRow = (saldosItem as { item_pedido_id: string; recebido_acumulado: number }[])
         .find((s) => s.item_pedido_id === it.itemPedidoId);
       const ja = Number(saldoRow?.recebido_acumulado ?? 0);
@@ -683,13 +688,16 @@ function ConferenciaItens({
               const dentroTol = Math.abs(Math.max(0, gap)) <= limite;
               return (
                 <tr key={it.id} className="border-t border-border">
-                  <td className="px-4 py-3 font-semibold text-navy">{it.produto}</td>
+                  <td className="px-4 py-3 font-semibold text-navy">
+                    {it.produto}
+                    {it.aVincular && <span className="ml-2 chip chip-warn">produto a vincular</span>}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">{it.unid}</td>
                   <td className="px-4 py-3 text-right text-ink">{it.pedido}</td>
                   <td className="px-4 py-3 text-right text-muted-foreground">{jaRecebido}</td>
                   <td className="px-4 py-3">
-                    {readOnly ? (
-                      <span className="font-semibold tabular-nums">{it.recebido}</span>
+                    {readOnly || it.aVincular ? (
+                      <span className="font-semibold tabular-nums">{it.aVincular ? "—" : it.recebido}</span>
                     ) : (
                       <NumberStepper value={it.recebido} onChange={(v) => update(idx, v)} />
                     )}
@@ -722,7 +730,7 @@ function ConferenciaItens({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
-                      {!readOnly && pendente && (
+                      {!readOnly && pendente && !it.aVincular && (
                         <button
                           type="button"
                           onClick={() => conferirIgualPedido(idx)}

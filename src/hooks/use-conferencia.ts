@@ -10,7 +10,7 @@ const CONFERENCIA_SELECT = `
     id, quantidade_recebida, conferido, divergencia, quantidade_divergencia,
     tem_problema_qualidade, quantidade_qualidade, foto_url,
     dentro_tolerancia, valor_divergencia, estimado, tolerancia_pct_aplicada,
-    itens_pedido(id, quantidade_pedida, preco_unitario, unidade, cliente_id, clientes(nome), produtos(nome, unidade, tipo_caixa_padrao_id, tolerancia_pct))
+    itens_pedido(id, quantidade_pedida, preco_unitario, unidade, cliente_id, nome_externo, codigo_externo, produto_id, clientes(nome), produtos(nome, unidade, tipo_caixa_padrao_id, tolerancia_pct))
   )
 `;
 

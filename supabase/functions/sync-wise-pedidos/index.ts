@@ -27,10 +27,26 @@ function pick(obj: Record<string, unknown>, keys: string[]): unknown {
   return "";
 }
 
+function parseBrNumber(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  const t = String(raw ?? "").trim().replace(/\s/g, "");
+  if (!t) return null;
+  if (/^-?\d{1,3}(\.\d{3})+$/.test(t)) return Number(t.replace(/\./g, ""));
+  if (/^-?\d{1,3}(\.\d{3})+,\d+$/.test(t) || /^-?\d+,\d+$/.test(t)) {
+    const n = Number(t.replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+  if (/^-?\d+(\.\d+)?$/.test(t)) {
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 function normalizeRow(raw: Record<string, unknown>): WisePedidoRow | null {
   const pedido = String(pick(raw, ["pedido", "n_pedido", "numero_pedido", "wise_pedido_id", "codigo"]) ?? "").trim();
   const produto = String(pick(raw, ["produto", "descricao", "item"]) ?? "").trim();
-  const quantidade = Number(pick(raw, ["quantidade", "qtd", "qtde", "qty"]) ?? 0);
+  const quantidade = parseBrNumber(pick(raw, ["quantidade", "qtd", "qtde", "qty"])) ?? 0;
   if (!pedido || (!produto && !pick(raw, ["codigo_produto", "sku"])) || !(quantidade > 0)) return null;
   const precoRaw = pick(raw, ["preco_unitario", "preco", "valor_unitario"]);
   return {
@@ -40,8 +56,8 @@ function normalizeRow(raw: Record<string, unknown>): WisePedidoRow | null {
     codigo_produto: String(pick(raw, ["codigo_produto", "sku"]) ?? "").trim(),
     produto,
     quantidade,
-    unidade: String(pick(raw, ["unidade", "un"]) ?? "un").trim() || "un",
-    preco_unitario: precoRaw == null || precoRaw === "" ? null : Number(precoRaw),
+    unidade: String(pick(raw, ["unidade", "un"]) ?? "").trim(),
+    preco_unitario: precoRaw == null || precoRaw === "" ? null : parseBrNumber(precoRaw),
     loja: String(pick(raw, ["loja", "cliente", "filial", "cnpj"]) ?? "").trim(),
     data_prevista: String(pick(raw, ["data_prevista", "data_entrega"]) ?? "").slice(0, 10) || null,
   };

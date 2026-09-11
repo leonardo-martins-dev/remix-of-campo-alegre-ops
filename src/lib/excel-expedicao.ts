@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { parseBrNumberLoose as parseBrQuantity } from "./parse-br-number";
 
 /** Colunas aceitas: codigo_carga, cliente, produto, quantidade (+ motorista, caixas G/I/P opcionais) */
 export const EXPEDICAO_EXCEL_COLUNAS = [
@@ -183,16 +184,6 @@ export type WiseExportacaoRow = {
 
 export function normalizeProdutoNome(n: string): string {
   return n.trim().toUpperCase().replace(/\s+/g, " ");
-}
-
-function parseBrQuantity(raw: unknown): number {
-  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-  const t = String(raw ?? "").trim();
-  if (!t) return 0;
-  if (/^\d{1,3}(\.\d{3})+$/.test(t)) return Number(t.replace(/\./g, ""));
-  const normalized = t.replace(/\./g, "").replace(",", ".");
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : 0;
 }
 
 function pickCol(row: Record<string, unknown>, keys: string[]): string {

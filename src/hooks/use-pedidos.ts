@@ -92,7 +92,7 @@ export function usePedido(pedidoId: string | null) {
           *,
           fornecedores(nome),
           itens_pedido(
-            id, quantidade_pedida, preco_unitario, unidade, cliente_id,
+            id, quantidade_pedida, preco_unitario, unidade, cliente_id, nome_externo, codigo_externo, produto_id,
             produtos(id, nome, unidade, codigo, tolerancia_pct, tipo_caixa_padrao_id),
             clientes(id, nome, cnpj),
             itens_pedido_rateio(id, quantidade, destinatarios(id, nome))

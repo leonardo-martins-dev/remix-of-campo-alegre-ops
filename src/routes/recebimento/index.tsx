@@ -26,17 +26,18 @@ import {
   usePedidosDia,
   usePedidosRealtime,
   useCreatePedidoManual,
-  useImportPedidos,
   useFillRate,
+  useAliases,
   useUpdatePedidoAdmin,
   useEncerrarPedido,
 } from "@/hooks/use-pedidos";
 import { useFornecedores, useProdutos, useDestinatarios, useClientes } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
 import { resolveIsAdmin } from "@/lib/roles";
-import { parsePedidosExcel, buildPedidosFromExcel } from "@/lib/excel";
-import { downloadWiseModelo } from "@/lib/excel-wise-pedidos";
-import { useImportWisePedidos, useSyncWisePedidos } from "@/hooks/use-wise-pedidos";
+import { downloadWiseModelo, type AliasRow } from "@/lib/excel-wise-pedidos";
+import { useConfirmWiseImport, usePreviewWiseImport, useSyncWisePedidos, type ImportPreview, type ImportWiseResult } from "@/hooks/use-wise-pedidos";
+import { ImportacaoWiseDialog } from "@/components/importacao-wise-dialog";
+import { ImportacoesPanel } from "@/components/importacoes-panel";
 import { usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { formatDateBRT, formatTime, todayBRT } from "@/lib/utils-date";
 import { Textarea } from "@/components/ui/textarea";
@@ -87,7 +88,7 @@ type ManualItem = {
 const statusChip = (s: string) => {
   if (s === "conferido" || s === "recebido") return <span className="chip chip-ok">Recebido</span>;
   if (s === "parcial") return <span className="chip chip-warn">Parcial</span>;
-  if (s === "aguardando_vinculo") return <span className="chip chip-warn">Aguardando vínculo</span>;
+  if (s === "aguardando_vinculo") return <span className="chip chip-warn">Fornecedor não reconhecido</span>;
   if (s === "encerrado") return <span className="chip">Encerrado</span>;
   if (s === "aguardando_liberacao") return <span className="chip chip-warn">Aguardando liberação</span>;
   if (s === "divergencia") return <span className="chip chip-danger">Com divergência</span>;
@@ -145,7 +146,7 @@ function origemLabel(o: string) {
 }
 
 function Page() {
-  const [tab, setTab] = useState<"todos" | "pendente" | "parcial" | "conferido" | "divergencia" | "aguardando_liberacao" | "aguardando_vinculo" | "encerrado">("todos");
+  const [tab, setTab] = useState<"todos" | "pendente" | "parcial" | "conferido" | "divergencia" | "aguardando_liberacao" | "aguardando_vinculo" | "encerrado" | "importacoes">("todos");
   const [dataFiltro, setDataFiltro] = useState(todayBRT());
   const [busca, setBusca] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
@@ -155,6 +156,8 @@ function Page() {
   const [encerrarId, setEncerrarId] = useState<string | null>(null);
   const [encerrarMotivo, setEncerrarMotivo] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [lastImport, setLastImport] = useState<ImportWiseResult | null>(null);
 
   const { user, profile, isAdmin } = useAuth();
   usePedidosRealtime();
@@ -165,9 +168,10 @@ function Page() {
   const { data: destinatarios = [] } = useDestinatarios();
   const { data: clientes = [] } = useClientes();
   const createManual = useCreatePedidoManual();
-  const importPedidos = useImportPedidos();
-  const importWise = useImportWisePedidos();
+  const previewMut = usePreviewWiseImport();
+  const confirmMut = useConfirmWiseImport();
   const syncWise = useSyncWisePedidos();
+  const { data: aliases = [] } = useAliases();
   const { data: pendencias = [] } = usePendenciasVinculo();
   const updatePedido = useUpdatePedidoAdmin();
   const encerrarPedido = useEncerrarPedido();
@@ -210,44 +214,24 @@ function Page() {
     return { totalItens, itensPendentes, divergencias, fillAvg };
   }, [typedPedidos, fillRateData]);
 
-  const nameMaps = useMemo(
-    () => ({
-      fornecedorByName: new Map(fornecedores.map((f) => [f.nome.trim(), f.id])),
-      produtoByName: new Map(produtos.map((p) => [p.nome.trim(), p.id])),
-      destinatarioByName: new Map(destinatarios.map((d) => [d.nome.trim(), d.id])),
-    }),
-    [fornecedores, produtos, destinatarios]
-  );
-
   const handleExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !user?.id) return;
-
     try {
       const buf = await file.arrayBuffer();
-      try {
-        const result = await importWise.mutateAsync({
-          file: buf,
-          filename: file.name,
-          created_by: user.id,
-          fornecedores,
-          produtos: produtos.map((p) => ({ id: p.id, nome: p.nome })),
-          destinatarios,
-          clientes,
-        });
-        toast.success(`${result.novos} novos · ${result.atualizados} atualizados · ${result.pendencias} pendências`);
-        return;
-      } catch (wiseErr) {
-        const rows = parsePedidosExcel(buf);
-        if (!rows.length) throw wiseErr;
-        const built = buildPedidosFromExcel(rows, nameMaps);
-        if (!built.length) throw wiseErr;
-        await importPedidos.mutateAsync(built.map((p) => ({ ...p, created_by: user.id })));
-        toast.success(`${built.length} pedido(s) importado(s)`);
-      }
+      const next = await previewMut.mutateAsync({
+        file: buf,
+        filename: file.name,
+        fornecedores,
+        produtos: produtos.map((p) => ({ id: p.id, nome: p.nome, codigo: p.codigo })),
+        destinatarios,
+        clientes,
+      });
+      setPreview(next);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao importar Excel");
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Erro ao ler o arquivo");
     }
   };
 
@@ -347,11 +331,19 @@ function Page() {
             </button>
             <button
               type="button"
-              disabled={importPedidos.isPending}
+              disabled={previewMut.isPending}
               onClick={() => fileRef.current?.click()}
               className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
             >
-              <FileSpreadsheet size={14} /> Importar pedido do Wise
+              <FileSpreadsheet size={14} /> Importar planilha (modelo)
+            </button>
+            <button
+              type="button"
+              disabled={previewMut.isPending}
+              onClick={() => fileRef.current?.click()}
+              className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+            >
+              <FileSpreadsheet size={14} /> Importar exportação do Wise
             </button>
             <button
               type="button"
@@ -392,6 +384,17 @@ function Page() {
         ]}
       />
 
+      {lastImport && (
+        <div className="mb-4 p-3 rounded-lg bg-primary-soft text-navy text-sm flex flex-wrap items-center justify-between gap-2">
+          <span>
+            Importação gravada: {lastImport.novos} novos · {lastImport.atualizados} atualizados · {lastImport.itens} itens · {lastImport.pendencias} pendências
+            {lastImport.ignoradas.length ? ` · ${lastImport.ignoradas.length} avisos` : ""}
+          </span>
+          <button type="button" className="text-xs font-semibold underline" onClick={() => setTab("importacoes")}>
+            Ver importações
+          </button>
+        </div>
+      )}
       {pendencias.length > 0 && (
         <div className="mb-4 p-3 rounded-lg bg-warning/15 text-navy text-sm">
           {pendencias.length} pendência(s) de vínculo — resolva em Configurações → Vínculos de importação.
@@ -421,6 +424,7 @@ function Page() {
               ["aguardando_liberacao", "Aguard. liberação"],
               ["divergencia", "Com divergência"],
               ["encerrado", "Encerrado"],
+              ["importacoes", "Importações"],
             ] as const
           ).map(([k, l]) => (
             <button
@@ -432,6 +436,9 @@ function Page() {
             </button>
           ))}
         </div>
+        {tab === "importacoes" ? (
+          <ImportacoesPanel canAdmin={canAdmin} />
+        ) : (
         <table className="w-full text-sm">
           <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
@@ -464,7 +471,9 @@ function Page() {
             {filtered.map((p) => (
               <tr key={p.id} className="border-t border-border hover:bg-secondary/30">
                 <td className="px-4 py-3 font-semibold text-navy">{p.codigo}</td>
-                <td className="px-4 py-3 text-ink">{p.fornecedores?.nome ?? "—"}</td>
+                <td className="px-4 py-3 text-ink">
+                  {p.fornecedores?.nome ?? (p.status === "aguardando_vinculo" ? "fornecedor não reconhecido" : "—")}
+                </td>
                 <td className="px-4 py-3 text-ink">{p.itens_pedido?.length ?? 0}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
@@ -519,7 +528,28 @@ function Page() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
+
+      {preview && (
+        <ImportacaoWiseDialog
+          preview={preview}
+          onClose={() => setPreview(null)}
+          confirming={confirmMut.isPending}
+          fornecedores={fornecedores.filter((f) => f.ativo !== false)}
+          produtos={produtos.map((p) => ({ id: p.id, nome: p.nome, codigo: p.codigo }))}
+          aliases={(aliases ?? []) as AliasRow[]}
+          destinatarios={destinatarios}
+          clientes={clientes}
+          onRebuild={setPreview}
+          onConfirm={async () => {
+            const result = await confirmMut.mutateAsync(preview);
+            setLastImport(result);
+            setPreview(null);
+            toast.success(`${result.novos} novos · ${result.atualizados} atualizados · ${result.pendencias} pendências`);
+          }}
+        />
+      )}
 
       <Dialog
         open={manualOpen}
