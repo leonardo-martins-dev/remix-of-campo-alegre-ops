@@ -260,7 +260,7 @@ function Page() {
       </div>
 
       {modo === "resumo" ? (
-        <div className="card-base overflow-hidden">
+        <div className="card-base overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
               <tr>
@@ -291,7 +291,7 @@ function Page() {
           </table>
         </div>
       ) : (
-        <div className="card-base overflow-hidden">
+        <div className="card-base overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
               <tr>

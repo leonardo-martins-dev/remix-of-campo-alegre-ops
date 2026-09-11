@@ -192,7 +192,7 @@ export function ImportacaoWiseDialog({
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md border px-3 py-2">
-      <div className="text-[11px] uppercase text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase text-muted-foreground">{label}</div>
       <div className="text-lg font-semibold">{value}</div>
     </div>
   );

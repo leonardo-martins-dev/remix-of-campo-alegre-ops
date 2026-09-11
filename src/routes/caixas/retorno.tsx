@@ -31,7 +31,7 @@ export const Route = createFileRoute("/caixas/retorno")({
 function Page() {
   const [view, setView] = useState<"painel" | "campo">("painel");
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div>
       <PageHeader
         title="Registro de Retorno"
         subtitle="Ranking e indicadores dos motoristas · modo campo para registro rápido"
@@ -191,7 +191,7 @@ function PhoneFrame() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-xs uppercase tracking-wider opacity-60">{label}</div>
-          <div className="text-[11px] opacity-50 mt-0.5">
+          <div className="text-xs opacity-50 mt-0.5">
             Saldo após retorno:{" "}
             <span className={`font-bold ${saldoAtual[tipo] < 0 ? "text-red-400" : ""}`}>
               {saldoAtual[tipo]}
@@ -260,7 +260,7 @@ function PhoneFrame() {
               style={{ background: "rgba(255,255,255,0.08)" }}
             >
               <div>
-                <div className="text-[10px] uppercase tracking-wider opacity-60">Loja</div>
+                <div className="text-xs uppercase tracking-wider opacity-60">Loja</div>
                 <div className="font-bold">{cliente?.nome ?? "—"}</div>
               </div>
               <ChevronDown size={16} />
@@ -285,7 +285,7 @@ function PhoneFrame() {
 
             {hasSaldoNegativo && (
               <div
-                className="mt-4 rounded-xl p-3 text-[11px]"
+                className="mt-4 rounded-xl p-3 text-xs"
                 style={{ background: "rgba(239,68,68,0.15)", color: "#FCA5A5" }}
               >
                 Saldo negativo detectado — verifique movimentações antes de registrar retorno.
@@ -300,7 +300,7 @@ function PhoneFrame() {
 
             {(isAdmin || !(profile as { motorista_id?: string } | null)?.motorista_id) && (
               <div className="mt-3">
-                <label className="text-[10px] uppercase opacity-60">Motorista</label>
+                <label className="text-xs uppercase opacity-60">Motorista</label>
                 <Select value={motoristaId} onValueChange={setMotoristaId}>
                   <SelectTrigger className="mt-1 bg-white/10 border-white/20 text-white h-9">
                     <SelectValue placeholder="Selecione o motorista" />
@@ -315,7 +315,7 @@ function PhoneFrame() {
             )}
 
             {offline && (
-              <div className="mt-4 rounded-xl p-3 flex items-center gap-2 text-[11px]" style={{ background: "rgba(240,169,43,0.12)", color: "#F0C97A" }}>
+              <div className="mt-4 rounded-xl p-3 flex items-center gap-2 text-xs" style={{ background: "rgba(240,169,43,0.12)", color: "#F0C97A" }}>
                 <WifiOff size={14} /> Funciona offline · sincroniza ao recuperar sinal
               </div>
             )}
@@ -438,7 +438,7 @@ function DesktopPanel() {
         </div>
       </div>
 
-      <div className="card-base overflow-hidden">
+      <div className="card-base overflow-x-auto">
         <div className="p-4 border-b border-border"><h3 className="text-sm font-bold text-navy">Últimos registros</h3></div>
         <table className="w-full text-sm">
           <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">

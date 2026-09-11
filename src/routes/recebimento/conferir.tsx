@@ -620,7 +620,7 @@ function ConferenciaItens({
           <div className="text-2xl font-bold text-navy tabular-nums">
             {stats.conferidos}/{stats.total}
           </div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">conferidos</div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">conferidos</div>
         </div>
       </div>
 
@@ -659,7 +659,7 @@ function ConferenciaItens({
         </div>
       </div>
 
-      <div className="card-base overflow-hidden">
+      <div className="card-base overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
@@ -916,7 +916,7 @@ function MiniStat({
             : "var(--navy)";
   return (
     <div className="card-base p-3">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="text-xl font-bold mt-1" style={{ color: c }}>
         {value}
       </div>

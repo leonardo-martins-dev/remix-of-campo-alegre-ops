@@ -213,7 +213,7 @@ function Page() {
             <div key={c.id} className="flex items-center gap-2">
               <span className="text-xs text-ink">{c.nome}</span>
               <div className="flex items-center">
-                <span className="px-2 h-8 bg-secondary border border-r-0 border-border rounded-l text-[10px] font-semibold text-muted-foreground flex items-center">
+                <span className="px-2 h-8 bg-secondary border border-r-0 border-border rounded-l text-xs font-semibold text-muted-foreground flex items-center">
                   R$
                 </span>
                 <input
@@ -296,7 +296,7 @@ function Page() {
         </div>
       )}
 
-      <div className="card-base overflow-hidden">
+      <div className="card-base overflow-x-auto">
         {dados.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhum dado de perda.</p>
         ) : (

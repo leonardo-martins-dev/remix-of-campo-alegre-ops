@@ -37,7 +37,7 @@ export function Donut({ segments, size = 160, thickness = 18, center }: { segmen
       {center && (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <div className="text-2xl font-bold text-navy">{center.value}</div>
-          <div className="text-[11px] text-muted-foreground uppercase tracking-wider">{center.label}</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wider">{center.label}</div>
         </div>
       )}
     </div>
@@ -72,7 +72,7 @@ export function ProgressRing({ value, size = 140, thickness = 12, label }: { val
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <div className="text-3xl font-bold text-navy">{value}%</div>
-        {label && <div className="text-[11px] text-muted-foreground uppercase tracking-wider">{label}</div>}
+        {label && <div className="text-xs text-muted-foreground uppercase tracking-wider">{label}</div>}
       </div>
     </div>
   );

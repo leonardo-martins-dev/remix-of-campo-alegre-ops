@@ -8,26 +8,43 @@ import { getIcon, slugToPath } from "@/lib/pages";
 import { initials } from "@/lib/utils-date";
 import { useGlobalSearch, useAlertas } from "@/hooks/use-dashboard";
 import { one } from "@/lib/embed";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
-export function AppShell() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const navigate = useNavigate();
-  const { profile, isAdmin, pages, signOut } = useAuth();
-  const [open, setOpen] = useState(true);
-  const [search, setSearch] = useState("");
-  const { data: searchResults } = useGlobalSearch(search);
-  const { data: alertas = [] } = useAlertas();
+function SidebarBrand() {
+  return (
+    <div className="h-14 sm:h-16 shrink-0 flex items-center gap-2 px-5 border-b border-sidebar-border">
+      <div className="h-9 w-9 rounded-lg flex items-center justify-center" style={{ background: "var(--brand-green)" }}>
+        <Sprout className="text-white" size={20} />
+      </div>
+      <div className="leading-tight min-w-0">
+        <div className="text-sm font-bold text-navy truncate">Campo Alegre</div>
+        <div className="text-xs text-muted-foreground uppercase tracking-widest">Packing House</div>
+      </div>
+    </div>
+  );
+}
 
-  const isTv = pathname.startsWith("/expedicao/tv");
-  const isMobile = pathname.startsWith("/caixas/retorno") || pathname.startsWith("/caixas/inventario") || pathname.startsWith("/caixas/galpao") || pathname.startsWith("/caixas/fornecedor") || pathname === "/fornecedor";
-  const isFornecedor = profile?.role === "fornecedor";
-
+function SidebarNav({
+  pathname,
+  onNavigate,
+}: {
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  const { isAdmin, pages } = useAuth();
   const hasGestaoInSidebar = pages.some((p) => p.slug === "gestao");
 
   const groups = useMemo(() => {
@@ -43,93 +60,121 @@ export function AppShell() {
     }));
   }, [pages]);
 
+  const linkClass = (active: boolean) =>
+    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+      active ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold" : "text-ink hover:bg-secondary"
+    }`;
+
+  return (
+    <>
+      <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-4 space-y-5">
+        {groups.map((g) => (
+          <div key={g.label} className="px-3">
+            <div className="label-group px-3 mb-2">{g.label}</div>
+            <div className="space-y-0.5">
+              {g.items.map((it) => {
+                const path = slugToPath(it.slug);
+                const active = pathname === path;
+                const Icon = getIcon(it.icone);
+                return (
+                  <Link
+                    key={it.slug}
+                    to={path}
+                    onClick={onNavigate}
+                    className={linkClass(active)}
+                  >
+                    <Icon size={16} className="shrink-0" />
+                    <span className="truncate">{it.nome}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {isAdmin && (
+          <div className="px-3">
+            <div className="label-group px-3 mb-2">Administração</div>
+            <div className="space-y-0.5">
+              {!hasGestaoInSidebar && (
+                <Link
+                  to="/gestao"
+                  onClick={onNavigate}
+                  className={linkClass(pathname === "/gestao")}
+                >
+                  <Settings size={16} className="shrink-0" />
+                  <span>Configurações</span>
+                </Link>
+              )}
+              <Link
+                to="/gestao/usuarios"
+                onClick={onNavigate}
+                className={linkClass(pathname === "/gestao/usuarios")}
+              >
+                <UserPlus size={16} className="shrink-0" />
+                <span>Criar Usuários</span>
+              </Link>
+            </div>
+          </div>
+        )}
+      </nav>
+      <div className="shrink-0 p-3 border-t border-sidebar-border">
+        <div className="text-xs text-muted-foreground px-2">v1.1.0-qa · Supabase</div>
+      </div>
+    </>
+  );
+}
+
+export function AppShell() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const { profile, isAdmin, signOut } = useAuth();
+  const isNarrow = useIsMobile();
+  const [desktopOpen, setDesktopOpen] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const { data: searchResults } = useGlobalSearch(search);
+  const { data: alertas = [] } = useAlertas();
+
+  const isTv = pathname.startsWith("/expedicao/tv");
+  const isFornecedor = profile?.role === "fornecedor";
+
   if (isTv || isFornecedor) return <Outlet />;
 
   const roleLabel = isAdmin ? "Administrador" : "Operação";
+  const toggleNav = () => {
+    if (isNarrow) setMobileOpen(true);
+    else setDesktopOpen((o) => !o);
+  };
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {open && (
-        <aside className="w-64 shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col">
-          <div className="h-16 flex items-center gap-2 px-5 border-b border-sidebar-border">
-            <div className="h-9 w-9 rounded-lg flex items-center justify-center" style={{ background: "var(--brand-green)" }}>
-              <Sprout className="text-white" size={20} />
-            </div>
-            <div className="leading-tight">
-              <div className="text-sm font-bold text-navy">Campo Alegre</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Packing House</div>
-            </div>
-          </div>
-          <nav className="flex-1 overflow-y-auto py-4 space-y-5">
-            {groups.map((g) => (
-              <div key={g.label} className="px-3">
-                <div className="label-group px-3 mb-2">{g.label}</div>
-                <div className="space-y-0.5">
-                  {g.items.map((it) => {
-                    const path = slugToPath(it.slug);
-                    const active = pathname === path;
-                    const Icon = getIcon(it.icone);
-                    return (
-                      <Link
-                        key={it.slug}
-                        to={path}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                          active ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold" : "text-ink hover:bg-secondary"
-                        }`}
-                      >
-                        <Icon size={16} />
-                        <span>{it.nome}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            {isAdmin && (
-              <div className="px-3">
-                <div className="label-group px-3 mb-2">Administração</div>
-                <div className="space-y-0.5">
-                  {isAdmin && !hasGestaoInSidebar && (
-                    <Link
-                      to="/gestao"
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                        pathname === "/gestao"
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-                          : "text-ink hover:bg-secondary"
-                      }`}
-                    >
-                      <Settings size={16} />
-                      <span>Configurações</span>
-                    </Link>
-                  )}
-                  {isAdmin && (
-                    <Link
-                      to="/gestao/usuarios"
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                        pathname === "/gestao/usuarios"
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-                          : "text-ink hover:bg-secondary"
-                      }`}
-                    >
-                      <UserPlus size={16} />
-                      <span>Criar Usuários</span>
-                    </Link>
-                  )}
-                </div>
-              </div>
-            )}
-          </nav>
-          <div className="p-3 border-t border-sidebar-border">
-            <div className="text-[10px] text-muted-foreground px-2">v1.1.0-qa · Supabase</div>
-          </div>
+    <div className="h-svh flex overflow-hidden bg-background">
+      {/* Desktop: sidebar altura do monitor, scroll só no menu */}
+      {!isNarrow && desktopOpen && (
+        <aside className="hidden md:flex w-64 shrink-0 h-full bg-sidebar border-r border-sidebar-border flex-col">
+          <SidebarBrand />
+          <SidebarNav pathname={pathname} />
         </aside>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-card border-b border-border flex items-center px-5 gap-4">
+      {/* Mobile: drawer */}
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="w-72 max-w-[85vw] p-0 gap-0 bg-sidebar flex flex-col overflow-hidden">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Menu</SheetTitle>
+            <SheetDescription>Navegação do Packing House</SheetDescription>
+          </SheetHeader>
+          <SidebarBrand />
+          <SidebarNav pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
+        <header className="h-14 sm:h-16 shrink-0 bg-card border-b border-border flex items-center px-3 sm:px-5 gap-2 sm:gap-4">
           <button
-            onClick={() => setOpen((o) => !o)}
-            className="h-9 w-9 rounded-md hover:bg-secondary flex items-center justify-center text-navy"
+            type="button"
+            onClick={toggleNav}
+            aria-label="Abrir menu"
+            className="h-9 w-9 shrink-0 rounded-md hover:bg-secondary flex items-center justify-center text-navy"
           >
             <div className="space-y-1">
               <div className="h-0.5 w-4 bg-navy rounded" />
@@ -137,10 +182,11 @@ export function AppShell() {
               <div className="h-0.5 w-4 bg-navy rounded" />
             </div>
           </button>
-          <div className="relative max-w-md w-full">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+
+          <div className="relative flex-1 min-w-0 max-w-md">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <input
-              placeholder="Buscar pedido, fornecedor, cliente..."
+              placeholder={isNarrow ? "Buscar..." : "Buscar pedido, fornecedor, cliente..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full h-9 pl-9 pr-3 rounded-lg bg-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -150,8 +196,12 @@ export function AppShell() {
                 {searchResults.pedidos.map((p: { id: string; codigo: string; fornecedores: { nome: string } | { nome: string }[] | null }) => (
                   <button
                     key={p.id}
+                    type="button"
                     className="block w-full text-left px-3 py-2 hover:bg-secondary"
-                    onClick={() => { navigate({ to: "/recebimento/conferir", search: { pedidoId: p.id } }); setSearch(""); }}
+                    onClick={() => {
+                      navigate({ to: "/recebimento/conferir", search: { pedidoId: p.id } });
+                      setSearch("");
+                    }}
                   >
                     Pedido {p.codigo} · {one(p.fornecedores)?.nome}
                   </button>
@@ -159,8 +209,12 @@ export function AppShell() {
                 {searchResults.clientes.map((c: { id: string; nome: string }) => (
                   <button
                     key={c.id}
+                    type="button"
                     className="block w-full text-left px-3 py-2 hover:bg-secondary"
-                    onClick={() => { navigate({ to: "/caixas/saldo" }); setSearch(""); }}
+                    onClick={() => {
+                      navigate({ to: "/caixas/saldo" });
+                      setSearch("");
+                    }}
                   >
                     Cliente · {c.nome}
                   </button>
@@ -168,8 +222,12 @@ export function AppShell() {
                 {searchResults.fornecedores.map((f: { id: string; nome: string }) => (
                   <button
                     key={f.id}
+                    type="button"
                     className="block w-full text-left px-3 py-2 hover:bg-secondary"
-                    onClick={() => { navigate({ to: "/recebimento" }); setSearch(""); }}
+                    onClick={() => {
+                      navigate({ to: "/recebimento" });
+                      setSearch("");
+                    }}
                   >
                     Fornecedor · {f.nome}
                   </button>
@@ -177,10 +235,14 @@ export function AppShell() {
               </div>
             )}
           </div>
-          <div className="ml-auto flex items-center gap-3">
+
+          <div className="ml-auto flex items-center gap-1 sm:gap-3 shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="h-9 w-9 rounded-md hover:bg-secondary flex items-center justify-center relative text-navy">
+                <button
+                  type="button"
+                  className="h-9 w-9 rounded-md hover:bg-secondary flex items-center justify-center relative text-navy"
+                >
                   <Bell size={16} />
                   {alertas.length > 0 && (
                     <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full" style={{ background: "var(--danger)" }} />
@@ -205,17 +267,21 @@ export function AppShell() {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 pl-3 border-l border-border">
-                  <div className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: "var(--navy)" }}>
+                <button type="button" className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-border">
+                  <div
+                    className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                    style={{ background: "var(--navy)" }}
+                  >
                     {initials(profile?.nome ?? "U")}
                   </div>
-                  <div className="leading-tight text-left">
-                    <div className="text-xs font-semibold text-navy">{profile?.nome ?? "Usuário"}</div>
-                    <div className="text-[10px] text-muted-foreground">{roleLabel}</div>
+                  <div className="leading-tight text-left hidden sm:block">
+                    <div className="text-xs font-semibold text-navy max-w-[9rem] truncate">{profile?.nome ?? "Usuário"}</div>
+                    <div className="text-xs text-muted-foreground">{roleLabel}</div>
                   </div>
-                  <ChevronDown size={14} className="text-muted-foreground" />
+                  <ChevronDown size={14} className="text-muted-foreground hidden sm:block" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -236,8 +302,11 @@ export function AppShell() {
             </DropdownMenu>
           </div>
         </header>
-        <main className={`flex-1 overflow-auto ${isMobile ? "" : "p-6"}`}>
-          <Outlet />
+
+        <main className="flex-1 min-h-0 overflow-auto overscroll-contain p-4 sm:p-6">
+          <div className="mx-auto w-full max-w-[1400px]">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

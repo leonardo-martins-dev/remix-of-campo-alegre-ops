@@ -120,14 +120,14 @@ function Page() {
                   {i + 1}
                 </div>
                 <div className="text-xs font-semibold text-navy text-center">{e.etapa}</div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">
                   {e.tempo === 0 ? "T0" : `+${formatMin(e.tempo)}`}
                 </div>
               </div>
               {i < ciclo.length - 1 && (
                 <div className="flex flex-col items-center text-muted-foreground">
                   <ChevronRight size={20} />
-                  <span className="text-[10px]">{formatMin(ciclo[i + 1].tempo - e.tempo)}</span>
+                  <span className="text-xs">{formatMin(ciclo[i + 1].tempo - e.tempo)}</span>
                 </div>
               )}
             </div>
@@ -136,7 +136,7 @@ function Page() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card-base overflow-hidden">
+        <div className="card-base overflow-x-auto">
           <div className="p-4 border-b border-border">
             <h3 className="text-sm font-bold text-navy">Tempo de carregamento por loja</h3>
           </div>
@@ -170,7 +170,7 @@ function Page() {
           )}
         </div>
 
-        <div className="card-base overflow-hidden">
+        <div className="card-base overflow-x-auto">
           <div className="p-4 border-b border-border">
             <h3 className="text-sm font-bold text-navy">Tempo de conferência por pedido</h3>
           </div>

@@ -538,7 +538,7 @@ function Page() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 card-base overflow-hidden">
+        <div className="lg:col-span-2 card-base overflow-x-auto">
           {loadingDetail ? (
             <div className="p-8 text-center text-sm text-muted-foreground">Carregando romaneio...</div>
           ) : (
@@ -566,7 +566,7 @@ function Page() {
                       Família {fi + 1} · {fam.familia}
                     </div>
                     <table className="w-full text-sm">
-                      <thead className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      <thead className="text-xs text-muted-foreground uppercase tracking-wider">
                         <tr>
                           <th className="text-left px-5 py-2">Produto</th>
                           <th className="text-right px-3 py-2">Romaneio</th>
@@ -591,7 +591,7 @@ function Page() {
                               <div className="flex items-center justify-center gap-2">
                                 {(tiposCx.length ? tiposCx.map((t) => t.sigla) : (["G", "I", "P"] as const)).map((k) => (
                                   <div key={k} className="flex items-center gap-1">
-                                    <span className="text-[10px] font-bold text-muted-foreground w-3">{k}</span>
+                                    <span className="text-xs font-bold text-muted-foreground w-3">{k}</span>
                                     <NumberStepper
                                       size="sm"
                                       width="w-8"
@@ -649,14 +649,14 @@ function Page() {
                     setRealCaixas(sugCaixas);
                     persistResumo(sugCaixas);
                   }}
-                  className="text-[10px] font-semibold text-primary-dark hover:underline"
+                  className="text-xs font-semibold text-primary-dark hover:underline"
                 >
                   Resetar
                 </button>
               )}
             </div>
             <table className="w-full text-sm">
-              <thead className="text-[10px] text-muted-foreground uppercase">
+              <thead className="text-xs text-muted-foreground uppercase">
                 <tr>
                   <th className="text-left py-1">Tipo</th>
                   <th className="text-right py-1">Sug.</th>
@@ -718,7 +718,7 @@ function Page() {
           >
             <CheckCircle2 size={16} /> Finalizar carga
           </button>
-          <p className="text-[11px] text-muted-foreground text-center mt-2">
+          <p className="text-xs text-muted-foreground text-center mt-2">
             Registra as <strong>caixas reais enviadas</strong> no Controle de Caixas
           </p>
         </div>
@@ -834,7 +834,7 @@ function FilaExpedicaoCard({
   if (!fila.length) return null;
 
   return (
-    <div className={`card-base overflow-hidden ${compact ? "mb-4" : "mb-6"}`}>
+    <div className={`card-base overflow-x-auto ${compact ? "mb-4" : "mb-6"}`}>
       <div className="px-5 py-3 border-b border-border flex items-center gap-2">
         <Package size={16} className="text-primary-dark" />
         <h3 className="text-sm font-bold text-navy">Fila da conferência</h3>
@@ -865,7 +865,7 @@ function FilaExpedicaoCard({
         ))}
       </div>
       {!compact && (
-        <p className="px-5 py-2 text-[11px] text-muted-foreground border-t border-border">
+        <p className="px-5 py-2 text-xs text-muted-foreground border-t border-border">
           Pedidos conferidos sem carga no painel. Se a geração automática falhou, use o botão acima ou configure
           mapeamento em Gestão.
         </p>

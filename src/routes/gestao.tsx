@@ -57,7 +57,7 @@ function Page() {
   return (
     <div>
       <PageHeader title="Configurações" subtitle="Cadastros e parâmetros do sistema" />
-      <Tabs defaultValue="cadastros" className="max-w-4xl">
+      <Tabs defaultValue="cadastros" className="w-full">
         <TabsList>
           <TabsTrigger value="cadastros">Cadastros</TabsTrigger>
           <TabsTrigger value="caixas">Tipos de caixa</TabsTrigger>
@@ -655,7 +655,7 @@ function ConfigPanel() {
         {configs.map((c: { id: string; chave: string; valor: unknown; descricao: string | null }) => (
           <div key={c.id} className="space-y-1">
             <Label>{configLabel(c.chave)}</Label>
-            {c.descricao && <p className="text-[10px] text-muted-foreground">{c.descricao}</p>}
+            {c.descricao && <p className="text-xs text-muted-foreground">{c.descricao}</p>}
             <Input
               defaultValue={String(c.valor ?? "").replace(/"/g, "")}
               onBlur={(e) => {

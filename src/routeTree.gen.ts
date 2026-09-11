@@ -12,31 +12,25 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndicadoresRouteImport } from './routes/indicadores'
 import { Route as GestaoRouteImport } from './routes/gestao'
+import { Route as FornecedoresRouteImport } from './routes/fornecedores'
+import { Route as FornecedorRouteImport } from './routes/fornecedor'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RecebimentoIndexRouteImport } from './routes/recebimento/index'
+import { Route as QuebraIndexRouteImport } from './routes/quebra/index'
 import { Route as ExpedicaoIndexRouteImport } from './routes/expedicao/index'
 import { Route as RecebimentoLiberacoesRouteImport } from './routes/recebimento/liberacoes'
 import { Route as RecebimentoFaltasRouteImport } from './routes/recebimento/faltas'
 import { Route as RecebimentoConferirRouteImport } from './routes/recebimento/conferir'
+import { Route as QuebraLancarRouteImport } from './routes/quebra/lancar'
 import { Route as GestaoUsuariosRouteImport } from './routes/gestao.usuarios'
-import { Route as FiscalFornecedoresCategoriaRouteImport } from './routes/fiscal/fornecedores-categoria'
-import { Route as FiscalCategoriasRouteImport } from './routes/fiscal/categorias'
 import { Route as ExpedicaoTvRouteImport } from './routes/expedicao/tv'
 import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
-import { Route as CaixasEconomiaRouteImport } from './routes/caixas/economia'
-import { Route as CaixasGalpaoRouteImport } from './routes/caixas/galpao'
 import { Route as CaixasInventarioRouteImport } from './routes/caixas/inventario'
+import { Route as CaixasGalpaoRouteImport } from './routes/caixas/galpao'
 import { Route as CaixasFornecedorRouteImport } from './routes/caixas/fornecedor'
-import { Route as FornecedorRouteImport } from './routes/fornecedor'
-import { Route as FornecedoresRouteImport } from './routes/fornecedores'
-import { Route as QuebraIndexRouteImport } from './routes/quebra/index'
-import { Route as QuebraLancarRouteImport } from './routes/quebra/lancar'
-import { Route as PlatformTenantsIndexRouteImport } from './routes/platform/tenants/index'
-import { Route as FiscalNotasIndexRouteImport } from './routes/fiscal/notas/index'
-import { Route as FiscalNotasChaveRouteImport } from './routes/fiscal/notas/$chave'
-import { Route as PlatformTenantsTenantIdEmpresasRouteImport } from './routes/platform/tenants/$tenantId/empresas'
+import { Route as CaixasEconomiaRouteImport } from './routes/caixas/economia'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -53,6 +47,16 @@ const GestaoRoute = GestaoRouteImport.update({
   path: '/gestao',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FornecedoresRoute = FornecedoresRouteImport.update({
+  id: '/fornecedores',
+  path: '/fornecedores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FornecedorRoute = FornecedorRouteImport.update({
+  id: '/fornecedor',
+  path: '/fornecedor',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -66,6 +70,11 @@ const IndexRoute = IndexRouteImport.update({
 const RecebimentoIndexRoute = RecebimentoIndexRouteImport.update({
   id: '/recebimento/',
   path: '/recebimento/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuebraIndexRoute = QuebraIndexRouteImport.update({
+  id: '/quebra/',
+  path: '/quebra/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExpedicaoIndexRoute = ExpedicaoIndexRouteImport.update({
@@ -88,21 +97,15 @@ const RecebimentoConferirRoute = RecebimentoConferirRouteImport.update({
   path: '/recebimento/conferir',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QuebraLancarRoute = QuebraLancarRouteImport.update({
+  id: '/quebra/lancar',
+  path: '/quebra/lancar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GestaoUsuariosRoute = GestaoUsuariosRouteImport.update({
   id: '/usuarios',
   path: '/usuarios',
   getParentRoute: () => GestaoRoute,
-} as any)
-const FiscalFornecedoresCategoriaRoute =
-  FiscalFornecedoresCategoriaRouteImport.update({
-    id: '/fiscal/fornecedores-categoria',
-    path: '/fiscal/fornecedores-categoria',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const FiscalCategoriasRoute = FiscalCategoriasRouteImport.update({
-  id: '/fiscal/categorias',
-  path: '/fiscal/categorias',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const ExpedicaoTvRoute = ExpedicaoTvRouteImport.update({
   id: '/expedicao/tv',
@@ -119,9 +122,9 @@ const CaixasRetornoRoute = CaixasRetornoRouteImport.update({
   path: '/caixas/retorno',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CaixasEconomiaRoute = CaixasEconomiaRouteImport.update({
-  id: '/caixas/economia',
-  path: '/caixas/economia',
+const CaixasInventarioRoute = CaixasInventarioRouteImport.update({
+  id: '/caixas/inventario',
+  path: '/caixas/inventario',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CaixasGalpaoRoute = CaixasGalpaoRouteImport.update({
@@ -129,270 +132,187 @@ const CaixasGalpaoRoute = CaixasGalpaoRouteImport.update({
   path: '/caixas/galpao',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CaixasInventarioRoute = CaixasInventarioRouteImport.update({
-  id: '/caixas/inventario',
-  path: '/caixas/inventario',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const CaixasFornecedorRoute = CaixasFornecedorRouteImport.update({
   id: '/caixas/fornecedor',
   path: '/caixas/fornecedor',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FornecedorRoute = FornecedorRouteImport.update({
-  id: '/fornecedor',
-  path: '/fornecedor',
+const CaixasEconomiaRoute = CaixasEconomiaRouteImport.update({
+  id: '/caixas/economia',
+  path: '/caixas/economia',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FornecedoresRoute = FornecedoresRouteImport.update({
-  id: '/fornecedores',
-  path: '/fornecedores',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QuebraIndexRoute = QuebraIndexRouteImport.update({
-  id: '/quebra/',
-  path: '/quebra/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QuebraLancarRoute = QuebraLancarRouteImport.update({
-  id: '/quebra/lancar',
-  path: '/quebra/lancar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PlatformTenantsIndexRoute = PlatformTenantsIndexRouteImport.update({
-  id: '/platform/tenants/',
-  path: '/platform/tenants/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FiscalNotasIndexRoute = FiscalNotasIndexRouteImport.update({
-  id: '/fiscal/notas/',
-  path: '/fiscal/notas/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FiscalNotasChaveRoute = FiscalNotasChaveRouteImport.update({
-  id: '/fiscal/notas/$chave',
-  path: '/fiscal/notas/$chave',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PlatformTenantsTenantIdEmpresasRoute =
-  PlatformTenantsTenantIdEmpresasRouteImport.update({
-    id: '/platform/tenants/$tenantId/empresas',
-    path: '/platform/tenants/$tenantId/empresas',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/fornecedor': typeof FornecedorRoute
+  '/fornecedores': typeof FornecedoresRoute
   '/gestao': typeof GestaoRouteWithChildren
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
-  '/caixas/retorno': typeof CaixasRetornoRoute
-  '/caixas/saldo': typeof CaixasSaldoRoute
+  '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
   '/caixas/inventario': typeof CaixasInventarioRoute
-  '/caixas/fornecedor': typeof CaixasFornecedorRoute
-  '/fornecedor': typeof FornecedorRoute
-  '/fornecedores': typeof FornecedoresRoute
-  '/quebra/': typeof QuebraIndexRoute
-  '/quebra/lancar': typeof QuebraLancarRoute
+  '/caixas/retorno': typeof CaixasRetornoRoute
+  '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
-  '/fiscal/categorias': typeof FiscalCategoriasRoute
-  '/fiscal/fornecedores-categoria': typeof FiscalFornecedoresCategoriaRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
+  '/quebra/lancar': typeof QuebraLancarRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/recebimento/liberacoes': typeof RecebimentoLiberacoesRoute
   '/expedicao/': typeof ExpedicaoIndexRoute
+  '/quebra/': typeof QuebraIndexRoute
   '/recebimento/': typeof RecebimentoIndexRoute
-  '/fiscal/notas/$chave': typeof FiscalNotasChaveRoute
-  '/fiscal/notas/': typeof FiscalNotasIndexRoute
-  '/platform/tenants/': typeof PlatformTenantsIndexRoute
-  '/platform/tenants/$tenantId/empresas': typeof PlatformTenantsTenantIdEmpresasRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/fornecedor': typeof FornecedorRoute
+  '/fornecedores': typeof FornecedoresRoute
   '/gestao': typeof GestaoRouteWithChildren
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
-  '/caixas/retorno': typeof CaixasRetornoRoute
-  '/caixas/saldo': typeof CaixasSaldoRoute
+  '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
   '/caixas/inventario': typeof CaixasInventarioRoute
-  '/caixas/fornecedor': typeof CaixasFornecedorRoute
-  '/fornecedor': typeof FornecedorRoute
-  '/fornecedores': typeof FornecedoresRoute
-  '/quebra': typeof QuebraIndexRoute
-  '/quebra/lancar': typeof QuebraLancarRoute
+  '/caixas/retorno': typeof CaixasRetornoRoute
+  '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
-  '/fiscal/categorias': typeof FiscalCategoriasRoute
-  '/fiscal/fornecedores-categoria': typeof FiscalFornecedoresCategoriaRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
+  '/quebra/lancar': typeof QuebraLancarRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/recebimento/liberacoes': typeof RecebimentoLiberacoesRoute
   '/expedicao': typeof ExpedicaoIndexRoute
+  '/quebra': typeof QuebraIndexRoute
   '/recebimento': typeof RecebimentoIndexRoute
-  '/fiscal/notas/$chave': typeof FiscalNotasChaveRoute
-  '/fiscal/notas': typeof FiscalNotasIndexRoute
-  '/platform/tenants': typeof PlatformTenantsIndexRoute
-  '/platform/tenants/$tenantId/empresas': typeof PlatformTenantsTenantIdEmpresasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/fornecedor': typeof FornecedorRoute
+  '/fornecedores': typeof FornecedoresRoute
   '/gestao': typeof GestaoRouteWithChildren
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
-  '/caixas/retorno': typeof CaixasRetornoRoute
-  '/caixas/saldo': typeof CaixasSaldoRoute
+  '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
   '/caixas/inventario': typeof CaixasInventarioRoute
-  '/caixas/fornecedor': typeof CaixasFornecedorRoute
-  '/fornecedor': typeof FornecedorRoute
-  '/fornecedores': typeof FornecedoresRoute
-  '/quebra/': typeof QuebraIndexRoute
-  '/quebra/lancar': typeof QuebraLancarRoute
+  '/caixas/retorno': typeof CaixasRetornoRoute
+  '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
-  '/fiscal/categorias': typeof FiscalCategoriasRoute
-  '/fiscal/fornecedores-categoria': typeof FiscalFornecedoresCategoriaRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
+  '/quebra/lancar': typeof QuebraLancarRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/recebimento/liberacoes': typeof RecebimentoLiberacoesRoute
   '/expedicao/': typeof ExpedicaoIndexRoute
+  '/quebra/': typeof QuebraIndexRoute
   '/recebimento/': typeof RecebimentoIndexRoute
-  '/fiscal/notas/$chave': typeof FiscalNotasChaveRoute
-  '/fiscal/notas/': typeof FiscalNotasIndexRoute
-  '/platform/tenants/': typeof PlatformTenantsIndexRoute
-  '/platform/tenants/$tenantId/empresas': typeof PlatformTenantsTenantIdEmpresasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/fornecedor'
+    | '/fornecedores'
     | '/gestao'
     | '/indicadores'
     | '/login'
     | '/caixas/economia'
-    | '/caixas/retorno'
-    | '/caixas/saldo'
+    | '/caixas/fornecedor'
     | '/caixas/galpao'
     | '/caixas/inventario'
-    | '/caixas/fornecedor'
-    | '/fornecedor'
-    | '/fornecedores'
-    | '/quebra/'
-    | '/quebra/lancar'
+    | '/caixas/retorno'
+    | '/caixas/saldo'
     | '/expedicao/tv'
-    | '/fiscal/categorias'
-    | '/fiscal/fornecedores-categoria'
     | '/gestao/usuarios'
+    | '/quebra/lancar'
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/recebimento/liberacoes'
     | '/expedicao/'
+    | '/quebra/'
     | '/recebimento/'
-    | '/fiscal/notas/$chave'
-    | '/fiscal/notas/'
-    | '/platform/tenants/'
-    | '/platform/tenants/$tenantId/empresas'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/dashboard'
+    | '/fornecedor'
+    | '/fornecedores'
     | '/gestao'
     | '/indicadores'
     | '/login'
     | '/caixas/economia'
-    | '/caixas/retorno'
-    | '/caixas/saldo'
+    | '/caixas/fornecedor'
     | '/caixas/galpao'
     | '/caixas/inventario'
-    | '/caixas/fornecedor'
-    | '/fornecedor'
-    | '/fornecedores'
-    | '/quebra'
-    | '/quebra/lancar'
+    | '/caixas/retorno'
+    | '/caixas/saldo'
     | '/expedicao/tv'
-    | '/fiscal/categorias'
-    | '/fiscal/fornecedores-categoria'
     | '/gestao/usuarios'
+    | '/quebra/lancar'
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/recebimento/liberacoes'
     | '/expedicao'
+    | '/quebra'
     | '/recebimento'
-    | '/fiscal/notas/$chave'
-    | '/fiscal/notas'
-    | '/platform/tenants'
-    | '/platform/tenants/$tenantId/empresas'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/fornecedor'
+    | '/fornecedores'
     | '/gestao'
     | '/indicadores'
     | '/login'
     | '/caixas/economia'
-    | '/caixas/retorno'
-    | '/caixas/saldo'
+    | '/caixas/fornecedor'
     | '/caixas/galpao'
     | '/caixas/inventario'
-    | '/caixas/fornecedor'
-    | '/fornecedor'
-    | '/fornecedores'
-    | '/quebra/'
-    | '/quebra/lancar'
+    | '/caixas/retorno'
+    | '/caixas/saldo'
     | '/expedicao/tv'
-    | '/fiscal/categorias'
-    | '/fiscal/fornecedores-categoria'
     | '/gestao/usuarios'
+    | '/quebra/lancar'
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/recebimento/liberacoes'
     | '/expedicao/'
+    | '/quebra/'
     | '/recebimento/'
-    | '/fiscal/notas/$chave'
-    | '/fiscal/notas/'
-    | '/platform/tenants/'
-    | '/platform/tenants/$tenantId/empresas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
+  FornecedorRoute: typeof FornecedorRoute
+  FornecedoresRoute: typeof FornecedoresRoute
   GestaoRoute: typeof GestaoRouteWithChildren
   IndicadoresRoute: typeof IndicadoresRoute
   LoginRoute: typeof LoginRoute
   CaixasEconomiaRoute: typeof CaixasEconomiaRoute
-  CaixasRetornoRoute: typeof CaixasRetornoRoute
-  CaixasSaldoRoute: typeof CaixasSaldoRoute
+  CaixasFornecedorRoute: typeof CaixasFornecedorRoute
   CaixasGalpaoRoute: typeof CaixasGalpaoRoute
   CaixasInventarioRoute: typeof CaixasInventarioRoute
-  CaixasFornecedorRoute: typeof CaixasFornecedorRoute
-  FornecedorRoute: typeof FornecedorRoute
-  FornecedoresRoute: typeof FornecedoresRoute
-  QuebraIndexRoute: typeof QuebraIndexRoute
-  QuebraLancarRoute: typeof QuebraLancarRoute
+  CaixasRetornoRoute: typeof CaixasRetornoRoute
+  CaixasSaldoRoute: typeof CaixasSaldoRoute
   ExpedicaoTvRoute: typeof ExpedicaoTvRoute
-  FiscalCategoriasRoute: typeof FiscalCategoriasRoute
-  FiscalFornecedoresCategoriaRoute: typeof FiscalFornecedoresCategoriaRoute
+  QuebraLancarRoute: typeof QuebraLancarRoute
   RecebimentoConferirRoute: typeof RecebimentoConferirRoute
   RecebimentoFaltasRoute: typeof RecebimentoFaltasRoute
   RecebimentoLiberacoesRoute: typeof RecebimentoLiberacoesRoute
   ExpedicaoIndexRoute: typeof ExpedicaoIndexRoute
+  QuebraIndexRoute: typeof QuebraIndexRoute
   RecebimentoIndexRoute: typeof RecebimentoIndexRoute
-  FiscalNotasChaveRoute: typeof FiscalNotasChaveRoute
-  FiscalNotasIndexRoute: typeof FiscalNotasIndexRoute
-  PlatformTenantsIndexRoute: typeof PlatformTenantsIndexRoute
-  PlatformTenantsTenantIdEmpresasRoute: typeof PlatformTenantsTenantIdEmpresasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -418,6 +338,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GestaoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/fornecedores': {
+      id: '/fornecedores'
+      path: '/fornecedores'
+      fullPath: '/fornecedores'
+      preLoaderRoute: typeof FornecedoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fornecedor': {
+      id: '/fornecedor'
+      path: '/fornecedor'
+      fullPath: '/fornecedor'
+      preLoaderRoute: typeof FornecedorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -437,6 +371,13 @@ declare module '@tanstack/react-router' {
       path: '/recebimento'
       fullPath: '/recebimento/'
       preLoaderRoute: typeof RecebimentoIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quebra/': {
+      id: '/quebra/'
+      path: '/quebra'
+      fullPath: '/quebra/'
+      preLoaderRoute: typeof QuebraIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/expedicao/': {
@@ -467,26 +408,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecebimentoConferirRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/quebra/lancar': {
+      id: '/quebra/lancar'
+      path: '/quebra/lancar'
+      fullPath: '/quebra/lancar'
+      preLoaderRoute: typeof QuebraLancarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/gestao/usuarios': {
       id: '/gestao/usuarios'
       path: '/usuarios'
       fullPath: '/gestao/usuarios'
       preLoaderRoute: typeof GestaoUsuariosRouteImport
       parentRoute: typeof GestaoRoute
-    }
-    '/fiscal/fornecedores-categoria': {
-      id: '/fiscal/fornecedores-categoria'
-      path: '/fiscal/fornecedores-categoria'
-      fullPath: '/fiscal/fornecedores-categoria'
-      preLoaderRoute: typeof FiscalFornecedoresCategoriaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/fiscal/categorias': {
-      id: '/fiscal/categorias'
-      path: '/fiscal/categorias'
-      fullPath: '/fiscal/categorias'
-      preLoaderRoute: typeof FiscalCategoriasRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/expedicao/tv': {
       id: '/expedicao/tv'
@@ -509,11 +443,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CaixasRetornoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/caixas/economia': {
-      id: '/caixas/economia'
-      path: '/caixas/economia'
-      fullPath: '/caixas/economia'
-      preLoaderRoute: typeof CaixasEconomiaRouteImport
+    '/caixas/inventario': {
+      id: '/caixas/inventario'
+      path: '/caixas/inventario'
+      fullPath: '/caixas/inventario'
+      preLoaderRoute: typeof CaixasInventarioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/caixas/galpao': {
@@ -523,13 +457,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CaixasGalpaoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/caixas/inventario': {
-      id: '/caixas/inventario'
-      path: '/caixas/inventario'
-      fullPath: '/caixas/inventario'
-      preLoaderRoute: typeof CaixasInventarioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/caixas/fornecedor': {
       id: '/caixas/fornecedor'
       path: '/caixas/fornecedor'
@@ -537,60 +464,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CaixasFornecedorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/fornecedor': {
-      id: '/fornecedor'
-      path: '/fornecedor'
-      fullPath: '/fornecedor'
-      preLoaderRoute: typeof FornecedorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/fornecedores': {
-      id: '/fornecedores'
-      path: '/fornecedores'
-      fullPath: '/fornecedores'
-      preLoaderRoute: typeof FornecedoresRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/quebra/': {
-      id: '/quebra/'
-      path: '/quebra'
-      fullPath: '/quebra/'
-      preLoaderRoute: typeof QuebraIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/quebra/lancar': {
-      id: '/quebra/lancar'
-      path: '/quebra/lancar'
-      fullPath: '/quebra/lancar'
-      preLoaderRoute: typeof QuebraLancarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/platform/tenants/': {
-      id: '/platform/tenants/'
-      path: '/platform/tenants'
-      fullPath: '/platform/tenants/'
-      preLoaderRoute: typeof PlatformTenantsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/fiscal/notas/': {
-      id: '/fiscal/notas/'
-      path: '/fiscal/notas'
-      fullPath: '/fiscal/notas/'
-      preLoaderRoute: typeof FiscalNotasIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/fiscal/notas/$chave': {
-      id: '/fiscal/notas/$chave'
-      path: '/fiscal/notas/$chave'
-      fullPath: '/fiscal/notas/$chave'
-      preLoaderRoute: typeof FiscalNotasChaveRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/platform/tenants/$tenantId/empresas': {
-      id: '/platform/tenants/$tenantId/empresas'
-      path: '/platform/tenants/$tenantId/empresas'
-      fullPath: '/platform/tenants/$tenantId/empresas'
-      preLoaderRoute: typeof PlatformTenantsTenantIdEmpresasRouteImport
+    '/caixas/economia': {
+      id: '/caixas/economia'
+      path: '/caixas/economia'
+      fullPath: '/caixas/economia'
+      preLoaderRoute: typeof CaixasEconomiaRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -610,31 +488,25 @@ const GestaoRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
+  FornecedorRoute: FornecedorRoute,
+  FornecedoresRoute: FornecedoresRoute,
   GestaoRoute: GestaoRouteWithChildren,
   IndicadoresRoute: IndicadoresRoute,
   LoginRoute: LoginRoute,
   CaixasEconomiaRoute: CaixasEconomiaRoute,
-  CaixasRetornoRoute: CaixasRetornoRoute,
-  CaixasSaldoRoute: CaixasSaldoRoute,
+  CaixasFornecedorRoute: CaixasFornecedorRoute,
   CaixasGalpaoRoute: CaixasGalpaoRoute,
   CaixasInventarioRoute: CaixasInventarioRoute,
-  CaixasFornecedorRoute: CaixasFornecedorRoute,
-  FornecedorRoute: FornecedorRoute,
-  FornecedoresRoute: FornecedoresRoute,
-  QuebraIndexRoute: QuebraIndexRoute,
-  QuebraLancarRoute: QuebraLancarRoute,
+  CaixasRetornoRoute: CaixasRetornoRoute,
+  CaixasSaldoRoute: CaixasSaldoRoute,
   ExpedicaoTvRoute: ExpedicaoTvRoute,
-  FiscalCategoriasRoute: FiscalCategoriasRoute,
-  FiscalFornecedoresCategoriaRoute: FiscalFornecedoresCategoriaRoute,
+  QuebraLancarRoute: QuebraLancarRoute,
   RecebimentoConferirRoute: RecebimentoConferirRoute,
   RecebimentoFaltasRoute: RecebimentoFaltasRoute,
   RecebimentoLiberacoesRoute: RecebimentoLiberacoesRoute,
   ExpedicaoIndexRoute: ExpedicaoIndexRoute,
+  QuebraIndexRoute: QuebraIndexRoute,
   RecebimentoIndexRoute: RecebimentoIndexRoute,
-  FiscalNotasChaveRoute: FiscalNotasChaveRoute,
-  FiscalNotasIndexRoute: FiscalNotasIndexRoute,
-  PlatformTenantsIndexRoute: PlatformTenantsIndexRoute,
-  PlatformTenantsTenantIdEmpresasRoute: PlatformTenantsTenantIdEmpresasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

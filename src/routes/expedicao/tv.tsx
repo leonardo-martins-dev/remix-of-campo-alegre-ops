@@ -131,20 +131,20 @@ function TvMode() {
         <div className="flex items-center gap-6">
           <div className="text-center">
             <div className="text-3xl font-bold text-white">{concluidasHoje}</div>
-            <div className="text-[10px] uppercase tracking-wider text-white/50">Concluídas hoje</div>
+            <div className="text-xs uppercase tracking-wider text-white/50">Concluídas hoje</div>
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold" style={{ color: "var(--warning)" }}>
               {naFila}
             </div>
-            <div className="text-[10px] uppercase tracking-wider text-white/50">Na fila</div>
+            <div className="text-xs uppercase tracking-wider text-white/50">Na fila</div>
           </div>
           <div className="text-center px-4 py-2 rounded-lg bg-white/5">
             <div className="text-2xl font-mono font-bold flex items-center gap-2">
               <Clock size={18} />
               {mm}:{ss}
             </div>
-            <div className="text-[10px] uppercase tracking-wider text-white/50">Tempo de carga</div>
+            <div className="text-xs uppercase tracking-wider text-white/50">Tempo de carga</div>
           </div>
           <Link to="/expedicao" className="h-10 w-10 rounded-lg hover:bg-white/10 flex items-center justify-center">
             <X size={20} />
@@ -267,7 +267,7 @@ function TvMode() {
                 >
                   <div className="flex items-center gap-2">
                     <span className="h-2.5 w-2.5 rounded-full" style={{ background: bg }} />
-                    <span className="text-[10px] uppercase text-white/50">{c.codigo}</span>
+                    <span className="text-xs uppercase text-white/50">{c.codigo}</span>
                   </div>
                   <div className="font-bold mt-1 truncate">{nome}</div>
                   <div className="text-xs text-white/50">{mot}</div>

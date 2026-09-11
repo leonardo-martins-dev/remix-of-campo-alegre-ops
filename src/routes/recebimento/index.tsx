@@ -412,7 +412,7 @@ function Page() {
         <Input className="w-64" placeholder="Buscar pedido, fornecedor ou cliente" value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
 
-      <div className="card-base">
+      <div className="card-base overflow-x-auto">
         <div className="flex items-center gap-1 p-2 border-b border-border overflow-x-auto">
           {(
             [

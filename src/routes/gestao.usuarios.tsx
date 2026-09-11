@@ -16,7 +16,7 @@ function Page() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <PageHeader
         title="Criar Usuários"
         subtitle="Cadastro de novos usuários e permissões de acesso"

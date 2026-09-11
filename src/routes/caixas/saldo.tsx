@@ -257,7 +257,7 @@ function Page() {
       </div>
 
       {aba !== "cliente" && (
-        <div className="card-base overflow-hidden mb-5">
+        <div className="card-base overflow-x-auto mb-5">
           <table className="w-full text-sm">
             <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
               <tr>
@@ -318,7 +318,7 @@ function Page() {
               const display = draftCustos[c.id] !== undefined ? draftCustos[c.id] : String(c.custo_unitario);
               return (
                 <div key={c.id}>
-                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground">{c.nome}</label>
+                  <label className="text-xs uppercase tracking-wider text-muted-foreground">{c.nome}</label>
                   <div className="flex items-center mt-1">
                     <span className="px-2.5 h-9 bg-secondary border border-r-0 border-border rounded-l-md text-xs font-semibold text-muted-foreground flex items-center">
                       R$
@@ -412,7 +412,7 @@ function Page() {
         </div>
       </div>
 
-      <div className="card-base overflow-hidden">
+      <div className="card-base overflow-x-auto">
         <div className="p-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-sm font-bold text-navy">Saldo por cliente</h3>
           <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary/50">

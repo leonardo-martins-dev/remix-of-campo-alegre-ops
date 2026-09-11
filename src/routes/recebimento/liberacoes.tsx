@@ -35,7 +35,7 @@ function Page() {
 
   if (!isAdmin) {
     return (
-      <p className="p-6 text-sm text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Acesso restrito a administradores.{" "}
         <Link to="/recebimento" className="text-primary-dark underline">
           Voltar
