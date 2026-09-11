@@ -129,7 +129,11 @@ export async function buildImportPreview(payload: {
   return {
     hash,
     filename: payload.filename,
-    formato: payload.filename.toLowerCase().endsWith(".csv") ? "csv" : "xlsx",
+    formato: payload.filename.toLowerCase().endsWith(".csv")
+      ? "csv"
+      : payload.filename.toLowerCase().endsWith(".xls")
+        ? "xls"
+        : "xlsx",
     sheet: parsed.sheet,
     linhasLidas: parsed.rows.length + parsed.ignoradas.length,
     pedidos,

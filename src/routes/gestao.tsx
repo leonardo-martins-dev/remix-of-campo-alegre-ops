@@ -29,6 +29,7 @@ import { useAliases, usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { useResolverPendencia } from "@/hooks/use-wise-pedidos";
 import { usePosicoes, useSaldosAbertura } from "@/hooks/use-ledger";
 import { useMotivosAjuste, useSaveMotivoAjuste } from "@/hooks/use-inventario";
+import { ProdutosCadastro } from "@/components/produtos-cadastro";
 
 export const Route = createFileRoute("/gestao")({
   component: Page,
@@ -103,7 +104,7 @@ function CadastrosPanel() {
       {tables.map(({ label, table, hook, placeholder }) => (
         <CadastroTable key={table} label={label} table={table} placeholder={placeholder} useData={hook} />
       ))}
-      <ProdutosTable />
+      <ProdutosCadastro />
       <FamiliasPanel />
       <MapeamentoExpedicao />
     </div>
@@ -386,138 +387,6 @@ function FamiliasPanel() {
             </li>
           ))}
         </ul>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ProdutosTable() {
-  const { data = [], isLoading } = useProdutos();
-  const { data: familias = [] } = useFamilias();
-  const { insert, update } = useCadastroMutations("produtos", ["cadastros", "produtos"]);
-  const [nome, setNome] = useState("");
-  const [codigo, setCodigo] = useState("");
-  const [unidades, setUnidades] = useState("");
-  const [familiaId, setFamiliaId] = useState("");
-  const [touched, setTouched] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editNome, setEditNome] = useState("");
-  const [editFamilia, setEditFamilia] = useState("");
-
-  const showError = touched && !nome.trim();
-
-  const handleAdd = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    setTouched(true);
-    if (!nome.trim()) {
-      toast.error("Informe um nome");
-      return;
-    }
-    insert.mutate(
-      {
-        nome: nome.trim(),
-        unidade: "un",
-        codigo: codigo.trim() || null,
-        unidades_por_caixa: unidades ? Number(unidades) : null,
-        familia_id: familiaId || null,
-        ativo: true,
-      },
-      {
-        onSuccess: () => {
-          setNome("");
-          setCodigo("");
-          setUnidades("");
-          setFamiliaId("");
-          setTouched(false);
-          toast.success("Produto cadastrado");
-        },
-        onError: (e) => toast.error(e.message),
-      }
-    );
-  };
-
-  return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">Produtos</CardTitle></CardHeader>
-      <CardContent>
-        <form onSubmit={handleAdd} className="mb-1">
-          <div className="flex flex-wrap gap-2">
-            <Input
-              placeholder="Nome do produto"
-              value={nome}
-              aria-invalid={showError}
-              aria-describedby={showError ? "produto-nome-error" : undefined}
-              className={showError ? "border-destructive ring-2 ring-destructive/30 focus-visible:ring-destructive" : ""}
-              onChange={(e) => {
-                setNome(e.target.value);
-                if (e.target.value.trim()) setTouched(false);
-              }}
-            />
-            <Input
-              className="w-36"
-              placeholder="Código"
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-            />
-            <select className="h-9 rounded-md border px-2 text-sm" value={familiaId} onChange={(e) => setFamiliaId(e.target.value)}>
-              <option value="">Família…</option>
-              {(familias as { id: string; nome: string }[]).map((f) => (
-                <option key={f.id} value={f.id}>{f.nome}</option>
-              ))}
-            </select>
-            <Input
-              className="w-28"
-              type="number"
-              min={0}
-              placeholder="Un/cx"
-              value={unidades}
-              onChange={(e) => setUnidades(e.target.value)}
-            />
-            <Button type="submit">Adicionar</Button>
-          </div>
-          {showError && (
-            <p id="produto-nome-error" className="text-sm font-medium text-destructive mt-2" role="alert">
-              Informe um nome para cadastrar
-            </p>
-          )}
-        </form>
-        {!isLoading && (
-          <ul className="space-y-1 text-sm">
-            {(data as { id: string; nome: string; codigo?: string | null; unidades_por_caixa?: number | null; familia_id?: string | null; ativo?: boolean; familias_produto?: { nome: string } | { nome: string }[] | null }[]).map((row) => {
-              const fam = Array.isArray(row.familias_produto) ? row.familias_produto[0]?.nome : row.familias_produto?.nome;
-              return (
-              <li key={row.id} className={`flex justify-between items-center py-1 border-b border-border gap-2 ${row.ativo === false ? "opacity-50" : ""}`}>
-                {editId === row.id ? (
-                  <div className="flex flex-wrap gap-2 flex-1">
-                    <Input className="h-8" value={editNome} onChange={(e) => setEditNome(e.target.value)} />
-                    <select className="h-8 rounded-md border px-2" value={editFamilia} onChange={(e) => setEditFamilia(e.target.value)}>
-                      <option value="">Sem família</option>
-                      {(familias as { id: string; nome: string }[]).map((f) => (
-                        <option key={f.id} value={f.id}>{f.nome}</option>
-                      ))}
-                    </select>
-                    <Button size="sm" onClick={() => update.mutate({ id: row.id, nome: editNome.trim(), familia_id: editFamilia || null }, { onSuccess: () => { toast.success("Atualizado"); setEditId(null); } })}>Salvar</Button>
-                  </div>
-                ) : (
-                  <span>
-                    {row.nome}
-                    {row.codigo ? <span className="text-muted-foreground"> · {row.codigo}</span> : null}
-                    {fam ? <span className="text-muted-foreground"> · {fam}</span> : null}
-                    {row.unidades_por_caixa ? <span className="text-muted-foreground"> · {row.unidades_por_caixa} un/cx</span> : null}
-                    {row.ativo === false ? <span className="text-muted-foreground"> · inativo</span> : null}
-                  </span>
-                )}
-                <div className="flex gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" className="h-7" onClick={() => { setEditId(row.id); setEditNome(row.nome); setEditFamilia(row.familia_id ?? ""); }}>Editar</Button>
-                  <Button variant="ghost" size="sm" className="h-7" onClick={() => update.mutate({ id: row.id, ativo: row.ativo === false }, { onSuccess: () => toast.success(row.ativo === false ? "Reativado" : "Inativado") })}>
-                    {row.ativo === false ? "Reativar" : "Inativar"}
-                  </Button>
-                </div>
-              </li>
-              );
-            })}
-          </ul>
-        )}
       </CardContent>
     </Card>
   );
