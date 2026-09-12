@@ -47,6 +47,8 @@ import { formatTime } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { SugestaoCaixasBadge } from "@/components/sugestao-caixas";
+import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
 
 type ConferirSearch = { pedidoId?: string };
 
@@ -61,6 +63,7 @@ export const Route = createFileRoute("/recebimento/conferir")({
 type LinhaItem = {
   id: string;
   itemPedidoId?: string | null;
+  produtoId?: string | null;
   produto: string;
   unid: string;
   pedido: number;
@@ -173,6 +176,7 @@ function mapToLinha(
   return {
     id: ic.id,
     itemPedidoId: ip?.id,
+    produtoId: (ip as { produto_id?: string | null })?.produto_id ?? null,
     produto: prod?.nome ?? (ip as { nome_externo?: string | null })?.nome_externo ?? "—",
     unid: (ip as { unidade?: string | null })?.unidade || prod?.unidade || "un",
     aVincular: !(ip as { produto_id?: string | null })?.produto_id,
@@ -270,6 +274,16 @@ function ConferenciaItens({
   const movForn = useRegistrarMovimentoFornecedor();
   const [cheias, setCheias] = useState<Record<string, number>>({});
   const [vazias, setVazias] = useState<Record<string, number>>({});
+
+  const fornecedorIdPedido = pedido?.fornecedor_id ?? null;
+  const itensParaSugestao = useMemo(() => {
+    const itensPedido = (pedido as { itens_pedido?: { produto_id?: string | null; quantidade_pedida: number }[] } | null)?.itens_pedido ?? [];
+    return itensPedido.map((i) => ({
+      produto_id: i.produto_id ?? null,
+      quantidade: Number(i.quantidade_pedida),
+    }));
+  }, [pedido]);
+  const { data: sugestoesCaixas } = useSugestaoCaixas(fornecedorIdPedido, itensParaSugestao);
 
   const [confirmFinal, setConfirmFinal] = useState(false);
 
@@ -666,6 +680,7 @@ function ConferenciaItens({
               <th className="text-left px-4 py-3">Produto</th>
               <th className="text-left px-4 py-3">Un.</th>
               <th className="text-right px-4 py-3">Pedido</th>
+              <th className="text-left px-4 py-3">Caixas</th>
               <th className="text-right px-4 py-3">Já recebido</th>
               <th className="text-center px-4 py-3">Nesta entrega</th>
               <th className="text-right px-4 py-3">Saldo</th>
@@ -686,6 +701,7 @@ function ConferenciaItens({
               const gap = totalApos - it.pedido;
               const pendente = !it.conferido;
               const dentroTol = Math.abs(Math.max(0, gap)) <= limite;
+              const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
               return (
                 <tr key={it.id} className="border-t border-border">
                   <td className="px-4 py-3 font-semibold text-navy">
@@ -694,6 +710,9 @@ function ConferenciaItens({
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{it.unid}</td>
                   <td className="px-4 py-3 text-right text-ink">{it.pedido}</td>
+                  <td className="px-4 py-3">
+                    <SugestaoCaixasBadge sugestao={sugestaoItem} showAdminLink />
+                  </td>
                   <td className="px-4 py-3 text-right text-muted-foreground">{jaRecebido}</td>
                   <td className="px-4 py-3">
                     {readOnly || it.aVincular ? (

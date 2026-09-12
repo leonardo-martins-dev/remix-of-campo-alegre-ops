@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +11,31 @@ import { useConfirmarMovimento, useMovimentosFornecedor, usePosicoes, useRegistr
 import { useRegistrarInventario } from "@/hooks/use-inventario";
 import { enqueueFornecedorMov, getFornecedorQueue, removeFornecedorFromQueue } from "@/lib/offline-queue";
 import { NumberStepper } from "@/components/number-stepper";
+import { SugestaoCaixas } from "@/components/sugestao-caixas";
+import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
+import { supabase } from "@/lib/supabase";
+import { one } from "@/lib/embed";
+import { formatDateBRT } from "@/lib/utils-date";
 
 export const Route = createFileRoute("/fornecedor")({
   component: Page,
   head: () => ({ meta: [{ title: "Minhas caixas · Campo Alegre" }] }),
 });
+
+type ItemPedido = {
+  id: string;
+  quantidade_pedida: number;
+  produto_id: string | null;
+  produtos: { id: string; nome: string; unidade: string } | { id: string; nome: string; unidade: string }[] | null;
+};
+
+type PedidoPendente = {
+  id: string;
+  codigo: string;
+  data_prevista: string | null;
+  status: string;
+  itens_pedido: ItemPedido[];
+};
 
 function Page() {
   const { user, profile } = useAuth();
@@ -33,6 +54,32 @@ function Page() {
   const registrarInv = useRegistrarInventario();
   const posForn = (posicoes as { id: string; tipo: string; ref_id: string | null }[])
     .find((p) => p.tipo === "fornecedor" && p.ref_id === fornecedorId);
+
+  const { data: pedidosPendentes = [] } = useQuery({
+    queryKey: ["pedidos-fornecedor", fornecedorId],
+    enabled: !!fornecedorId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pedidos_recebimento")
+        .select(`
+          id, codigo, data_prevista, status,
+          itens_pedido(id, quantidade_pedida, produto_id, produtos(id, nome, unidade))
+        `)
+        .eq("fornecedor_id", fornecedorId!)
+        .in("status", ["pendente", "parcial"])
+        .order("data_prevista", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as PedidoPendente[];
+    },
+  });
+
+  const itensParaSugestao = pedidosPendentes.flatMap((p) =>
+    p.itens_pedido.map((i) => ({
+      produto_id: i.produto_id,
+      quantidade: Number(i.quantidade_pedida),
+    }))
+  );
+  const { data: sugestoes } = useSugestaoCaixas(fornecedorId, itensParaSugestao);
 
   useEffect(() => {
     async function flush() {
@@ -84,6 +131,42 @@ function Page() {
   return (
     <div className="max-w-md mx-auto">
       <PageHeader title="Minhas caixas" subtitle="Confirme ou registre movimentos" />
+
+      {pedidosPendentes.length > 0 && (
+        <div className="mb-6 space-y-4">
+          <h2 className="text-sm font-semibold text-navy">Pedidos a entregar</h2>
+          {pedidosPendentes.map((ped) => (
+            <div key={ped.id} className="rounded-xl border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-navy">{ped.codigo}</span>
+                <span className="chip chip-info text-xs">
+                  {ped.data_prevista ? `Entrega ${formatDateBRT(ped.data_prevista)}` : "Sem data"}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {ped.itens_pedido.map((item) => {
+                  const prod = one(item.produtos);
+                  const sugestao = item.produto_id ? sugestoes?.get(item.produto_id) : undefined;
+                  return (
+                    <div key={item.id} className="border-t border-border pt-2 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">{prod?.nome ?? "Produto"}</span>
+                        <span className="text-muted-foreground">
+                          {Number(item.quantidade_pedida)} {prod?.unidade ?? "un"}
+                        </span>
+                      </div>
+                      <div className="mt-1">
+                        <SugestaoCaixas sugestao={sugestao} compact />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-3">
         {pendentes.map((m) => (
           <div key={m.id} className="rounded-xl border p-3 space-y-2">
