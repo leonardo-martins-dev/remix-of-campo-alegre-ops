@@ -26,6 +26,7 @@ import { Route as RecebimentoConferirRouteImport } from './routes/recebimento/co
 import { Route as QuebraLancarRouteImport } from './routes/quebra/lancar'
 import { Route as GestaoUsuariosRouteImport } from './routes/gestao.usuarios'
 import { Route as ExpedicaoTvRouteImport } from './routes/expedicao/tv'
+import { Route as ExpedicaoRotasRouteImport } from './routes/expedicao/rotas'
 import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
 import { Route as CaixasMotoristaRouteImport } from './routes/caixas/motorista'
@@ -119,6 +120,11 @@ const ExpedicaoTvRoute = ExpedicaoTvRouteImport.update({
   path: '/expedicao/tv',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExpedicaoRotasRoute = ExpedicaoRotasRouteImport.update({
+  id: '/expedicao/rotas',
+  path: '/expedicao/rotas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CaixasSaldoRoute = CaixasSaldoRouteImport.update({
   id: '/caixas/saldo',
   path: '/caixas/saldo',
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/caixas/motorista': typeof CaixasMotoristaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/expedicao/rotas': typeof ExpedicaoRotasRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/quebra/lancar': typeof QuebraLancarRoute
@@ -196,6 +203,7 @@ export interface FileRoutesByTo {
   '/caixas/motorista': typeof CaixasMotoristaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/expedicao/rotas': typeof ExpedicaoRotasRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/quebra/lancar': typeof QuebraLancarRoute
@@ -223,6 +231,7 @@ export interface FileRoutesById {
   '/caixas/motorista': typeof CaixasMotoristaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/expedicao/rotas': typeof ExpedicaoRotasRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/quebra/lancar': typeof QuebraLancarRoute
@@ -251,6 +260,7 @@ export interface FileRouteTypes {
     | '/caixas/motorista'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/expedicao/rotas'
     | '/expedicao/tv'
     | '/gestao/usuarios'
     | '/quebra/lancar'
@@ -277,6 +287,7 @@ export interface FileRouteTypes {
     | '/caixas/motorista'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/expedicao/rotas'
     | '/expedicao/tv'
     | '/gestao/usuarios'
     | '/quebra/lancar'
@@ -303,6 +314,7 @@ export interface FileRouteTypes {
     | '/caixas/motorista'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/expedicao/rotas'
     | '/expedicao/tv'
     | '/gestao/usuarios'
     | '/quebra/lancar'
@@ -330,6 +342,7 @@ export interface RootRouteChildren {
   CaixasMotoristaRoute: typeof CaixasMotoristaRoute
   CaixasRetornoRoute: typeof CaixasRetornoRoute
   CaixasSaldoRoute: typeof CaixasSaldoRoute
+  ExpedicaoRotasRoute: typeof ExpedicaoRotasRoute
   ExpedicaoTvRoute: typeof ExpedicaoTvRoute
   QuebraLancarRoute: typeof QuebraLancarRoute
   RecebimentoConferirRoute: typeof RecebimentoConferirRoute
@@ -462,6 +475,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExpedicaoTvRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/expedicao/rotas': {
+      id: '/expedicao/rotas'
+      path: '/expedicao/rotas'
+      fullPath: '/expedicao/rotas'
+      preLoaderRoute: typeof ExpedicaoRotasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/caixas/saldo': {
       id: '/caixas/saldo'
       path: '/caixas/saldo'
@@ -540,6 +560,7 @@ const rootRouteChildren: RootRouteChildren = {
   CaixasMotoristaRoute: CaixasMotoristaRoute,
   CaixasRetornoRoute: CaixasRetornoRoute,
   CaixasSaldoRoute: CaixasSaldoRoute,
+  ExpedicaoRotasRoute: ExpedicaoRotasRoute,
   ExpedicaoTvRoute: ExpedicaoTvRoute,
   QuebraLancarRoute: QuebraLancarRoute,
   RecebimentoConferirRoute: RecebimentoConferirRoute,

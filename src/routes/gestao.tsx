@@ -23,6 +23,13 @@ import {
   useDestinatarioClienteMap,
   useSaveDestinatarioClienteMap,
 } from "@/hooks/use-cadastros";
+import {
+  useRotasComDetalhes,
+  useSaveRota,
+  useClientesPorRota,
+  useAlocarClienteRota,
+  SEM_ROTA_ID,
+} from "@/hooks/use-expedicao-rotas";
 import { configLabel, statusLabel } from "@/lib/labels";
 import { useCreateTipoCaixa, useDeleteTipoCaixa, useTiposCaixa, useUpdateTipoCaixa } from "@/hooks/use-tipos-caixa";
 import { useAliases, usePendenciasVinculo } from "@/hooks/use-pedidos";
@@ -61,6 +68,7 @@ function Page() {
       <Tabs defaultValue="cadastros" className="w-full">
         <TabsList>
           <TabsTrigger value="cadastros">Cadastros</TabsTrigger>
+          <TabsTrigger value="rotas">Rotas</TabsTrigger>
           <TabsTrigger value="caixas">Tipos de caixa</TabsTrigger>
           <TabsTrigger value="conversao">Conversão</TabsTrigger>
           <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
@@ -70,6 +78,9 @@ function Page() {
         </TabsList>
         <TabsContent value="cadastros" className="mt-4">
           <CadastrosPanel />
+        </TabsContent>
+        <TabsContent value="rotas" className="mt-4">
+          <RotasPanel />
         </TabsContent>
         <TabsContent value="caixas" className="mt-4">
           <TiposCaixaPanel />
@@ -394,6 +405,364 @@ function FamiliasPanel() {
         </ul>
       </CardContent>
     </Card>
+  );
+}
+
+const DIAS_SEMANA = [
+  { value: "seg", label: "Seg" },
+  { value: "ter", label: "Ter" },
+  { value: "qua", label: "Qua" },
+  { value: "qui", label: "Qui" },
+  { value: "sex", label: "Sex" },
+  { value: "sab", label: "Sáb" },
+  { value: "dom", label: "Dom" },
+];
+
+function RotasPanel() {
+  const { data: rotas = [], isLoading: loadingRotas } = useRotasComDetalhes();
+  const { data: clientesPorRota = [] } = useClientesPorRota();
+  const { data: motoristas = [] } = useMotoristas();
+  const { data: caminhoes = [] } = useCaminhoes();
+  const saveRota = useSaveRota();
+  const alocarCliente = useAlocarClienteRota();
+  const [nome, setNome] = useState("");
+  const [dias, setDias] = useState<string[]>([]);
+  const [motoristaId, setMotoristaId] = useState("");
+  const [caminhaoId, setCaminhaoId] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState("");
+  const [editDias, setEditDias] = useState<string[]>([]);
+  const [editMotoristaId, setEditMotoristaId] = useState("");
+  const [editCaminhaoId, setEditCaminhaoId] = useState("");
+
+  const clientesSemRota = clientesPorRota.filter((c) => c.rota_id === SEM_ROTA_ID);
+
+  const handleAdd = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!nome.trim()) {
+      toast.error("Informe o nome da rota");
+      return;
+    }
+    saveRota.mutate(
+      {
+        nome: nome.trim(),
+        dias_semana: dias,
+        motorista_padrao_id: motoristaId || null,
+        caminhao_padrao_id: caminhaoId || null,
+        ativo: true,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Rota criada");
+          setNome("");
+          setDias([]);
+          setMotoristaId("");
+          setCaminhaoId("");
+        },
+        onError: (err) => toast.error(err.message),
+      }
+    );
+  };
+
+  const handleSaveEdit = () => {
+    if (!editId || !editNome.trim()) return;
+    saveRota.mutate(
+      {
+        id: editId,
+        nome: editNome.trim(),
+        dias_semana: editDias,
+        motorista_padrao_id: editMotoristaId || null,
+        caminhao_padrao_id: editCaminhaoId || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Rota atualizada");
+          setEditId(null);
+        },
+        onError: (err) => toast.error(err.message),
+      }
+    );
+  };
+
+  const rotasList = rotas.map((r) => ({
+    ...r,
+    motoristas: Array.isArray(r.motoristas) ? r.motoristas[0] : r.motoristas,
+    caminhoes: Array.isArray(r.caminhoes) ? r.caminhoes[0] : r.caminhoes,
+  })) as {
+    id: string;
+    nome: string;
+    ativo: boolean;
+    dias_semana: string[] | null;
+    motorista_padrao_id: string | null;
+    caminhao_padrao_id: string | null;
+    motoristas: { nome: string } | null;
+    caminhoes: { placa: string } | null;
+  }[];
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Rotas de expedição</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={handleAdd} className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Input
+                className="flex-1 min-w-[200px]"
+                placeholder="Nome da rota"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+              />
+              <select
+                className="h-9 rounded-md border border-border px-2 text-sm"
+                value={motoristaId}
+                onChange={(e) => setMotoristaId(e.target.value)}
+              >
+                <option value="">Motorista padrão…</option>
+                {motoristas.map((m) => (
+                  <option key={m.id} value={m.id}>{m.nome}</option>
+                ))}
+              </select>
+              <select
+                className="h-9 rounded-md border border-border px-2 text-sm"
+                value={caminhaoId}
+                onChange={(e) => setCaminhaoId(e.target.value)}
+              >
+                <option value="">Caminhão padrão…</option>
+                {caminhoes.map((c) => (
+                  <option key={c.id} value={c.id}>{c.placa}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Dias:</span>
+              {DIAS_SEMANA.map((d) => (
+                <label key={d.value} className="flex items-center gap-1 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={dias.includes(d.value)}
+                    onChange={(e) =>
+                      setDias(
+                        e.target.checked
+                          ? [...dias, d.value]
+                          : dias.filter((x) => x !== d.value)
+                      )
+                    }
+                  />
+                  {d.label}
+                </label>
+              ))}
+              <Button type="submit" size="sm" className="ml-auto">
+                Adicionar rota
+              </Button>
+            </div>
+          </form>
+
+          {loadingRotas ? (
+            <p className="text-xs text-muted-foreground">Carregando...</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {rotasList.map((r) => {
+                const clientesRota = clientesPorRota.filter((c) => c.rota_id === r.id);
+                const isEditing = editId === r.id;
+                return (
+                  <li
+                    key={r.id}
+                    className={`border rounded-lg p-3 ${r.ativo ? "" : "opacity-50"}`}
+                  >
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Input
+                            className="flex-1"
+                            value={editNome}
+                            onChange={(e) => setEditNome(e.target.value)}
+                          />
+                          <select
+                            className="h-9 rounded-md border border-border px-2 text-sm"
+                            value={editMotoristaId}
+                            onChange={(e) => setEditMotoristaId(e.target.value)}
+                          >
+                            <option value="">Motorista…</option>
+                            {motoristas.map((m) => (
+                              <option key={m.id} value={m.id}>{m.nome}</option>
+                            ))}
+                          </select>
+                          <select
+                            className="h-9 rounded-md border border-border px-2 text-sm"
+                            value={editCaminhaoId}
+                            onChange={(e) => setEditCaminhaoId(e.target.value)}
+                          >
+                            <option value="">Caminhão…</option>
+                            {caminhoes.map((c) => (
+                              <option key={c.id} value={c.id}>{c.placa}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Dias:</span>
+                          {DIAS_SEMANA.map((d) => (
+                            <label key={d.value} className="flex items-center gap-1 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={editDias.includes(d.value)}
+                                onChange={(e) =>
+                                  setEditDias(
+                                    e.target.checked
+                                      ? [...editDias, d.value]
+                                      : editDias.filter((x) => x !== d.value)
+                                  )
+                                }
+                              />
+                              {d.label}
+                            </label>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={handleSaveEdit}>
+                            Salvar
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <span className="font-semibold text-navy">{r.nome}</span>
+                            {r.dias_semana?.length ? (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                {r.dias_semana.map((d) => DIAS_SEMANA.find((x) => x.value === d)?.label).join(", ")}
+                              </span>
+                            ) : null}
+                            {r.motoristas?.nome && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                · {r.motoristas.nome}
+                              </span>
+                            )}
+                            {r.caminhoes?.placa && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                · {r.caminhoes.placa}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditId(r.id);
+                                setEditNome(r.nome);
+                                setEditDias(r.dias_semana ?? []);
+                                setEditMotoristaId(r.motorista_padrao_id ?? "");
+                                setEditCaminhaoId(r.caminhao_padrao_id ?? "");
+                              }}
+                            >
+                              Editar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                saveRota.mutate(
+                                  { id: r.id, nome: r.nome, ativo: !r.ativo },
+                                  {
+                                    onSuccess: () =>
+                                      toast.success(r.ativo ? "Rota inativada" : "Rota reativada"),
+                                  }
+                                )
+                              }
+                            >
+                              {r.ativo ? "Inativar" : "Ativar"}
+                            </Button>
+                          </div>
+                        </div>
+                        {clientesRota.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {clientesRota.map((c) => (
+                              <span
+                                key={c.cliente_id}
+                                className="chip chip-muted text-xs flex items-center gap-1"
+                              >
+                                {c.cliente_nome}
+                                <button
+                                  type="button"
+                                  className="ml-1 text-muted-foreground hover:text-destructive"
+                                  onClick={() =>
+                                    alocarCliente.mutate(
+                                      { clienteId: c.cliente_id, rotaId: null },
+                                      { onSuccess: () => toast.success("Cliente removido da rota") }
+                                    )
+                                  }
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Alocar supermercados às rotas</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {clientesSemRota.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Todos os supermercados estão alocados em rotas.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {clientesSemRota.length} supermercado(s) sem rota definida:
+              </p>
+              <ul className="space-y-2">
+                {clientesSemRota.map((c) => (
+                  <li
+                    key={c.cliente_id}
+                    className="flex items-center justify-between gap-2 border-b border-border py-2"
+                  >
+                    <span className="font-medium">{c.cliente_nome}</span>
+                    <select
+                      className="h-8 rounded-md border border-border px-2 text-sm"
+                      defaultValue=""
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        alocarCliente.mutate(
+                          { clienteId: c.cliente_id, rotaId: e.target.value },
+                          { onSuccess: () => toast.success("Supermercado alocado à rota") }
+                        );
+                      }}
+                    >
+                      <option value="">Selecionar rota…</option>
+                      {rotasList
+                        .filter((r) => r.ativo)
+                        .map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.nome}
+                          </option>
+                        ))}
+                    </select>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

@@ -14,6 +14,7 @@ import {
   Handshake,
   Shield,
   PackageCheck as ConferirIcon,
+  Route,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,6 +26,7 @@ export const SLUG_TO_PATH: Record<string, string> = {
   "recebimento/liberacoes": "/recebimento/liberacoes",
   expedicao: "/expedicao",
   "expedicao/tv": "/expedicao/tv",
+  "expedicao/rotas": "/expedicao/rotas",
   "caixas/saldo": "/caixas/saldo",
   "caixas/economia": "/caixas/economia",
   "caixas/retorno": "/caixas/retorno",
@@ -60,6 +62,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   Handshake,
   Shield,
   PackageCheckConferir: ConferirIcon,
+  Route,
 };
 
 export function pathnameToSlug(pathname: string): string {
