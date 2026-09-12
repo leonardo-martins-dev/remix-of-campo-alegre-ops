@@ -19,6 +19,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as RecebimentoIndexRouteImport } from './routes/recebimento/index'
 import { Route as QuebraIndexRouteImport } from './routes/quebra/index'
 import { Route as ExpedicaoIndexRouteImport } from './routes/expedicao/index'
+import { Route as RecebimentoValesRouteImport } from './routes/recebimento/vales'
 import { Route as RecebimentoLiberacoesRouteImport } from './routes/recebimento/liberacoes'
 import { Route as RecebimentoFaltasRouteImport } from './routes/recebimento/faltas'
 import { Route as RecebimentoConferirRouteImport } from './routes/recebimento/conferir'
@@ -80,6 +81,11 @@ const QuebraIndexRoute = QuebraIndexRouteImport.update({
 const ExpedicaoIndexRoute = ExpedicaoIndexRouteImport.update({
   id: '/expedicao/',
   path: '/expedicao/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecebimentoValesRoute = RecebimentoValesRouteImport.update({
+  id: '/recebimento/vales',
+  path: '/recebimento/vales',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RecebimentoLiberacoesRoute = RecebimentoLiberacoesRouteImport.update({
@@ -163,6 +169,7 @@ export interface FileRoutesByFullPath {
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/recebimento/liberacoes': typeof RecebimentoLiberacoesRoute
+  '/recebimento/vales': typeof RecebimentoValesRoute
   '/expedicao/': typeof ExpedicaoIndexRoute
   '/quebra/': typeof QuebraIndexRoute
   '/recebimento/': typeof RecebimentoIndexRoute
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/recebimento/liberacoes': typeof RecebimentoLiberacoesRoute
+  '/recebimento/vales': typeof RecebimentoValesRoute
   '/expedicao': typeof ExpedicaoIndexRoute
   '/quebra': typeof QuebraIndexRoute
   '/recebimento': typeof RecebimentoIndexRoute
@@ -212,6 +220,7 @@ export interface FileRoutesById {
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/recebimento/liberacoes': typeof RecebimentoLiberacoesRoute
+  '/recebimento/vales': typeof RecebimentoValesRoute
   '/expedicao/': typeof ExpedicaoIndexRoute
   '/quebra/': typeof QuebraIndexRoute
   '/recebimento/': typeof RecebimentoIndexRoute
@@ -238,6 +247,7 @@ export interface FileRouteTypes {
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/recebimento/liberacoes'
+    | '/recebimento/vales'
     | '/expedicao/'
     | '/quebra/'
     | '/recebimento/'
@@ -262,6 +272,7 @@ export interface FileRouteTypes {
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/recebimento/liberacoes'
+    | '/recebimento/vales'
     | '/expedicao'
     | '/quebra'
     | '/recebimento'
@@ -286,6 +297,7 @@ export interface FileRouteTypes {
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/recebimento/liberacoes'
+    | '/recebimento/vales'
     | '/expedicao/'
     | '/quebra/'
     | '/recebimento/'
@@ -310,6 +322,7 @@ export interface RootRouteChildren {
   RecebimentoConferirRoute: typeof RecebimentoConferirRoute
   RecebimentoFaltasRoute: typeof RecebimentoFaltasRoute
   RecebimentoLiberacoesRoute: typeof RecebimentoLiberacoesRoute
+  RecebimentoValesRoute: typeof RecebimentoValesRoute
   ExpedicaoIndexRoute: typeof ExpedicaoIndexRoute
   QuebraIndexRoute: typeof QuebraIndexRoute
   RecebimentoIndexRoute: typeof RecebimentoIndexRoute
@@ -385,6 +398,13 @@ declare module '@tanstack/react-router' {
       path: '/expedicao'
       fullPath: '/expedicao/'
       preLoaderRoute: typeof ExpedicaoIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recebimento/vales': {
+      id: '/recebimento/vales'
+      path: '/recebimento/vales'
+      fullPath: '/recebimento/vales'
+      preLoaderRoute: typeof RecebimentoValesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/recebimento/liberacoes': {
@@ -504,6 +524,7 @@ const rootRouteChildren: RootRouteChildren = {
   RecebimentoConferirRoute: RecebimentoConferirRoute,
   RecebimentoFaltasRoute: RecebimentoFaltasRoute,
   RecebimentoLiberacoesRoute: RecebimentoLiberacoesRoute,
+  RecebimentoValesRoute: RecebimentoValesRoute,
   ExpedicaoIndexRoute: ExpedicaoIndexRoute,
   QuebraIndexRoute: QuebraIndexRoute,
   RecebimentoIndexRoute: RecebimentoIndexRoute,

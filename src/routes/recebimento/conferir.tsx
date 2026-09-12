@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Save, CheckCircle2, Camera, Info, ArrowLeft, Check, AlertTriangle } from "lucide-react";
+import { Plus, Save, CheckCircle2, Camera, Info, ArrowLeft, Check, AlertTriangle, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { NumberStepper } from "@/components/number-stepper";
@@ -31,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { usePedidosDia, usePedido, useConfigValor, useSaldoItensPedido } from "@/hooks/use-pedidos";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { useRegistrarMovimentoFornecedor } from "@/hooks/use-ledger";
@@ -43,10 +44,11 @@ import {
 } from "@/hooks/use-conferencia";
 import { useProdutos } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
-import { formatTime } from "@/lib/utils-date";
+import { formatTime, formatDateBRT } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useCreateVale, useValesConferente, uploadValeFoto } from "@/hooks/use-vales";
 
 type ConferirSearch = { pedidoId?: string };
 
@@ -282,6 +284,16 @@ function ConferenciaItens({
 
   const [itens, setItens] = useState<LinhaItem[]>([]);
 
+  // Vale state
+  const createVale = useCreateVale();
+  const { data: meusVales = [] } = useValesConferente(user?.id ?? null);
+  const [valeOpen, setValeOpen] = useState(false);
+  const [valeItem, setValeItem] = useState<LinhaItem | null>(null);
+  const [valeObs, setValeObs] = useState("");
+  const [valeFotos, setValeFotos] = useState<string[]>([]);
+  const [valeUploading, setValeUploading] = useState(false);
+  const valeFotoRef = useRef<HTMLInputElement>(null);
+
   const pendentes = pedidos.filter((p) => p.status === "pendente" || p.status === "parcial");
   const fornecedorNome = one(pedido?.fornecedores)?.nome ?? one(pedidos.find((p) => p.id === pedidoId)?.fornecedores)?.nome ?? "—";
   const codigo = pedido?.codigo ?? pedidos.find((p) => p.id === pedidoId)?.codigo ?? "";
@@ -354,6 +366,73 @@ function ConferenciaItens({
           : { ...it, qualidade: it.qualidade ? null : { ativo: true, qtd: 1 } }
       )
     );
+  };
+
+  const fornecedorId = pedido?.fornecedor_id ?? pedidos.find((p) => p.id === pedidoId)?.fornecedor_id ?? "";
+
+  const openValeDialog = (it: LinhaItem, jaRecebido: number) => {
+    setValeItem({ ...it, recebido: it.recebido + jaRecebido });
+    setValeObs("");
+    setValeFotos([]);
+    setValeOpen(true);
+  };
+
+  const handleValeFotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setValeUploading(true);
+    try {
+      const tempId = `temp-${Date.now()}`;
+      const url = await uploadValeFoto(file, tempId);
+      setValeFotos((prev) => [...prev, url]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar foto");
+    } finally {
+      setValeUploading(false);
+    }
+  };
+
+  const submitVale = async () => {
+    if (!valeItem || !user?.id || !pedidoId || !fornecedorId) {
+      toast.error("Dados incompletos para solicitar vale");
+      return;
+    }
+    const diferenca = valeItem.pedido - valeItem.recebido;
+    if (diferenca <= 0) {
+      toast.error("Não há diferença para solicitar vale");
+      return;
+    }
+    const preco = valeItem.preco ?? fallbackPreco;
+    const valorCalc = diferenca * preco;
+    const estimado = !valeItem.preco;
+
+    try {
+      await createVale.mutateAsync({
+        pedido_id: pedidoId,
+        item_conferencia_id: valeItem.id,
+        fornecedor_id: fornecedorId,
+        conferente_id: user.id,
+        produto_nome: valeItem.produto,
+        quantidade_pedida: valeItem.pedido,
+        quantidade_recebida: valeItem.recebido,
+        diferenca,
+        preco_unitario: preco,
+        valor_calculado: valorCalc,
+        estimado,
+        observacao_conferente: valeObs.trim() || null,
+        fotos: valeFotos,
+      });
+      toast.success("Solicitação de vale enviada ao ADM");
+      setValeOpen(false);
+      setValeItem(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao solicitar vale");
+    }
+  };
+
+  const itemJaSolicitouVale = (itemId: string) => {
+    return meusVales.some((v) => v.item_conferencia_id === itemId && v.status === "pendente");
   };
 
   const stats = useMemo(() => {
@@ -767,6 +846,19 @@ function ConferenciaItens({
                           </button>
                         </>
                       )}
+                      {it.conferido && gap < 0 && !itemJaSolicitouVale(it.id) && (
+                        <button
+                          type="button"
+                          onClick={() => openValeDialog(it, jaRecebido)}
+                          className="inline-flex items-center gap-1 min-h-11 px-3 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold hover:bg-amber-100 transition-colors"
+                          title="Solicitar vale/desconto ao ADM"
+                        >
+                          <Receipt size={12} /> Vale
+                        </button>
+                      )}
+                      {itemJaSolicitouVale(it.id) && (
+                        <span className="chip chip-info text-xs">Vale pendente</span>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -790,6 +882,45 @@ function ConferenciaItens({
               </label>
             </div>
           ))}
+        </div>
+      )}
+
+      {meusVales.length > 0 && (
+        <div className="mt-5 rounded-xl border p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <Receipt size={14} /> Meus pedidos de vale
+          </h3>
+          <div className="space-y-2">
+            {meusVales.slice(0, 5).map((v) => (
+              <div key={v.id} className="flex items-center justify-between gap-3 p-2 rounded bg-secondary/30 text-sm">
+                <div>
+                  <span className="font-medium">{v.produto_nome ?? "Produto"}</span>
+                  <span className="text-muted-foreground ml-2">· {v.diferenca} un</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">R$ {v.valor_calculado.toFixed(2)}</span>
+                  {v.status === "pendente" && (
+                    <span className="chip chip-warn">Pendente</span>
+                  )}
+                  {v.status === "aplicado" && (
+                    <span className="chip chip-ok">
+                      Aplicado · R$ {v.valor_final?.toFixed(2)}
+                    </span>
+                  )}
+                  {v.status === "recusado" && (
+                    <span className="chip chip-danger" title={v.motivo_recusa ?? ""}>
+                      Recusado
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+            {meusVales.length > 5 && (
+              <p className="text-xs text-muted-foreground text-center">
+                +{meusVales.length - 5} vales anteriores
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -891,6 +1022,104 @@ function ConferenciaItens({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={valeOpen} onOpenChange={setValeOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Solicitar vale ao ADM</DialogTitle>
+          </DialogHeader>
+          <input
+            ref={valeFotoRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleValeFotoUpload}
+          />
+          {valeItem && (
+            <div className="space-y-4">
+              <div className="bg-secondary/50 rounded-lg p-3 text-sm space-y-1">
+                <div className="font-semibold text-navy">{valeItem.produto}</div>
+                <div className="text-muted-foreground">
+                  Pedido {codigo} · {fornecedorNome}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="p-3 rounded-lg border">
+                  <div className="text-2xl font-bold text-navy">{valeItem.pedido}</div>
+                  <div className="text-xs text-muted-foreground">Pedido</div>
+                </div>
+                <div className="p-3 rounded-lg border">
+                  <div className="text-2xl font-bold text-navy">{valeItem.recebido}</div>
+                  <div className="text-xs text-muted-foreground">Recebido</div>
+                </div>
+                <div className="p-3 rounded-lg border border-amber-200 bg-amber-50">
+                  <div className="text-2xl font-bold text-amber-700">{valeItem.pedido - valeItem.recebido}</div>
+                  <div className="text-xs text-amber-600">Diferença</div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg border border-primary/20 bg-primary-soft">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Valor calculado:</span>
+                  <span className="text-lg font-bold text-primary-dark">
+                    R$ {((valeItem.pedido - valeItem.recebido) * (valeItem.preco ?? fallbackPreco)).toFixed(2)}
+                    {!valeItem.preco && <span className="text-xs font-normal ml-1">(estimado)</span>}
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {valeItem.pedido - valeItem.recebido} {valeItem.unid} × R$ {(valeItem.preco ?? fallbackPreco).toFixed(2)}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Observação (opcional)</Label>
+                <Textarea
+                  placeholder="Motivo, detalhes ou justificativa..."
+                  value={valeObs}
+                  onChange={(e) => setValeObs(e.target.value)}
+                  rows={2}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Fotos (opcional)</Label>
+                <div className="flex flex-wrap gap-2">
+                  {valeFotos.map((url, i) => (
+                    <div key={i} className="relative w-16 h-16 rounded-md overflow-hidden border">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        className="absolute top-0 right-0 bg-destructive text-white text-xs w-5 h-5 flex items-center justify-center"
+                        onClick={() => setValeFotos((prev) => prev.filter((_, j) => j !== i))}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => valeFotoRef.current?.click()}
+                    disabled={valeUploading}
+                    className="w-16 h-16 rounded-md border-2 border-dashed border-border flex items-center justify-center text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-50"
+                  >
+                    {valeUploading ? "..." : <Camera size={20} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setValeOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={submitVale} disabled={createVale.isPending || !valeItem}>
+              {createVale.isPending ? "Enviando..." : "Solicitar vale"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

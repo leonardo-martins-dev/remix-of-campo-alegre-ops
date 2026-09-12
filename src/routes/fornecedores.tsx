@@ -9,6 +9,7 @@ import { useFornecedores } from "@/hooks/use-cadastros";
 import { useFaltas, useConfigValor, useFillRate } from "@/hooks/use-pedidos";
 import { useQuebras } from "@/hooks/use-quebra";
 import { useSaldosCaixa } from "@/hooks/use-ledger";
+import { useValesPorFornecedor, useValesFornecedor } from "@/hooks/use-vales";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { one } from "@/lib/embed";
@@ -28,7 +29,9 @@ function Page() {
   const { data: fillRows = [] } = useFillRate(period);
   const { data: alvo = 95 } = useConfigValor("alvo_fill_rate", 95);
   const { data: benchQ = 2 } = useConfigValor("benchmark_quebra_fornecedor", 2);
+  const { data: valesPorFornecedor = [] } = useValesPorFornecedor();
   const [fichaId, setFichaId] = useState<string | null>(null);
+  const { data: valesFicha = [] } = useValesFornecedor(fichaId);
 
   const { data: pedidos = [] } = useQuery({
     queryKey: ["pedidos-placar", from, to],
@@ -70,6 +73,12 @@ function Page() {
       const fillRow = (fillRows as { fornecedor_id: string; fill_rate?: number; fill_rate_valor?: number }[])
         .find((r) => r.fornecedor_id === f.id);
       const fill = Number(fillRow?.fill_rate_valor ?? fillRow?.fill_rate ?? 100);
+      const valeRow = (valesPorFornecedor as { fornecedor_id: string; pendentes: number; aplicados: number; recusados: number; valor_aplicado: number; valor_pendente: number }[])
+        .find((v) => v.fornecedor_id === f.id);
+      const valesPend = Number(valeRow?.pendentes ?? 0);
+      const valesApl = Number(valeRow?.aplicados ?? 0);
+      const valesRec = Number(valeRow?.recusados ?? 0);
+      const valesValor = Number(valeRow?.valor_aplicado ?? 0);
       return {
         id: f.id,
         nome: f.nome,
@@ -85,6 +94,10 @@ function Page() {
         quebraCx,
         quebraR,
         caixaAberto,
+        valesPend,
+        valesApl,
+        valesRec,
+        valesValor,
         impacto: faltaR + qualidadeR + quebraR,
       };
     }).sort((a, b) => b.impacto - a.impacto);
@@ -109,6 +122,7 @@ function Page() {
               <th>Faltas</th>
               <th>Qualidade</th>
               <th>Quebra</th>
+              <th>Vales</th>
               <th>Caixas</th>
               <th>Impacto</th>
             </tr>
@@ -125,6 +139,11 @@ function Page() {
                 <td>{r.faltaCx} un · {formatBRL(r.faltaR)} {r.acima ? `(${r.acima} acima)` : ""}</td>
                 <td>{r.qualidadeCx}</td>
                 <td className={r.quebraCx && (r.quebraCx / Math.max(1, r.pedidos)) * 100 > benchQ ? "text-destructive" : ""}>{r.quebraCx} · {formatBRL(r.quebraR)}</td>
+                <td>
+                  {r.valesPend > 0 && <span className="text-amber-600">{r.valesPend} pend</span>}
+                  {r.valesApl > 0 && <span className="text-[var(--success)] ml-1">{r.valesApl} apl · {formatBRL(r.valesValor)}</span>}
+                  {r.valesPend === 0 && r.valesApl === 0 && "—"}
+                </td>
                 <td>{r.caixaAberto}</td>
                 <td className="font-semibold">{formatBRL(r.impacto)}</td>
               </tr>
@@ -133,12 +152,51 @@ function Page() {
         </table>
       </div>
       {ficha && (
-        <div className="mt-6 rounded-xl border p-4 space-y-2">
+        <div className="mt-6 rounded-xl border p-4 space-y-3">
           <div className="flex justify-between">
             <h3 className="font-semibold">Ficha · {ficha.nome}</h3>
             <Button size="sm" variant="outline" onClick={() => exportToExcel(`ficha-${ficha.nome}.xlsx`, "Ficha", [ficha])}>Exportar ficha</Button>
           </div>
           <p className="text-sm">Impacto total {formatBRL(ficha.impacto)} · fill {ficha.fill.toFixed(1)}% · quebra {ficha.quebraCx} un</p>
+          
+          {(ficha.valesPend > 0 || ficha.valesApl > 0 || ficha.valesRec > 0) && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+              <h4 className="text-sm font-semibold text-amber-800 mb-2">Vales</h4>
+              <div className="flex flex-wrap gap-3 text-sm">
+                {ficha.valesPend > 0 && (
+                  <span className="text-amber-700">{ficha.valesPend} pendente(s)</span>
+                )}
+                {ficha.valesApl > 0 && (
+                  <span className="text-[var(--success)]">{ficha.valesApl} aplicado(s) · {formatBRL(ficha.valesValor)}</span>
+                )}
+                {ficha.valesRec > 0 && (
+                  <span className="text-muted-foreground">{ficha.valesRec} recusado(s)</span>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {valesFicha.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Histórico de vales</h4>
+              <div className="max-h-48 overflow-y-auto space-y-1">
+                {valesFicha.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between text-xs p-2 rounded bg-secondary/30">
+                    <div>
+                      <span className="font-medium">{v.produto_nome ?? "Produto"}</span>
+                      <span className="text-muted-foreground ml-2">· {v.diferenca} un</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {v.status === "pendente" && <span className="chip chip-warn">Pendente · {formatBRL(v.valor_calculado)}</span>}
+                      {v.status === "aplicado" && <span className="chip chip-ok">Aplicado · {formatBRL(v.valor_final ?? v.valor_calculado)}</span>}
+                      {v.status === "recusado" && <span className="chip chip-danger" title={v.motivo_recusa ?? ""}>Recusado</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
           <SerieSemanal fornecedorId={ficha.id} />
         </div>
       )}

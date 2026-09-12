@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert, RefreshCw, Ban } from "lucide-react";
+import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert, RefreshCw, Ban, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { useContarValesPendentes } from "@/hooks/use-vales";
 import { StatStrip } from "@/components/stat-strip";
 import {
   Dialog,
@@ -176,6 +177,7 @@ function Page() {
   const updatePedido = useUpdatePedidoAdmin();
   const encerrarPedido = useEncerrarPedido();
   const canAdmin = isAdmin || resolveIsAdmin(profile, user);
+  const { data: valesPendentes = 0 } = useContarValesPendentes();
 
   const [fornecedorId, setFornecedorId] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -296,12 +298,25 @@ function Page() {
               onChange={handleExcel}
             />
             {canAdmin && (
-              <Link
-                to="/recebimento/liberacoes"
-                className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-warning/40 bg-warning/10 text-sm font-semibold text-navy hover:bg-warning/20"
-              >
-                <ShieldAlert size={14} /> Liberações
-              </Link>
+              <>
+                <Link
+                  to="/recebimento/vales"
+                  className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-amber-300/50 bg-amber-50 text-sm font-semibold text-amber-800 hover:bg-amber-100 relative"
+                >
+                  <Receipt size={14} /> Vales
+                  {valesPendentes > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">
+                      {valesPendentes > 99 ? "99+" : valesPendentes}
+                    </span>
+                  )}
+                </Link>
+                <Link
+                  to="/recebimento/liberacoes"
+                  className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-warning/40 bg-warning/10 text-sm font-semibold text-navy hover:bg-warning/20"
+                >
+                  <ShieldAlert size={14} /> Liberações
+                </Link>
+              </>
             )}
             <button
               type="button"
