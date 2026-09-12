@@ -28,6 +28,7 @@ export const SLUG_TO_PATH: Record<string, string> = {
   "caixas/saldo": "/caixas/saldo",
   "caixas/economia": "/caixas/economia",
   "caixas/retorno": "/caixas/retorno",
+  "caixas/motorista": "/caixas/motorista",
   "caixas/galpao": "/caixas/galpao",
   "caixas/inventario": "/caixas/inventario",
   "caixas/fornecedor": "/caixas/fornecedor",

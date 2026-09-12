@@ -28,6 +28,7 @@ import { Route as GestaoUsuariosRouteImport } from './routes/gestao.usuarios'
 import { Route as ExpedicaoTvRouteImport } from './routes/expedicao/tv'
 import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
+import { Route as CaixasMotoristaRouteImport } from './routes/caixas/motorista'
 import { Route as CaixasInventarioRouteImport } from './routes/caixas/inventario'
 import { Route as CaixasGalpaoRouteImport } from './routes/caixas/galpao'
 import { Route as CaixasFornecedorRouteImport } from './routes/caixas/fornecedor'
@@ -128,6 +129,11 @@ const CaixasRetornoRoute = CaixasRetornoRouteImport.update({
   path: '/caixas/retorno',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CaixasMotoristaRoute = CaixasMotoristaRouteImport.update({
+  id: '/caixas/motorista',
+  path: '/caixas/motorista',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CaixasInventarioRoute = CaixasInventarioRouteImport.update({
   id: '/caixas/inventario',
   path: '/caixas/inventario',
@@ -161,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
   '/caixas/inventario': typeof CaixasInventarioRoute
+  '/caixas/motorista': typeof CaixasMotoristaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
@@ -186,6 +193,7 @@ export interface FileRoutesByTo {
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
   '/caixas/inventario': typeof CaixasInventarioRoute
+  '/caixas/motorista': typeof CaixasMotoristaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
@@ -212,6 +220,7 @@ export interface FileRoutesById {
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
   '/caixas/inventario': typeof CaixasInventarioRoute
+  '/caixas/motorista': typeof CaixasMotoristaRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
@@ -239,6 +248,7 @@ export interface FileRouteTypes {
     | '/caixas/fornecedor'
     | '/caixas/galpao'
     | '/caixas/inventario'
+    | '/caixas/motorista'
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/expedicao/tv'
@@ -264,6 +274,7 @@ export interface FileRouteTypes {
     | '/caixas/fornecedor'
     | '/caixas/galpao'
     | '/caixas/inventario'
+    | '/caixas/motorista'
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/expedicao/tv'
@@ -289,6 +300,7 @@ export interface FileRouteTypes {
     | '/caixas/fornecedor'
     | '/caixas/galpao'
     | '/caixas/inventario'
+    | '/caixas/motorista'
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/expedicao/tv'
@@ -315,6 +327,7 @@ export interface RootRouteChildren {
   CaixasFornecedorRoute: typeof CaixasFornecedorRoute
   CaixasGalpaoRoute: typeof CaixasGalpaoRoute
   CaixasInventarioRoute: typeof CaixasInventarioRoute
+  CaixasMotoristaRoute: typeof CaixasMotoristaRoute
   CaixasRetornoRoute: typeof CaixasRetornoRoute
   CaixasSaldoRoute: typeof CaixasSaldoRoute
   ExpedicaoTvRoute: typeof ExpedicaoTvRoute
@@ -463,6 +476,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CaixasRetornoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/caixas/motorista': {
+      id: '/caixas/motorista'
+      path: '/caixas/motorista'
+      fullPath: '/caixas/motorista'
+      preLoaderRoute: typeof CaixasMotoristaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/caixas/inventario': {
       id: '/caixas/inventario'
       path: '/caixas/inventario'
@@ -517,6 +537,7 @@ const rootRouteChildren: RootRouteChildren = {
   CaixasFornecedorRoute: CaixasFornecedorRoute,
   CaixasGalpaoRoute: CaixasGalpaoRoute,
   CaixasInventarioRoute: CaixasInventarioRoute,
+  CaixasMotoristaRoute: CaixasMotoristaRoute,
   CaixasRetornoRoute: CaixasRetornoRoute,
   CaixasSaldoRoute: CaixasSaldoRoute,
   ExpedicaoTvRoute: ExpedicaoTvRoute,
