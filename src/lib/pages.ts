@@ -15,6 +15,7 @@ import {
   Shield,
   PackageCheck as ConferirIcon,
   Route,
+  DollarSign,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,6 +42,7 @@ export const SLUG_TO_PATH: Record<string, string> = {
   indicadores: "/indicadores",
   gestao: "/gestao",
   "gestao/usuarios": "/gestao/usuarios",
+  "relatorios/custos": "/relatorios/custos",
 };
 
 export const ICON_MAP: Record<string, LucideIcon> = {
@@ -63,6 +65,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   Shield,
   PackageCheckConferir: ConferirIcon,
   Route,
+  DollarSign,
 };
 
 export function pathnameToSlug(pathname: string): string {
