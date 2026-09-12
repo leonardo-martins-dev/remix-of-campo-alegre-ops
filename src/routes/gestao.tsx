@@ -30,6 +30,7 @@ import { useResolverPendencia } from "@/hooks/use-wise-pedidos";
 import { usePosicoes, useSaldosAbertura } from "@/hooks/use-ledger";
 import { useMotivosAjuste, useSaveMotivoAjuste } from "@/hooks/use-inventario";
 import { ProdutosCadastro } from "@/components/produtos-cadastro";
+import { ConversaoCaixasPanel } from "@/components/conversao-caixas-panel";
 
 export const Route = createFileRoute("/gestao")({
   component: Page,
@@ -61,6 +62,7 @@ function Page() {
         <TabsList>
           <TabsTrigger value="cadastros">Cadastros</TabsTrigger>
           <TabsTrigger value="caixas">Tipos de caixa</TabsTrigger>
+          <TabsTrigger value="conversao">Conversão</TabsTrigger>
           <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
           <TabsTrigger value="abertura">Saldos de abertura</TabsTrigger>
           <TabsTrigger value="motivos">Motivos</TabsTrigger>
@@ -71,6 +73,9 @@ function Page() {
         </TabsContent>
         <TabsContent value="caixas" className="mt-4">
           <TiposCaixaPanel />
+        </TabsContent>
+        <TabsContent value="conversao" className="mt-4">
+          <ConversaoCaixasPanel />
         </TabsContent>
         <TabsContent value="vinculos" className="mt-4">
           <VinculosPanel />
