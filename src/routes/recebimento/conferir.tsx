@@ -1,6 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Save, CheckCircle2, Camera, Info, ArrowLeft, Check, AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import {
+  Plus,
+  Save,
+  CheckCircle2,
+  Camera,
+  Info,
+  ArrowLeft,
+  Check,
+  AlertTriangle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { NumberStepper } from "@/components/number-stepper";
@@ -47,8 +56,9 @@ import { formatTime } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { SugestaoCaixasBadge } from "@/components/sugestao-caixas";
 import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
+import { CaixasItemEditor, type CaixaItemEntry } from "@/components/caixas-item-editor";
+import { useCaixasItemConferencia } from "@/hooks/use-caixas-item";
 
 type ConferirSearch = { pedidoId?: string };
 
@@ -105,13 +115,11 @@ function Page() {
         <div className="bg-primary-soft border border-primary/20 rounded-lg p-3 mb-5 flex gap-2 text-xs text-primary-dark">
           <Info size={14} className="mt-0.5" />
           <span>
-            O recebimento é <strong>sempre aceito</strong>. Divergências não bloqueiam: viram registro no{" "}
-            <strong>Relatório de Faltas</strong>.
+            O recebimento é <strong>sempre aceito</strong>. Divergências não bloqueiam: viram
+            registro no <strong>Relatório de Faltas</strong>.
           </span>
         </div>
-        {loadingPedidos && (
-          <p className="text-sm text-muted-foreground">Carregando pedidos…</p>
-        )}
+        {loadingPedidos && <p className="text-sm text-muted-foreground">Carregando pedidos…</p>}
         {!loadingPedidos && pendentes.length === 0 && (
           <p className="text-sm text-muted-foreground">Nenhum pedido pendente hoje.</p>
         )}
@@ -129,7 +137,9 @@ function Page() {
                   <span className="chip chip-info">Chegou {formatTime(p.hora_chegada)}</span>
                   <span className="chip chip-warn">Pendente</span>
                 </div>
-                <div className="text-base font-bold text-navy">{one(p.fornecedores)?.nome ?? p.codigo}</div>
+                <div className="text-base font-bold text-navy">
+                  {one(p.fornecedores)?.nome ?? p.codigo}
+                </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {p.codigo} · {itensCount} itens no pedido
                 </div>
@@ -152,27 +162,44 @@ function Page() {
   );
 }
 
-function mapToLinha(
-  ic: {
-    id: string;
-    quantidade_recebida: number;
-    conferido: boolean;
-    tem_problema_qualidade: boolean;
-    quantidade_qualidade: number;
-    foto_url: string | null;
-    itens_pedido: {
-      id?: string;
-      quantidade_pedida: number;
-      preco_unitario?: number | null;
-      nome_externo?: string | null;
-      produto_id?: string | null;
-      produtos: { nome: string; unidade: string; tolerancia_pct?: number | null } | { nome: string; unidade: string; tolerancia_pct?: number | null }[] | null;
-      clientes?: { nome: string } | { nome: string }[] | null;
-    } | { id?: string; quantidade_pedida: number; preco_unitario?: number | null; nome_externo?: string | null; produto_id?: string | null; produtos: unknown; clientes?: unknown }[] | null;
-  }
-): LinhaItem {
+function mapToLinha(ic: {
+  id: string;
+  quantidade_recebida: number;
+  conferido: boolean;
+  tem_problema_qualidade: boolean;
+  quantidade_qualidade: number;
+  foto_url: string | null;
+  itens_pedido:
+    | {
+        id?: string;
+        quantidade_pedida: number;
+        preco_unitario?: number | null;
+        nome_externo?: string | null;
+        produto_id?: string | null;
+        produtos:
+          | { nome: string; unidade: string; tolerancia_pct?: number | null }
+          | { nome: string; unidade: string; tolerancia_pct?: number | null }[]
+          | null;
+        clientes?: { nome: string } | { nome: string }[] | null;
+      }
+    | {
+        id?: string;
+        quantidade_pedida: number;
+        preco_unitario?: number | null;
+        nome_externo?: string | null;
+        produto_id?: string | null;
+        produtos: unknown;
+        clientes?: unknown;
+      }[]
+    | null;
+}): LinhaItem {
   const ip = one(ic.itens_pedido);
-  const prod = one(ip?.produtos as { nome: string; unidade: string; tolerancia_pct?: number | null } | { nome: string; unidade: string; tolerancia_pct?: number | null }[] | null);
+  const prod = one(
+    ip?.produtos as
+      | { nome: string; unidade: string; tolerancia_pct?: number | null }
+      | { nome: string; unidade: string; tolerancia_pct?: number | null }[]
+      | null,
+  );
   return {
     id: ic.id,
     itemPedidoId: ip?.id,
@@ -201,7 +228,7 @@ function buildSavePayload(
     preco?: number | null;
     fallback?: number;
     jaRecebido?: number;
-  }
+  },
 ) {
   const ja = Number(opts?.jaRecebido ?? 0);
   const totalApos = ja + it.recebido;
@@ -277,13 +304,22 @@ function ConferenciaItens({
 
   const fornecedorIdPedido = pedido?.fornecedor_id ?? null;
   const itensParaSugestao = useMemo(() => {
-    const itensPedido = (pedido as { itens_pedido?: { produto_id?: string | null; quantidade_pedida: number }[] } | null)?.itens_pedido ?? [];
+    const itensPedido =
+      (
+        pedido as {
+          itens_pedido?: { produto_id?: string | null; quantidade_pedida: number }[];
+        } | null
+      )?.itens_pedido ?? [];
     return itensPedido.map((i) => ({
       produto_id: i.produto_id ?? null,
       quantidade: Number(i.quantidade_pedida),
     }));
   }, [pedido]);
   const { data: sugestoesCaixas } = useSugestaoCaixas(fornecedorIdPedido, itensParaSugestao);
+
+  const { data: caixasItemExistentes } = useCaixasItemConferencia(conferencia?.id);
+  const [caixasItem, setCaixasItem] = useState<Record<string, CaixaItemEntry[]>>({});
+  const caixasInitRef = useRef<string | null>(null);
 
   const [confirmFinal, setConfirmFinal] = useState(false);
 
@@ -297,16 +333,22 @@ function ConferenciaItens({
   const [itens, setItens] = useState<LinhaItem[]>([]);
 
   const pendentes = pedidos.filter((p) => p.status === "pendente" || p.status === "parcial");
-  const fornecedorNome = one(pedido?.fornecedores)?.nome ?? one(pedidos.find((p) => p.id === pedidoId)?.fornecedores)?.nome ?? "—";
+  const fornecedorNome =
+    one(pedido?.fornecedores)?.nome ??
+    one(pedidos.find((p) => p.id === pedidoId)?.fornecedores)?.nome ??
+    "—";
   const codigo = pedido?.codigo ?? pedidos.find((p) => p.id === pedidoId)?.codigo ?? "";
-  const wiseId = (pedido as { wise_pedido_id?: string | null } | null)?.wise_pedido_id
-    ?? (pedidos.find((p) => p.id === pedidoId) as { wise_pedido_id?: string | null } | undefined)?.wise_pedido_id;
+  const wiseId =
+    (pedido as { wise_pedido_id?: string | null } | null)?.wise_pedido_id ??
+    (pedidos.find((p) => p.id === pedidoId) as { wise_pedido_id?: string | null } | undefined)
+      ?.wise_pedido_id;
   const entregaAtual = (entregasMeta ?? []).findIndex((e) => e.id === conferencia?.id) + 1;
   const entregaTotal = Math.max(1, (entregasMeta ?? []).length);
   const horaChegada = pedido?.hora_chegada ?? pedidos.find((p) => p.id === pedidoId)?.hora_chegada;
   const conferenteNome = profile?.nome ?? "—";
   const pedidoStatus = pedido?.status ?? pedidos.find((p) => p.id === pedidoId)?.status;
-  const aguardandoLiberacao = pedidoStatus === "aguardando_liberacao" || pedidoStatus === "divergencia";
+  const aguardandoLiberacao =
+    pedidoStatus === "aguardando_liberacao" || pedidoStatus === "divergencia";
   const conferenciaAberta =
     conferencia?.status === "em_andamento" || conferencia?.status === "parcial";
   const readOnly = conferencia?.status === "finalizada";
@@ -325,24 +367,68 @@ function ConferenciaItens({
     startedRef.current = startKey;
     startMut.mutate(
       { pedidoId, conferenteId: user.id, user },
-      { onError: (e) => toast.error(e.message) }
+      { onError: (e) => toast.error(e.message) },
     );
   }, [pedidoId, user, pedidoStatus, conferencia?.id, conferenciaAberta, isLoading]);
 
   useEffect(() => {
     if (!conferencia?.itens_conferencia) return;
-    if (conferencia.status === "finalizada" && (pedidoStatus === "pendente" || pedidoStatus === "parcial")) {
+    if (
+      conferencia.status === "finalizada" &&
+      (pedidoStatus === "pendente" || pedidoStatus === "parcial")
+    ) {
       return;
     }
     setItens(conferencia.itens_conferencia.map(mapToLinha));
   }, [conferencia, pedidoStatus]);
 
+  useEffect(() => {
+    if (!conferencia?.itens_conferencia || !tipos.length) return;
+    const initKey = `${conferencia.id}:${sugestoesCaixas ? "sug" : "nosug"}:${caixasItemExistentes ? "db" : "nodb"}`;
+    if (caixasInitRef.current === initKey) return;
+    caixasInitRef.current = initKey;
+
+    const newCaixas: Record<string, CaixaItemEntry[]> = {};
+    for (const ic of conferencia.itens_conferencia) {
+      const itemId = ic.id;
+      const produtoId = one(ic.itens_pedido)?.produto_id as string | undefined;
+
+      const existingForItem = caixasItemExistentes?.get(itemId);
+      if (existingForItem && existingForItem.length > 0) {
+        newCaixas[itemId] = existingForItem.map((e) => ({
+          tipo_caixa_id: e.tipo_caixa_id,
+          sigla: e.sigla,
+          sugerida: e.sugerida,
+          real: e.real,
+          fator: e.fator,
+        }));
+      } else if (produtoId && sugestoesCaixas?.has(produtoId)) {
+        const sug = sugestoesCaixas.get(produtoId)!;
+        if (!sug.sem_conversao && sug.sugestoes.length > 0) {
+          const bestSug = sug.sugestoes[0];
+          newCaixas[itemId] = [
+            {
+              tipo_caixa_id: bestSug.tipo_caixa_id,
+              sigla: bestSug.tipo_caixa_sigla,
+              sugerida: bestSug.quantidade_caixas,
+              real: bestSug.quantidade_caixas,
+              fator: bestSug.fator,
+            },
+          ];
+        }
+      }
+    }
+    setCaixasItem(newCaixas);
+  }, [conferencia, tipos, sugestoesCaixas, caixasItemExistentes]);
+
+  const updateCaixasItem = useCallback((itemId: string, entries: CaixaItemEntry[]) => {
+    setCaixasItem((prev) => ({ ...prev, [itemId]: entries }));
+  }, []);
+
   const update = (idx: number, v: number) => {
     if (readOnly) return;
     setItens((prev) =>
-      prev.map((it, i) =>
-        i === idx ? { ...it, recebido: Math.max(0, v), conferido: true } : it
-      )
+      prev.map((it, i) => (i === idx ? { ...it, recebido: Math.max(0, v), conferido: true } : it)),
     );
   };
 
@@ -351,11 +437,12 @@ function ConferenciaItens({
     setItens((prev) =>
       prev.map((it, i) => {
         if (i !== idx) return it;
-        const saldoRow = (saldosItem as { item_pedido_id: string; recebido_acumulado: number }[])
-          .find((s) => s.item_pedido_id === it.itemPedidoId);
+        const saldoRow = (
+          saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
+        ).find((s) => s.item_pedido_id === it.itemPedidoId);
         const ja = Number(saldoRow?.recebido_acumulado ?? 0);
         return { ...it, recebido: Math.max(0, it.pedido - ja), conferido: true };
-      })
+      }),
     );
   };
 
@@ -363,10 +450,8 @@ function ConferenciaItens({
     if (readOnly) return;
     setItens((prev) =>
       prev.map((it, i) =>
-        i !== idx
-          ? it
-          : { ...it, qualidade: it.qualidade ? null : { ativo: true, qtd: 1 } }
-      )
+        i !== idx ? it : { ...it, qualidade: it.qualidade ? null : { ativo: true, qtd: 1 } },
+      ),
     );
   };
 
@@ -379,8 +464,9 @@ function ConferenciaItens({
     let comSaldo = 0;
     let sobraUn = 0;
     for (const it of contaveis) {
-      const saldoRow = (saldosItem as { item_pedido_id: string; recebido_acumulado: number }[])
-        .find((s) => s.item_pedido_id === it.itemPedidoId);
+      const saldoRow = (
+        saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
+      ).find((s) => s.item_pedido_id === it.itemPedidoId);
       const ja = Number(saldoRow?.recebido_acumulado ?? 0);
       const gap = ja + it.recebido - it.pedido;
       const pct = it.toleranciaPct ?? toleranciaPct;
@@ -424,24 +510,55 @@ function ConferenciaItens({
         pedidoId,
         status,
         itens: itens.map((it) => {
-            const saldoRow = (saldosItem as { item_pedido_id: string; recebido_acumulado: number }[])
-              .find((s) => s.item_pedido_id === it.itemPedidoId);
-            return buildSavePayload(it, {
-              toleranciaPct: it.toleranciaPct ?? toleranciaPct,
-              toleranciaMin,
-              preco: it.preco,
-              fallback: fallbackPreco,
-              jaRecebido: Number(saldoRow?.recebido_acumulado ?? 0),
-            });
-          }),
-        });
+          const saldoRow = (
+            saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
+          ).find((s) => s.item_pedido_id === it.itemPedidoId);
+          return buildSavePayload(it, {
+            toleranciaPct: it.toleranciaPct ?? toleranciaPct,
+            toleranciaMin,
+            preco: it.preco,
+            fallback: fallbackPreco,
+            jaRecebido: Number(saldoRow?.recebido_acumulado ?? 0),
+          });
+        }),
+      });
+
+      const totaisCaixasReal: Record<string, number> = {};
+      for (const it of itens) {
+        const entries = caixasItem[it.id] ?? [];
+        for (const e of entries) {
+          totaisCaixasReal[e.sigla] = (totaisCaixasReal[e.sigla] ?? 0) + e.real;
+        }
+      }
+
+      if (conferencia?.id) {
+        for (const it of itens) {
+          const entries = caixasItem[it.id] ?? [];
+          await supabase.from("caixas_item_conferencia").delete().eq("item_conferencia_id", it.id);
+          const rows = entries
+            .filter((e) => e.sugerida > 0 || e.real > 0)
+            .map((e) => ({
+              item_conferencia_id: it.id,
+              tipo_caixa_id: e.tipo_caixa_id,
+              tipo_caixa_sigla: e.sigla,
+              qtd_sugerida: e.sugerida,
+              qtd_real: e.real,
+              fator_usado: e.fator,
+              registrado_por: user?.id ?? null,
+            }));
+          if (rows.length > 0) {
+            await supabase.from("caixas_item_conferencia").insert(rows);
+          }
+        }
+      }
+
       if (status === "finalizada" && conferencia?.id) {
         await supabase.from("conferencia_caixas").delete().eq("conferencia_id", conferencia.id);
         const caixaRows = tipos
           .map((t) => ({
             conferencia_id: conferencia.id,
             tipo_caixa_sigla: t.sigla,
-            qtd_cheias: Number(cheias[t.sigla] ?? 0),
+            qtd_cheias: totaisCaixasReal[t.sigla] ?? 0,
             qtd_vazias: Number(vazias[t.sigla] ?? 0),
           }))
           .filter((r) => r.qtd_cheias > 0 || r.qtd_vazias > 0);
@@ -449,25 +566,32 @@ function ConferenciaItens({
           await supabase.from("conferencia_caixas").insert(caixaRows);
         }
       }
+
       if (status === "finalizada" && user && pedido?.fornecedor_id) {
+        await supabase
+          .from("movimentacoes_caixa")
+          .delete()
+          .eq("documento_id", conferencia.id)
+          .eq("documento_tipo", "entrega");
+
         for (const t of tipos) {
-          const c = Number(cheias[t.sigla] ?? 0);
-          const v = Number(vazias[t.sigla] ?? 0);
-          if (c > 0) {
+          const realQty = totaisCaixasReal[t.sigla] ?? 0;
+          const vaziasQty = Number(vazias[t.sigla] ?? 0);
+          if (realQty > 0) {
             await movForn.mutateAsync({
               fornecedor_id: pedido.fornecedor_id,
               tipo_caixa: t.sigla,
-              quantidade: c,
+              quantidade: realQty,
               natureza: "recebimento_cheias",
               registrado_por: user.id,
               conferencia_id: conferencia.id,
             });
           }
-          if (v > 0) {
+          if (vaziasQty > 0) {
             await movForn.mutateAsync({
               fornecedor_id: pedido.fornecedor_id,
               tipo_caixa: t.sigla,
-              quantidade: v,
+              quantidade: vaziasQty,
               natureza: "entrega_vazias",
               registrado_por: user.id,
               conferencia_id: conferencia.id,
@@ -476,26 +600,25 @@ function ConferenciaItens({
         }
       }
       const cargas = result?.cargasGeradas ?? [];
+      const totalCheias = Object.values(totaisCaixasReal).reduce((a, b) => a + b, 0);
+      const totalVazias = tipos.reduce((a, t) => a + Number(vazias[t.sigla] ?? 0), 0);
       const movTxt = tipos
         .map((t) => {
-          const c = Number(cheias[t.sigla] ?? 0);
+          const c = totaisCaixasReal[t.sigla] ?? 0;
           const v = Number(vazias[t.sigla] ?? 0);
           if (!c && !v) return null;
-          return `${t.sigla}: +${v} vazias · −${c} cheias`;
+          return `${t.sigla}: ${c > 0 ? `+${c} cheias` : ""}${c > 0 && v > 0 ? " · " : ""}${v > 0 ? `-${v} vazias` : ""}`;
         })
         .filter(Boolean)
         .join(" · ");
-      toast.success(
-        status === "finalizada" ? "Entrega finalizada" : "Parcial salva",
-        {
-          description:
-            status === "finalizada"
-              ? cargas.length
-                ? `${stats.conferidos} itens conferidos · ${cargas.length} carga(s) criada(s) no Painel de Carga (${cargas.map((c) => c.codigo).join(", ")}).`
-                : `${stats.conferidos} itens · ${cargas.length ? cargas.map((c) => c.codigo).join(", ") : "sem carga"} · ${movTxt || "sem movimento de caixa"}`
-              : `${stats.conferidos} itens guardados.`,
-        }
-      );
+      toast.success(status === "finalizada" ? "Entrega finalizada" : "Parcial salva", {
+        description:
+          status === "finalizada"
+            ? cargas.length
+              ? `${stats.conferidos} itens conferidos · ${cargas.length} carga(s) criada(s) no Painel de Carga (${cargas.map((c) => c.codigo).join(", ")}).`
+              : `${stats.conferidos} itens · ${movTxt || "sem movimento de caixa"}`
+            : `${stats.conferidos} itens guardados.`,
+      });
       if (status === "finalizada") onFinished();
       else onBack();
     } catch (e) {
@@ -551,9 +674,7 @@ function ConferenciaItens({
 
   if (error) {
     return (
-      <p className="text-sm text-destructive p-4">
-        Erro ao carregar conferência: {error.message}
-      </p>
+      <p className="text-sm text-destructive p-4">Erro ao carregar conferência: {error.message}</p>
     );
   }
 
@@ -592,22 +713,22 @@ function ConferenciaItens({
       )}
 
       {!readOnly && (
-      <div className="flex flex-wrap gap-2 mb-4">
-        {pendentes.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onTrocar(p.id)}
-            className={`px-3 h-8 rounded-md text-xs font-semibold transition-colors ${
-              p.id === pedidoId
-                ? "bg-primary text-primary-foreground"
-                : "bg-card border border-border text-navy hover:bg-secondary"
-            }`}
-          >
-            {one(p.fornecedores)?.nome ?? p.codigo}
-          </button>
-        ))}
-      </div>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {pendentes.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onTrocar(p.id)}
+              className={`px-3 h-8 rounded-md text-xs font-semibold transition-colors ${
+                p.id === pedidoId
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card border border-border text-navy hover:bg-secondary"
+              }`}
+            >
+              {one(p.fornecedores)?.nome ?? p.codigo}
+            </button>
+          ))}
+        </div>
       )}
 
       <div
@@ -641,7 +762,8 @@ function ConferenciaItens({
       <div className="bg-primary-soft border border-primary/20 rounded-lg p-3 mb-5 flex gap-2 text-xs text-primary-dark">
         <Info size={14} className="mt-0.5" />
         <span>
-          Recebimento sempre aceito. Divergências alimentam o Relatório de Faltas — não interrompem o lançamento.
+          Recebimento sempre aceito. Divergências alimentam o Relatório de Faltas — não interrompem
+          o lançamento.
         </span>
       </div>
 
@@ -691,8 +813,13 @@ function ConferenciaItens({
           </thead>
           <tbody>
             {itens.map((it, idx) => {
-              const saldoRow = (saldosItem as { item_pedido_id: string; recebido_acumulado: number; saldo: number }[])
-                .find((s) => s.item_pedido_id === it.itemPedidoId);
+              const saldoRow = (
+                saldosItem as {
+                  item_pedido_id: string;
+                  recebido_acumulado: number;
+                  saldo: number;
+                }[]
+              ).find((s) => s.item_pedido_id === it.itemPedidoId);
               const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
               const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
               const pct = it.toleranciaPct ?? toleranciaPct;
@@ -702,27 +829,42 @@ function ConferenciaItens({
               const pendente = !it.conferido;
               const dentroTol = Math.abs(Math.max(0, gap)) <= limite;
               const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
+              const itemCaixas = caixasItem[it.id] ?? [];
               return (
                 <tr key={it.id} className="border-t border-border">
                   <td className="px-4 py-3 font-semibold text-navy">
                     {it.produto}
-                    {it.aVincular && <span className="ml-2 chip chip-warn">produto a vincular</span>}
+                    {it.aVincular && (
+                      <span className="ml-2 chip chip-warn">produto a vincular</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{it.unid}</td>
                   <td className="px-4 py-3 text-right text-ink">{it.pedido}</td>
                   <td className="px-4 py-3">
-                    <SugestaoCaixasBadge sugestao={sugestaoItem} showAdminLink />
+                    <CaixasItemEditor
+                      entries={itemCaixas}
+                      onChange={(entries) => updateCaixasItem(it.id, entries)}
+                      tipos={tipos}
+                      sugestao={sugestaoItem}
+                      readOnly={readOnly || it.aVincular}
+                    />
                   </td>
                   <td className="px-4 py-3 text-right text-muted-foreground">{jaRecebido}</td>
                   <td className="px-4 py-3">
                     {readOnly || it.aVincular ? (
-                      <span className="font-semibold tabular-nums">{it.aVincular ? "—" : it.recebido}</span>
+                      <span className="font-semibold tabular-nums">
+                        {it.aVincular ? "—" : it.recebido}
+                      </span>
                     ) : (
                       <NumberStepper value={it.recebido} onChange={(v) => update(idx, v)} />
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">{Math.max(0, it.pedido - totalApos)}</td>
-                  <td className="px-4 py-3 text-right text-xs text-muted-foreground">±{limite.toFixed(0)} un</td>
+                  <td className="px-4 py-3 text-right font-semibold">
+                    {Math.max(0, it.pedido - totalApos)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-xs text-muted-foreground">
+                    ±{limite.toFixed(0)} un
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       {pendente && <span className="chip chip-muted">Pendente</span>}
@@ -795,53 +937,77 @@ function ConferenciaItens({
         </table>
       </div>
 
-      {!readOnly && tipos.length > 0 && (
+      {tipos.length > 0 && (
         <div className="mt-5 rounded-xl border p-4 space-y-3">
-          <h3 className="text-sm font-semibold">Caixas desta entrega</h3>
-          {tipos.map((t) => (
-            <div key={t.id} className="flex flex-wrap items-center gap-3 text-sm">
-              <span className="w-28 font-medium">{t.nome} ({t.sigla})</span>
-              <label className="flex items-center gap-2">Cheias
-                <NumberStepper value={cheias[t.sigla] ?? 0} onChange={(n) => setCheias((s) => ({ ...s, [t.sigla]: n }))} />
-              </label>
-              <label className="flex items-center gap-2">Vazias
-                <NumberStepper value={vazias[t.sigla] ?? 0} onChange={(n) => setVazias((s) => ({ ...s, [t.sigla]: n }))} />
-              </label>
+          <h3 className="text-sm font-semibold">Resumo de caixas desta entrega</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {tipos.map((t) => {
+              const cheiasCalc = itens.reduce((acc, it) => {
+                const entries = caixasItem[it.id] ?? [];
+                const e = entries.find((x) => x.sigla === t.sigla);
+                return acc + (e?.real ?? 0);
+              }, 0);
+              const vaziasQty = Number(vazias[t.sigla] ?? 0);
+              return (
+                <div key={t.id} className="p-2 rounded-lg bg-secondary/50 text-center">
+                  <div className="text-xs font-semibold text-muted-foreground mb-1">{t.sigla}</div>
+                  <div className="text-lg font-bold text-navy">{cheiasCalc}</div>
+                  <div className="text-[10px] text-muted-foreground">cheias (produtos)</div>
+                </div>
+              );
+            })}
+          </div>
+          {!readOnly && (
+            <div className="pt-3 border-t border-border">
+              <div className="text-xs font-semibold text-muted-foreground mb-2">
+                Caixas vazias devolvidas pelo fornecedor
+              </div>
+              <div className="flex flex-wrap gap-4">
+                {tipos.map((t) => (
+                  <label key={t.id} className="flex items-center gap-2 text-sm">
+                    <span className="w-8 text-center font-semibold">{t.sigla}</span>
+                    <NumberStepper
+                      value={vazias[t.sigla] ?? 0}
+                      onChange={(n) => setVazias((s) => ({ ...s, [t.sigla]: n }))}
+                    />
+                  </label>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
         </div>
       )}
 
       {!readOnly && (
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setAvulsoOpen(true)}
-          className="inline-flex items-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
-        >
-          <Plus size={14} /> Item avulso
-        </button>
-        <button
-          type="button"
-          onClick={() => salvar("parcial")}
-          disabled={saveMut.isPending}
-          className="inline-flex items-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
-        >
-          <Save size={14} /> Salvar parcial
-        </button>
-        <div className="flex-1" />
-        <div className="text-xs text-muted-foreground">
-          Assinatura: <span className="font-semibold text-navy">{conferenteNome}</span>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setAvulsoOpen(true)}
+            className="inline-flex items-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+          >
+            <Plus size={14} /> Item avulso
+          </button>
+          <button
+            type="button"
+            onClick={() => salvar("parcial")}
+            disabled={saveMut.isPending}
+            className="inline-flex items-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+          >
+            <Save size={14} /> Salvar parcial
+          </button>
+          <div className="flex-1" />
+          <div className="text-xs text-muted-foreground">
+            Assinatura: <span className="font-semibold text-navy">{conferenteNome}</span>
+          </div>
+          <button
+            type="button"
+            onClick={finalizar}
+            disabled={saveMut.isPending}
+            className="inline-flex items-center gap-2 min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+          >
+            <CheckCircle2 size={16} /> Finalizar entrega
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={finalizar}
-          disabled={saveMut.isPending}
-          className="inline-flex items-center gap-2 min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
-        >
-          <CheckCircle2 size={16} /> Finalizar entrega
-        </button>
-      </div>
       )}
 
       <Dialog open={avulsoOpen && !readOnly} onOpenChange={setAvulsoOpen}>
