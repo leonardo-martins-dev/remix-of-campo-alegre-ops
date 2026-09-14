@@ -91,7 +91,7 @@ JOIN public.clientes c ON c.id = cg.cliente_id
 LEFT JOIN public.rotas r ON r.id = c.rota_id
 WHERE cg.data_carga = public.today_brt()
   AND cg.status IN ('aguardando', 'carregando')
-GROUP BY cg.data_carga, r.id, r.nome, r.dias_semana, r.motorista_padrao_id, r.caminhao_padrao_id
+GROUP BY cg.data_carga, r.id, r.nome, r.dias_semana, r.motorista_padrao_id, r.caminhao_padrao_id, r.ordem
 ORDER BY r.ordem NULLS LAST, r.nome NULLS LAST;
 
 GRANT SELECT ON public.v_expedicao_por_rota TO authenticated;
@@ -125,7 +125,7 @@ JOIN public.produtos p ON p.id = ri.produto_id
 LEFT JOIN public.familias_produto fp ON fp.id = p.familia_id
 WHERE cg.data_carga = public.today_brt()
   AND cg.status IN ('aguardando', 'carregando')
-GROUP BY cg.data_carga, r.id, r.nome, ri.produto_id, p.id, p.nome, p.unidade, p.unidades_por_caixa, fp.nome
+GROUP BY cg.data_carga, r.id, r.nome, ri.produto_id, p.id, p.nome, p.unidade, p.unidades_por_caixa, fp.nome, fp.ordem
 ORDER BY fp.ordem NULLS LAST, fp.nome NULLS LAST, p.nome;
 
 GRANT SELECT ON public.v_produtos_por_rota TO authenticated;
