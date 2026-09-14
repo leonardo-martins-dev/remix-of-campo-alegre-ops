@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet, Receipt } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { KpiCard } from "@/components/kpi-card";
 import { BarRow } from "@/components/charts";
 import { Percent, TrendingDown, AlertTriangle, DollarSign } from "lucide-react";
 import { useFaltas, useConfigValor } from "@/hooks/use-pedidos";
 import { useFornecedores } from "@/hooks/use-cadastros";
+import { useAuth } from "@/lib/auth";
+import { useCreateVale, useValesPendentes } from "@/hooks/use-vales";
 import { exportToExcel } from "@/lib/excel";
 import { formatDateBRT, todayBRT } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
@@ -33,6 +36,7 @@ type FaltaRow = {
     quantidade_pedida: number;
     produtos: { nome: string; unidade: string } | null;
     pedidos_recebimento: {
+      id: string;
       codigo: string;
       fornecedor_id: string;
       fornecedores: { id: string; nome: string } | null;
@@ -41,6 +45,7 @@ type FaltaRow = {
 };
 
 function Page() {
+  const { isAdmin, user } = useAuth();
   const [fornecedorId, setFornecedorId] = useState<string>("all");
   const [period, setPeriod] = useState<"today" | "week" | "month">("week");
   const [divergencia, setDivergencia] = useState<"falta" | "sobra" | "qualidade" | "all">("falta");
@@ -54,6 +59,12 @@ function Page() {
     divergencia,
   });
   const { data: valorUnitario = 4.5 } = useConfigValor("impacto_falta_por_unidade", 4.5);
+  const createVale = useCreateVale();
+  const { data: valesExistentes = [] } = useValesPendentes();
+  const valeItemIds = useMemo(
+    () => new Set(valesExistentes.map((v) => v.item_conferencia_id).filter(Boolean)),
+    [valesExistentes],
+  );
 
   const faltasComImpacto = useMemo(() => {
     return faltas.map((raw) => {
@@ -85,6 +96,8 @@ function Page() {
       return {
         ...f,
         id: rec.id,
+        item_conferencia_id: rec.id,
+        pedido_id: ped?.id ?? null,
         produto: prod?.nome ?? "—",
         unid: prod?.unidade ?? "un",
         fornecedor: forn?.nome ?? "—",
@@ -303,6 +316,7 @@ function Page() {
                 <th className="text-right px-4 py-3">Divergência</th>
                 <th className="text-left px-4 py-3">Encerramento</th>
                 <th className="text-right px-4 py-3">Impacto</th>
+                {isAdmin && <th className="px-4 py-3" />}
               </tr>
             </thead>
             <tbody>
@@ -324,6 +338,42 @@ function Page() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right font-bold">R$ {i.impacto.toFixed(2)}</td>
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-right">
+                      {i.tipo === "falta" && i.pedido_id && i.fornecedor_id && !valeItemIds.has(i.item_conferencia_id) ? (
+                        <button
+                          type="button"
+                          disabled={createVale.isPending}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900 hover:underline disabled:opacity-50"
+                          onClick={async () => {
+                            if (!user?.id || !i.pedido_id || !i.fornecedor_id) return;
+                            try {
+                              await createVale.mutateAsync({
+                                pedido_id: i.pedido_id,
+                                item_conferencia_id: i.item_conferencia_id,
+                                fornecedor_id: i.fornecedor_id,
+                                conferente_id: user.id,
+                                produto_nome: i.produto,
+                                quantidade_pedida: i.pedido,
+                                quantidade_recebida: i.recebido,
+                                diferenca: i.falta,
+                                preco_unitario: i.preco !== valorUnitario ? i.preco : null,
+                                valor_calculado: i.impacto,
+                                estimado: i.estimado,
+                              });
+                              toast.success("Vale solicitado com sucesso");
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : "Erro ao solicitar vale");
+                            }
+                          }}
+                        >
+                          <Receipt size={12} /> Solicitar vale
+                        </button>
+                      ) : valeItemIds.has(i.item_conferencia_id) ? (
+                        <span className="text-xs text-muted-foreground">Vale criado</span>
+                      ) : null}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

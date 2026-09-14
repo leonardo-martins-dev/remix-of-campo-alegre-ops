@@ -1,5 +1,6 @@
 const QUEUE_KEY = "campo-alegre-retorno-queue";
 const FORN_QUEUE_KEY = "campo-alegre-fornecedor-queue";
+const MOV_QUEUE_KEY = "campo-alegre-movimentacao-queue";
 
 export type RetornoQueueItem = {
   id: string;
@@ -80,4 +81,35 @@ export function clearRetornoQueue() {
 export function removeFromQueue(id: string) {
   const queue = getRetornoQueue().filter((i) => i.id !== id);
   localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+}
+
+export type MovQueueItem = {
+  id: string;
+  origem: { tipo: string; ref_id: string | null; posicao_id: string | null; nome: string };
+  destino: { tipo: string; ref_id: string | null; posicao_id: string | null; nome: string };
+  caixas: Record<string, number>;
+  motorista_id?: string | null;
+  registrado_por: string;
+  observacoes?: string;
+  veiculo_fornecedor?: boolean;
+  created_at: string;
+};
+
+export function getMovQueue(): MovQueueItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(MOV_QUEUE_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+export function enqueueMov(item: Omit<MovQueueItem, "id" | "created_at">) {
+  const queue = getMovQueue();
+  queue.push({ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() });
+  localStorage.setItem(MOV_QUEUE_KEY, JSON.stringify(queue));
+}
+
+export function removeMovFromQueue(id: string) {
+  const queue = getMovQueue().filter((i) => i.id !== id);
+  localStorage.setItem(MOV_QUEUE_KEY, JSON.stringify(queue));
 }

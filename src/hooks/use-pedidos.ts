@@ -242,7 +242,7 @@ export function useFaltas(filters: FaltasFilters = {}) {
           itens_pedido(
             id, quantidade_pedida, preco_unitario,
             produtos(nome, unidade),
-            pedidos_recebimento(codigo, data_pedido, status, fornecedor_id, encerrado_em, encerrado_por, motivo_encerramento, fornecedores(id, nome))
+            pedidos_recebimento(id, codigo, data_pedido, status, fornecedor_id, encerrado_em, encerrado_por, motivo_encerramento, fornecedores(id, nome))
           )
         `)
         .not("divergencia", "is", null);

@@ -197,7 +197,7 @@ export function useAlertas() {
             tone: a.oldestDays >= critico ? "danger" : "warn",
             title: `${a.tipo} há ${a.oldestDays} dias (${a.partnerKind})`,
             desc: `${a.saldo} cx acima do alerta de ${alertaDias} dias (FIFO).`,
-            href: a.partnerKind === "fornecedor" ? "/caixas/fornecedor" : "/caixas/saldo",
+            href: a.partnerKind === "fornecedor" ? "/caixas/movimentacao" : "/caixas/saldo",
           });
         }
       });
@@ -235,7 +235,7 @@ export function useAlertas() {
           tone: "warn",
           title: `${atrasadas.length} confirmação(ões) atrasada(s)`,
           desc: `Fornecedor sem resposta há mais de ${diasConf} dias.`,
-          href: "/caixas/fornecedor",
+          href: "/caixas/movimentacao",
         });
       }
 
@@ -303,7 +303,7 @@ export function useAlertas() {
         }
       });
       if ((contestacoes ?? 0) > 0) {
-        danger.push({ tone: "danger", title: `${contestacoes} movimento(s) contestado(s)`, desc: "Revise no extrato do fornecedor.", href: "/caixas/fornecedor" });
+        danger.push({ tone: "danger", title: `${contestacoes} movimento(s) contestado(s)`, desc: "Revise no extrato do fornecedor.", href: "/caixas/movimentacao" });
       }
 
       return [...danger, ...warn].slice(0, 8);

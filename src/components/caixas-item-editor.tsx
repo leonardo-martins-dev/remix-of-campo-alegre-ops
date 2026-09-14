@@ -76,7 +76,7 @@ export function CaixasItemEditor({
     [entries, onChange, tipos, sugestao],
   );
 
-  if (entries.length === 0 && sugestao?.sem_conversao) {
+  if (entries.length === 0 && sugestao?.sem_conversao && readOnly) {
     return <span className="text-xs text-muted-foreground italic">sem conversão</span>;
   }
 

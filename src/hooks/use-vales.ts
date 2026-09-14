@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { one } from "@/lib/embed";
 
-export type StatusVale = "pendente" | "aplicado" | "recusado";
+export type StatusVale = "pendente" | "aplicado" | "lancado" | "recusado";
 
 export type SolicitacaoVale = {
   id: string;
@@ -23,15 +23,77 @@ export type SolicitacaoVale = {
   motivo_recusa: string | null;
   decidido_por: string | null;
   decidido_em: string | null;
+  lancado_em: string | null;
+  lancado_por: string | null;
+  ref_wise: string | null;
   created_at: string;
   updated_at: string;
   fornecedores?: { nome: string } | null;
   pedidos_recebimento?: { codigo: string } | null;
   conferente?: { nome: string } | null;
   decidido_por_profile?: { nome: string } | null;
+  lancado_por_profile?: { nome: string } | null;
   fotos?: { id: string; url: string }[];
 };
 
+export type ValesFilter = {
+  status: StatusVale;
+  fornecedorId?: string | null;
+  from?: string | null;
+  to?: string | null;
+};
+
+const VALES_SELECT = `
+  *,
+  fornecedores(nome),
+  pedidos_recebimento(codigo),
+  conferente:profiles!solicitacoes_vale_conferente_id_fkey(nome),
+  decidido_por_profile:profiles!solicitacoes_vale_decidido_por_fkey(nome),
+  lancado_por_profile:profiles!solicitacoes_vale_lancado_por_fkey(nome),
+  solicitacoes_vale_fotos(id, url)
+`;
+
+function mapVale(row: Record<string, unknown>): SolicitacaoVale {
+  return {
+    ...(row as unknown as SolicitacaoVale),
+    fornecedores: one(row.fornecedores as { nome: string } | { nome: string }[] | null),
+    pedidos_recebimento: one(row.pedidos_recebimento as { codigo: string } | { codigo: string }[] | null),
+    conferente: one(row.conferente as { nome: string } | { nome: string }[] | null),
+    decidido_por_profile: one(row.decidido_por_profile as { nome: string } | { nome: string }[] | null),
+    lancado_por_profile: one(row.lancado_por_profile as { nome: string } | { nome: string }[] | null),
+    fotos: (row.solicitacoes_vale_fotos as { id: string; url: string }[] | undefined) ?? [],
+  };
+}
+
+/** Generic listing by status + optional filters */
+export function useValesByStatus(filter: ValesFilter) {
+  return useQuery({
+    queryKey: ["vales", filter.status, filter.fornecedorId ?? "all", filter.from ?? "", filter.to ?? ""],
+    queryFn: async () => {
+      let q = supabase
+        .from("solicitacoes_vale")
+        .select(VALES_SELECT)
+        .eq("status", filter.status)
+        .order("created_at", { ascending: false });
+
+      if (filter.fornecedorId) {
+        q = q.eq("fornecedor_id", filter.fornecedorId);
+      }
+      if (filter.from) {
+        q = q.gte("created_at", `${filter.from}T00:00:00-03:00`);
+      }
+      if (filter.to) {
+        q = q.lte("created_at", `${filter.to}T23:59:59-03:00`);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []).map(mapVale);
+    },
+  });
+}
+
+/** Legacy — still used by conferir.tsx and the badge */
 export function useValesPendentes() {
   return useQuery({
     queryKey: ["vales-pendentes"],
@@ -132,6 +194,47 @@ export function useContarValesPendentes() {
   });
 }
 
+/** KPI counts for the filtered vales set */
+export function useValesKpis(filter: Omit<ValesFilter, "status">) {
+  return useQuery({
+    queryKey: ["vales-kpis", filter.fornecedorId ?? "all", filter.from ?? "", filter.to ?? ""],
+    queryFn: async () => {
+      let q = supabase
+        .from("solicitacoes_vale")
+        .select("status, valor_calculado, valor_final");
+
+      if (filter.fornecedorId) {
+        q = q.eq("fornecedor_id", filter.fornecedorId);
+      }
+      if (filter.from) {
+        q = q.gte("created_at", `${filter.from}T00:00:00-03:00`);
+      }
+      if (filter.to) {
+        q = q.lte("created_at", `${filter.to}T23:59:59-03:00`);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+
+      const rows = data ?? [];
+      const pendentes = rows.filter((r) => r.status === "pendente");
+      const aplicados = rows.filter((r) => r.status === "aplicado");
+      const lancados = rows.filter((r) => r.status === "lancado");
+      const recusados = rows.filter((r) => r.status === "recusado");
+
+      return {
+        pendentes: pendentes.length,
+        aplicados: aplicados.length,
+        lancados: lancados.length,
+        recusados: recusados.length,
+        valorPendente: pendentes.reduce((a, r) => a + Number(r.valor_calculado ?? 0), 0),
+        valorAplicado: aplicados.reduce((a, r) => a + Number(r.valor_final ?? r.valor_calculado ?? 0), 0),
+        valorLancado: lancados.reduce((a, r) => a + Number(r.valor_final ?? r.valor_calculado ?? 0), 0),
+      };
+    },
+  });
+}
+
 export function useValesPorFornecedor() {
   return useQuery({
     queryKey: ["vales-por-fornecedor"],
@@ -186,11 +289,23 @@ export function useCreateVale() {
       return vale;
     },
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vales"] });
       qc.invalidateQueries({ queryKey: ["vales-pendentes"] });
       qc.invalidateQueries({ queryKey: ["vales-pendentes-count"] });
       qc.invalidateQueries({ queryKey: ["vales-conferente"] });
+      qc.invalidateQueries({ queryKey: ["vales-kpis"] });
     },
   });
+}
+
+function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["vales"] });
+  qc.invalidateQueries({ queryKey: ["vales-pendentes"] });
+  qc.invalidateQueries({ queryKey: ["vales-pendentes-count"] });
+  qc.invalidateQueries({ queryKey: ["vales-conferente"] });
+  qc.invalidateQueries({ queryKey: ["vales-fornecedor"] });
+  qc.invalidateQueries({ queryKey: ["vales-por-fornecedor"] });
+  qc.invalidateQueries({ queryKey: ["vales-kpis"] });
 }
 
 export function useAplicarVale() {
@@ -204,13 +319,7 @@ export function useAplicarVale() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["vales-pendentes"] });
-      qc.invalidateQueries({ queryKey: ["vales-pendentes-count"] });
-      qc.invalidateQueries({ queryKey: ["vales-conferente"] });
-      qc.invalidateQueries({ queryKey: ["vales-fornecedor"] });
-      qc.invalidateQueries({ queryKey: ["vales-por-fornecedor"] });
-    },
+    onSuccess: () => invalidateAll(qc),
   });
 }
 
@@ -225,13 +334,37 @@ export function useRecusarVale() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["vales-pendentes"] });
-      qc.invalidateQueries({ queryKey: ["vales-pendentes-count"] });
-      qc.invalidateQueries({ queryKey: ["vales-conferente"] });
-      qc.invalidateQueries({ queryKey: ["vales-fornecedor"] });
-      qc.invalidateQueries({ queryKey: ["vales-por-fornecedor"] });
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function useMarcarValeLancado() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ valeId, refWise }: { valeId: string; refWise?: string }) => {
+      const { data, error } = await supabase.rpc("marcar_vale_lancado", {
+        p_vale_id: valeId,
+        p_ref_wise: refWise ?? null,
+      });
+      if (error) throw error;
+      return data;
     },
+    onSuccess: () => invalidateAll(qc),
+  });
+}
+
+export function useAplicarValesLote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ valeIds, valores }: { valeIds: string[]; valores?: Record<string, number> }) => {
+      const { data, error } = await supabase.rpc("aplicar_vales_lote", {
+        p_vale_ids: valeIds,
+        p_valores: valores ? JSON.stringify(valores) : null,
+      });
+      if (error) throw error;
+      return data as { aplicados: number; total: number };
+    },
+    onSuccess: () => invalidateAll(qc),
   });
 }
 

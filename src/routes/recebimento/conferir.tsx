@@ -60,6 +60,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useCreateVale, useValesConferente, uploadValeFoto } from "@/hooks/use-vales";
 import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
+import { useSaveConversaoFornecedor } from "@/hooks/use-conversoes";
 import { CaixasItemEditor, type CaixaItemEntry } from "@/components/caixas-item-editor";
 import { useCaixasItemConferencia } from "@/hooks/use-caixas-item";
 
@@ -302,6 +303,7 @@ function ConferenciaItens({
     },
   });
   const movForn = useRegistrarMovimentoFornecedor();
+  const saveConversao = useSaveConversaoFornecedor();
   const [cheias, setCheias] = useState<Record<string, number>>({});
   const [vazias, setVazias] = useState<Record<string, number>>({});
 
@@ -325,6 +327,9 @@ function ConferenciaItens({
   const caixasInitRef = useRef<string | null>(null);
 
   const [confirmFinal, setConfirmFinal] = useState(false);
+  const vaziasInitRef = useRef(false);
+  const stepperRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const focusedRef = useRef(false);
 
   const startedRef = useRef<string | null>(null);
   const fotoRef = useRef<HTMLInputElement>(null);
@@ -434,29 +439,90 @@ function ConferenciaItens({
     setCaixasItem(newCaixas);
   }, [conferencia, tipos, sugestoesCaixas, caixasItemExistentes]);
 
+  useEffect(() => {
+    if (vaziasInitRef.current) return;
+    if (Object.keys(caixasItem).length === 0) return;
+    const totais: Record<string, number> = {};
+    for (const entries of Object.values(caixasItem)) {
+      for (const e of entries) {
+        totais[e.sigla] = (totais[e.sigla] ?? 0) + e.real;
+      }
+    }
+    if (Object.keys(totais).length === 0) return;
+    vaziasInitRef.current = true;
+    setVazias(totais);
+  }, [caixasItem]);
+
+  useEffect(() => {
+    if (focusedRef.current || readOnly || itens.length === 0) return;
+    const firstIdx = itens.findIndex((it) => {
+      if (it.conferido || it.aVincular) return false;
+      const sr = (saldosItem as { item_pedido_id: string; saldo: number }[])
+        .find((s) => s.item_pedido_id === it.itemPedidoId);
+      return Number(sr?.saldo ?? it.pedido) > 0;
+    });
+    if (firstIdx >= 0) {
+      focusedRef.current = true;
+      setTimeout(() => stepperRefs.current[firstIdx]?.focus(), 200);
+    }
+  }, [itens, readOnly, saldosItem]);
+
+  const handleStepperKeyDown = (idx: number) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      setItens((prev) => prev.map((x, i) => (i === idx ? { ...x, conferido: true } : x)));
+      const nextIdx = itens.findIndex((item, i) => {
+        if (i <= idx || item.aVincular || item.conferido) return false;
+        const sr = (saldosItem as { item_pedido_id: string; saldo: number }[])
+          .find((s) => s.item_pedido_id === item.itemPedidoId);
+        return Number(sr?.saldo ?? item.pedido) > 0;
+      });
+      if (nextIdx >= 0) setTimeout(() => stepperRefs.current[nextIdx]?.focus(), 0);
+    }
+  };
+
   const updateCaixasItem = useCallback((itemId: string, entries: CaixaItemEntry[]) => {
     setCaixasItem((prev) => ({ ...prev, [itemId]: entries }));
   }, []);
 
+  const autoUpdateCaixas = useCallback((itemId: string, qty: number) => {
+    setCaixasItem((prev) => {
+      const entries = prev[itemId];
+      if (!entries || entries.length === 0) return prev;
+      const updated = entries.map((e) => {
+        if (e.fator && e.fator > 0) {
+          const calc = Math.ceil(qty / e.fator);
+          return { ...e, sugerida: calc, real: calc };
+        }
+        return e;
+      });
+      return { ...prev, [itemId]: updated };
+    });
+  }, []);
+
   const update = (idx: number, v: number) => {
     if (readOnly) return;
+    const newVal = Math.max(0, v);
+    const it = itens[idx];
     setItens((prev) =>
-      prev.map((it, i) => (i === idx ? { ...it, recebido: Math.max(0, v), conferido: true } : it)),
+      prev.map((it, i) => (i === idx ? { ...it, recebido: newVal, conferido: true } : it)),
     );
+    if (it) autoUpdateCaixas(it.id, newVal);
   };
 
   const conferirIgualPedido = (idx: number) => {
     if (readOnly) return;
+    const it = itens[idx];
+    if (!it) return;
+    const saldoRow = (
+      saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
+    ).find((s) => s.item_pedido_id === it.itemPedidoId);
+    const ja = Number(saldoRow?.recebido_acumulado ?? 0);
+    const newVal = Math.max(0, it.pedido - ja);
     setItens((prev) =>
-      prev.map((it, i) => {
-        if (i !== idx) return it;
-        const saldoRow = (
-          saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
-        ).find((s) => s.item_pedido_id === it.itemPedidoId);
-        const ja = Number(saldoRow?.recebido_acumulado ?? 0);
-        return { ...it, recebido: Math.max(0, it.pedido - ja), conferido: true };
-      }),
+      prev.map((it, i) => (i === idx ? { ...it, recebido: newVal, conferido: true } : it)),
     );
+    autoUpdateCaixas(it.id, newVal);
   };
 
   const toggleQualidade = (idx: number) => {
@@ -537,13 +603,18 @@ function ConferenciaItens({
 
   const stats = useMemo(() => {
     const contaveis = itens.filter((i) => !i.aVincular);
-    const total = contaveis.length;
-    const conferidos = contaveis.filter((i) => i.conferido).length;
+    const comSaldoReceber = contaveis.filter((i) => {
+      const sr = (saldosItem as { item_pedido_id: string; saldo: number }[])
+        .find((s) => s.item_pedido_id === i.itemPedidoId);
+      return Number(sr?.saldo ?? i.pedido) > 0;
+    });
+    const total = comSaldoReceber.length;
+    const conferidos = comSaldoReceber.filter((i) => i.conferido).length;
     const faltantes = total - conferidos;
     let divergencias = 0;
     let comSaldo = 0;
     let sobraUn = 0;
-    for (const it of contaveis) {
+    for (const it of comSaldoReceber) {
       const saldoRow = (
         saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
       ).find((s) => s.item_pedido_id === it.itemPedidoId);
@@ -566,17 +637,6 @@ function ConferenciaItens({
       progresso: total ? Math.round((conferidos / total) * 100) : 0,
     };
   }, [itens, saldosItem, toleranciaPct, toleranciaMin]);
-
-  const clienteResumo = useMemo(() => {
-    const map: Record<string, { ped: number; rec: number }> = {};
-    itens.forEach((it) => {
-      const nome = it.cliente ?? "Sem cliente";
-      if (!map[nome]) map[nome] = { ped: 0, rec: 0 };
-      map[nome].ped += it.pedido;
-      map[nome].rec += it.recebido;
-    });
-    return map;
-  }, [itens]);
 
   const salvar = async (status: "parcial" | "finalizada") => {
     if (readOnly) return;
@@ -628,6 +688,28 @@ function ConferenciaItens({
             }));
           if (rows.length > 0) {
             await supabase.from("caixas_item_conferencia").insert(rows);
+          }
+        }
+      }
+
+      if (fornecedorIdPedido) {
+        for (const it of itens) {
+          if (!it.produtoId || !it.conferido) continue;
+          const sug = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
+          if (!sug?.sem_conversao) continue;
+          const entries = caixasItem[it.id] ?? [];
+          for (const e of entries) {
+            if (e.real > 0 && it.recebido > 0) {
+              const fatorCalc = +(it.recebido / e.real).toFixed(2);
+              if (fatorCalc > 0) {
+                await saveConversao.mutateAsync({
+                  fornecedor_id: fornecedorIdPedido,
+                  produto_id: it.produtoId,
+                  tipo_caixa_id: e.tipo_caixa_id,
+                  fator: fatorCalc,
+                });
+              }
+            }
           }
         }
       }
@@ -855,26 +937,6 @@ function ConferenciaItens({
         <MiniStat label="Progresso" value={`${stats.progresso}%`} tone="info" />
       </div>
 
-      <div className="card-base p-4 mb-5">
-        <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-          Recebido × pedido por cliente
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(clienteResumo).map(([d, q]) => {
-            const rec = Math.round(q.rec);
-            const ok = rec === q.ped;
-            return (
-              <span
-                key={d}
-                className={`chip ${ok ? "chip-teal" : rec < q.ped ? "chip-warn" : "chip-danger"} text-sm`}
-              >
-                {d} · {rec}/{q.ped}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="card-base overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -907,6 +969,7 @@ function ConferenciaItens({
               const totalApos = jaRecebido + it.recebido;
               const gap = totalApos - it.pedido;
               const pendente = !it.conferido;
+              const saldoZero = saldo <= 0;
               const dentroTol = Math.abs(Math.max(0, gap)) <= limite;
               const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
               const itemCaixas = caixasItem[it.id] ?? [];
@@ -931,12 +994,18 @@ function ConferenciaItens({
                   </td>
                   <td className="px-4 py-3 text-right text-muted-foreground">{jaRecebido}</td>
                   <td className="px-4 py-3">
-                    {readOnly || it.aVincular ? (
+                    {readOnly || it.aVincular || saldoZero ? (
                       <span className="font-semibold tabular-nums">
                         {it.aVincular ? "—" : it.recebido}
                       </span>
                     ) : (
-                      <NumberStepper value={it.recebido} onChange={(v) => update(idx, v)} />
+                      <NumberStepper
+                        value={it.recebido}
+                        onChange={(v) => update(idx, v)}
+                        inputMode="numeric"
+                        inputRef={(el) => { stepperRefs.current[idx] = el; }}
+                        onKeyDown={handleStepperKeyDown(idx)}
+                      />
                     )}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold">
@@ -947,15 +1016,16 @@ function ConferenciaItens({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      {pendente && <span className="chip chip-muted">Pendente</span>}
-                      {!pendente && gap === 0 && <span className="chip chip-ok">OK</span>}
-                      {!pendente && gap < 0 && (
+                      {saldoZero && <span className="chip chip-ok">Completo</span>}
+                      {!saldoZero && pendente && <span className="chip chip-muted">Pendente</span>}
+                      {!saldoZero && !pendente && gap === 0 && <span className="chip chip-ok">OK</span>}
+                      {!saldoZero && !pendente && gap < 0 && (
                         <span className="chip chip-warn">Saldo {Math.abs(gap)}</span>
                       )}
-                      {!pendente && gap > 0 && dentroTol && (
+                      {!saldoZero && !pendente && gap > 0 && dentroTol && (
                         <span className="chip chip-info">Sobra {gap} · dentro da tolerância</span>
                       )}
-                      {!pendente && gap > 0 && !dentroTol && (
+                      {!saldoZero && !pendente && gap > 0 && !dentroTol && (
                         <span className="chip chip-danger">Sobra {gap} · acima da tolerância</span>
                       )}
                       {it.qualidade && (
@@ -971,7 +1041,7 @@ function ConferenciaItens({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
-                      {!readOnly && pendente && !it.aVincular && (
+                      {!readOnly && pendente && !it.aVincular && !saldoZero && (
                         <button
                           type="button"
                           onClick={() => conferirIgualPedido(idx)}
@@ -1053,7 +1123,7 @@ function ConferenciaItens({
           {!readOnly && (
             <div className="pt-3 border-t border-border">
               <div className="text-xs font-semibold text-muted-foreground mb-2">
-                Caixas vazias devolvidas pelo fornecedor
+                Caixas vazias devolvidas ao fornecedor
               </div>
               <div className="flex flex-wrap gap-4">
                 {tipos.map((t) => (

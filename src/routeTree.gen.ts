@@ -26,10 +26,19 @@ import { Route as RecebimentoFaltasRouteImport } from './routes/recebimento/falt
 import { Route as RecebimentoConferirRouteImport } from './routes/recebimento/conferir'
 import { Route as QuebraLancarRouteImport } from './routes/quebra/lancar'
 import { Route as GestaoUsuariosRouteImport } from './routes/gestao.usuarios'
+import { Route as GestaoTiposCaixaRouteImport } from './routes/gestao.tipos-caixa'
+import { Route as GestaoRotasRouteImport } from './routes/gestao.rotas'
+import { Route as GestaoRegrasRouteImport } from './routes/gestao.regras'
+import { Route as GestaoProdutosRouteImport } from './routes/gestao.produtos'
+import { Route as GestaoFrotaRouteImport } from './routes/gestao.frota'
+import { Route as GestaoFornecedoresRouteImport } from './routes/gestao.fornecedores'
+import { Route as GestaoConversaoRouteImport } from './routes/gestao.conversao'
+import { Route as GestaoClientesRouteImport } from './routes/gestao.clientes'
 import { Route as ExpedicaoTvRouteImport } from './routes/expedicao/tv'
 import { Route as ExpedicaoRotasRouteImport } from './routes/expedicao/rotas'
 import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
+import { Route as CaixasMovimentacaoRouteImport } from './routes/caixas/movimentacao'
 import { Route as CaixasMotoristaRouteImport } from './routes/caixas/motorista'
 import { Route as CaixasInventarioRouteImport } from './routes/caixas/inventario'
 import { Route as CaixasGalpaoRouteImport } from './routes/caixas/galpao'
@@ -121,6 +130,46 @@ const GestaoUsuariosRoute = GestaoUsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => GestaoRoute,
 } as any)
+const GestaoTiposCaixaRoute = GestaoTiposCaixaRouteImport.update({
+  id: '/tipos-caixa',
+  path: '/tipos-caixa',
+  getParentRoute: () => GestaoRoute,
+} as any)
+const GestaoRotasRoute = GestaoRotasRouteImport.update({
+  id: '/rotas',
+  path: '/rotas',
+  getParentRoute: () => GestaoRoute,
+} as any)
+const GestaoRegrasRoute = GestaoRegrasRouteImport.update({
+  id: '/regras',
+  path: '/regras',
+  getParentRoute: () => GestaoRoute,
+} as any)
+const GestaoProdutosRoute = GestaoProdutosRouteImport.update({
+  id: '/produtos',
+  path: '/produtos',
+  getParentRoute: () => GestaoRoute,
+} as any)
+const GestaoFrotaRoute = GestaoFrotaRouteImport.update({
+  id: '/frota',
+  path: '/frota',
+  getParentRoute: () => GestaoRoute,
+} as any)
+const GestaoFornecedoresRoute = GestaoFornecedoresRouteImport.update({
+  id: '/fornecedores',
+  path: '/fornecedores',
+  getParentRoute: () => GestaoRoute,
+} as any)
+const GestaoConversaoRoute = GestaoConversaoRouteImport.update({
+  id: '/conversao',
+  path: '/conversao',
+  getParentRoute: () => GestaoRoute,
+} as any)
+const GestaoClientesRoute = GestaoClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
+  getParentRoute: () => GestaoRoute,
+} as any)
 const ExpedicaoTvRoute = ExpedicaoTvRouteImport.update({
   id: '/expedicao/tv',
   path: '/expedicao/tv',
@@ -139,6 +188,11 @@ const CaixasSaldoRoute = CaixasSaldoRouteImport.update({
 const CaixasRetornoRoute = CaixasRetornoRouteImport.update({
   id: '/caixas/retorno',
   path: '/caixas/retorno',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CaixasMovimentacaoRoute = CaixasMovimentacaoRouteImport.update({
+  id: '/caixas/movimentacao',
+  path: '/caixas/movimentacao',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CaixasMotoristaRoute = CaixasMotoristaRouteImport.update({
@@ -180,10 +234,19 @@ export interface FileRoutesByFullPath {
   '/caixas/galpao': typeof CaixasGalpaoRoute
   '/caixas/inventario': typeof CaixasInventarioRoute
   '/caixas/motorista': typeof CaixasMotoristaRoute
+  '/caixas/movimentacao': typeof CaixasMovimentacaoRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/rotas': typeof ExpedicaoRotasRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
+  '/gestao/clientes': typeof GestaoClientesRoute
+  '/gestao/conversao': typeof GestaoConversaoRoute
+  '/gestao/fornecedores': typeof GestaoFornecedoresRoute
+  '/gestao/frota': typeof GestaoFrotaRoute
+  '/gestao/produtos': typeof GestaoProdutosRoute
+  '/gestao/regras': typeof GestaoRegrasRoute
+  '/gestao/rotas': typeof GestaoRotasRoute
+  '/gestao/tipos-caixa': typeof GestaoTiposCaixaRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/quebra/lancar': typeof QuebraLancarRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
@@ -208,10 +271,19 @@ export interface FileRoutesByTo {
   '/caixas/galpao': typeof CaixasGalpaoRoute
   '/caixas/inventario': typeof CaixasInventarioRoute
   '/caixas/motorista': typeof CaixasMotoristaRoute
+  '/caixas/movimentacao': typeof CaixasMovimentacaoRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/rotas': typeof ExpedicaoRotasRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
+  '/gestao/clientes': typeof GestaoClientesRoute
+  '/gestao/conversao': typeof GestaoConversaoRoute
+  '/gestao/fornecedores': typeof GestaoFornecedoresRoute
+  '/gestao/frota': typeof GestaoFrotaRoute
+  '/gestao/produtos': typeof GestaoProdutosRoute
+  '/gestao/regras': typeof GestaoRegrasRoute
+  '/gestao/rotas': typeof GestaoRotasRoute
+  '/gestao/tipos-caixa': typeof GestaoTiposCaixaRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/quebra/lancar': typeof QuebraLancarRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
@@ -237,10 +309,19 @@ export interface FileRoutesById {
   '/caixas/galpao': typeof CaixasGalpaoRoute
   '/caixas/inventario': typeof CaixasInventarioRoute
   '/caixas/motorista': typeof CaixasMotoristaRoute
+  '/caixas/movimentacao': typeof CaixasMovimentacaoRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
   '/expedicao/rotas': typeof ExpedicaoRotasRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
+  '/gestao/clientes': typeof GestaoClientesRoute
+  '/gestao/conversao': typeof GestaoConversaoRoute
+  '/gestao/fornecedores': typeof GestaoFornecedoresRoute
+  '/gestao/frota': typeof GestaoFrotaRoute
+  '/gestao/produtos': typeof GestaoProdutosRoute
+  '/gestao/regras': typeof GestaoRegrasRoute
+  '/gestao/rotas': typeof GestaoRotasRoute
+  '/gestao/tipos-caixa': typeof GestaoTiposCaixaRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/quebra/lancar': typeof QuebraLancarRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
@@ -267,10 +348,19 @@ export interface FileRouteTypes {
     | '/caixas/galpao'
     | '/caixas/inventario'
     | '/caixas/motorista'
+    | '/caixas/movimentacao'
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/expedicao/rotas'
     | '/expedicao/tv'
+    | '/gestao/clientes'
+    | '/gestao/conversao'
+    | '/gestao/fornecedores'
+    | '/gestao/frota'
+    | '/gestao/produtos'
+    | '/gestao/regras'
+    | '/gestao/rotas'
+    | '/gestao/tipos-caixa'
     | '/gestao/usuarios'
     | '/quebra/lancar'
     | '/recebimento/conferir'
@@ -295,10 +385,19 @@ export interface FileRouteTypes {
     | '/caixas/galpao'
     | '/caixas/inventario'
     | '/caixas/motorista'
+    | '/caixas/movimentacao'
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/expedicao/rotas'
     | '/expedicao/tv'
+    | '/gestao/clientes'
+    | '/gestao/conversao'
+    | '/gestao/fornecedores'
+    | '/gestao/frota'
+    | '/gestao/produtos'
+    | '/gestao/regras'
+    | '/gestao/rotas'
+    | '/gestao/tipos-caixa'
     | '/gestao/usuarios'
     | '/quebra/lancar'
     | '/recebimento/conferir'
@@ -323,10 +422,19 @@ export interface FileRouteTypes {
     | '/caixas/galpao'
     | '/caixas/inventario'
     | '/caixas/motorista'
+    | '/caixas/movimentacao'
     | '/caixas/retorno'
     | '/caixas/saldo'
     | '/expedicao/rotas'
     | '/expedicao/tv'
+    | '/gestao/clientes'
+    | '/gestao/conversao'
+    | '/gestao/fornecedores'
+    | '/gestao/frota'
+    | '/gestao/produtos'
+    | '/gestao/regras'
+    | '/gestao/rotas'
+    | '/gestao/tipos-caixa'
     | '/gestao/usuarios'
     | '/quebra/lancar'
     | '/recebimento/conferir'
@@ -352,6 +460,7 @@ export interface RootRouteChildren {
   CaixasGalpaoRoute: typeof CaixasGalpaoRoute
   CaixasInventarioRoute: typeof CaixasInventarioRoute
   CaixasMotoristaRoute: typeof CaixasMotoristaRoute
+  CaixasMovimentacaoRoute: typeof CaixasMovimentacaoRoute
   CaixasRetornoRoute: typeof CaixasRetornoRoute
   CaixasSaldoRoute: typeof CaixasSaldoRoute
   ExpedicaoRotasRoute: typeof ExpedicaoRotasRoute
@@ -488,6 +597,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GestaoUsuariosRouteImport
       parentRoute: typeof GestaoRoute
     }
+    '/gestao/tipos-caixa': {
+      id: '/gestao/tipos-caixa'
+      path: '/tipos-caixa'
+      fullPath: '/gestao/tipos-caixa'
+      preLoaderRoute: typeof GestaoTiposCaixaRouteImport
+      parentRoute: typeof GestaoRoute
+    }
+    '/gestao/rotas': {
+      id: '/gestao/rotas'
+      path: '/rotas'
+      fullPath: '/gestao/rotas'
+      preLoaderRoute: typeof GestaoRotasRouteImport
+      parentRoute: typeof GestaoRoute
+    }
+    '/gestao/regras': {
+      id: '/gestao/regras'
+      path: '/regras'
+      fullPath: '/gestao/regras'
+      preLoaderRoute: typeof GestaoRegrasRouteImport
+      parentRoute: typeof GestaoRoute
+    }
+    '/gestao/produtos': {
+      id: '/gestao/produtos'
+      path: '/produtos'
+      fullPath: '/gestao/produtos'
+      preLoaderRoute: typeof GestaoProdutosRouteImport
+      parentRoute: typeof GestaoRoute
+    }
+    '/gestao/frota': {
+      id: '/gestao/frota'
+      path: '/frota'
+      fullPath: '/gestao/frota'
+      preLoaderRoute: typeof GestaoFrotaRouteImport
+      parentRoute: typeof GestaoRoute
+    }
+    '/gestao/fornecedores': {
+      id: '/gestao/fornecedores'
+      path: '/fornecedores'
+      fullPath: '/gestao/fornecedores'
+      preLoaderRoute: typeof GestaoFornecedoresRouteImport
+      parentRoute: typeof GestaoRoute
+    }
+    '/gestao/conversao': {
+      id: '/gestao/conversao'
+      path: '/conversao'
+      fullPath: '/gestao/conversao'
+      preLoaderRoute: typeof GestaoConversaoRouteImport
+      parentRoute: typeof GestaoRoute
+    }
+    '/gestao/clientes': {
+      id: '/gestao/clientes'
+      path: '/clientes'
+      fullPath: '/gestao/clientes'
+      preLoaderRoute: typeof GestaoClientesRouteImport
+      parentRoute: typeof GestaoRoute
+    }
     '/expedicao/tv': {
       id: '/expedicao/tv'
       path: '/expedicao/tv'
@@ -514,6 +679,13 @@ declare module '@tanstack/react-router' {
       path: '/caixas/retorno'
       fullPath: '/caixas/retorno'
       preLoaderRoute: typeof CaixasRetornoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/caixas/movimentacao': {
+      id: '/caixas/movimentacao'
+      path: '/caixas/movimentacao'
+      fullPath: '/caixas/movimentacao'
+      preLoaderRoute: typeof CaixasMovimentacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/caixas/motorista': {
@@ -555,10 +727,26 @@ declare module '@tanstack/react-router' {
 }
 
 interface GestaoRouteChildren {
+  GestaoClientesRoute: typeof GestaoClientesRoute
+  GestaoConversaoRoute: typeof GestaoConversaoRoute
+  GestaoFornecedoresRoute: typeof GestaoFornecedoresRoute
+  GestaoFrotaRoute: typeof GestaoFrotaRoute
+  GestaoProdutosRoute: typeof GestaoProdutosRoute
+  GestaoRegrasRoute: typeof GestaoRegrasRoute
+  GestaoRotasRoute: typeof GestaoRotasRoute
+  GestaoTiposCaixaRoute: typeof GestaoTiposCaixaRoute
   GestaoUsuariosRoute: typeof GestaoUsuariosRoute
 }
 
 const GestaoRouteChildren: GestaoRouteChildren = {
+  GestaoClientesRoute: GestaoClientesRoute,
+  GestaoConversaoRoute: GestaoConversaoRoute,
+  GestaoFornecedoresRoute: GestaoFornecedoresRoute,
+  GestaoFrotaRoute: GestaoFrotaRoute,
+  GestaoProdutosRoute: GestaoProdutosRoute,
+  GestaoRegrasRoute: GestaoRegrasRoute,
+  GestaoRotasRoute: GestaoRotasRoute,
+  GestaoTiposCaixaRoute: GestaoTiposCaixaRoute,
   GestaoUsuariosRoute: GestaoUsuariosRoute,
 }
 
@@ -578,6 +766,7 @@ const rootRouteChildren: RootRouteChildren = {
   CaixasGalpaoRoute: CaixasGalpaoRoute,
   CaixasInventarioRoute: CaixasInventarioRoute,
   CaixasMotoristaRoute: CaixasMotoristaRoute,
+  CaixasMovimentacaoRoute: CaixasMovimentacaoRoute,
   CaixasRetornoRoute: CaixasRetornoRoute,
   CaixasSaldoRoute: CaixasSaldoRoute,
   ExpedicaoRotasRoute: ExpedicaoRotasRoute,
