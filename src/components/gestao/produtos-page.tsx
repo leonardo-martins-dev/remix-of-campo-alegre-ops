@@ -21,6 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/page-header";
 import { useProdutos, useFamilias, useCadastroMutations } from "@/hooks/use-cadastros";
 import { normalizeKey } from "@/lib/normalize";
@@ -30,7 +31,6 @@ type ProdutoRow = {
   nome: string;
   unidade?: string | null;
   codigo?: string | null;
-  unidades_por_caixa?: number | null;
   familia_id?: string | null;
   ativo?: boolean;
   familias_produto?: { nome: string } | { nome: string }[] | null;
@@ -41,10 +41,9 @@ type FormState = {
   codigo: string;
   unidade: string;
   familiaId: string;
-  unidades: string;
 };
 
-const EMPTY_FORM: FormState = { nome: "", codigo: "", unidade: "un", familiaId: "", unidades: "" };
+const EMPTY_FORM: FormState = { nome: "", codigo: "", unidade: "un", familiaId: "" };
 const UNIDADES = [
   { value: "un", label: "UN" },
   { value: "kg", label: "KG" },
@@ -135,7 +134,6 @@ function ProdutosTab() {
       codigo: row.codigo ?? "",
       unidade: row.unidade || "un",
       familiaId: row.familia_id ?? "",
-      unidades: row.unidades_por_caixa != null ? String(row.unidades_por_caixa) : "",
     });
     setTouched(false);
     setSheetOpen(true);
@@ -151,7 +149,6 @@ function ProdutosTab() {
       nome: form.nome.trim(),
       unidade: form.unidade || "un",
       codigo: form.codigo.trim() || null,
-      unidades_por_caixa: form.unidades.trim() ? Number(form.unidades) : null,
       familia_id: form.familiaId || null,
     };
     if (editId) {
@@ -343,32 +340,32 @@ function ProdutosTab() {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Família</Label>
-                <select
-                  className="h-9 w-full rounded-md border border-border px-2 text-sm bg-background"
-                  value={form.familiaId}
-                  onChange={(e) => setForm((s) => ({ ...s, familiaId: e.target.value }))}
-                >
-                  <option value="">Sem família</option>
-                  {(familias as { id: string; nome: string }[]).map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label>Unidades por caixa</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.unidades}
-                  onChange={(e) => setForm((s) => ({ ...s, unidades: e.target.value }))}
-                />
-              </div>
+            <div className="space-y-1">
+              <Label>Família</Label>
+              <select
+                className="h-9 w-full rounded-md border border-border px-2 text-sm bg-background"
+                value={form.familiaId}
+                onChange={(e) => setForm((s) => ({ ...s, familiaId: e.target.value }))}
+              >
+                <option value="">Sem família</option>
+                {(familias as { id: string; nome: string }[]).map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.nome}
+                  </option>
+                ))}
+              </select>
             </div>
+            <p className="text-sm text-muted-foreground">
+              Fatores un/cx (por tipo de caixa e fornecedor) ficam em{" "}
+              <Link
+                to="/gestao/conversao"
+                className="text-primary underline-offset-2 hover:underline"
+                onClick={() => setSheetOpen(false)}
+              >
+                Unidades por caixa
+              </Link>
+              .
+            </p>
           </div>
           <SheetFooter>
             <Button variant="outline" onClick={() => setSheetOpen(false)}>

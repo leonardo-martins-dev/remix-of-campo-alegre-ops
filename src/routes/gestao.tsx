@@ -74,13 +74,13 @@ function CadastrosHub() {
     },
     {
       title: "Produtos",
-      description: "Catálogo, famílias, códigos Wise e unidades",
+      description: "Catálogo, famílias e códigos Wise",
       icon: Package,
       href: "/gestao/produtos",
     },
     {
       title: "Unidades por caixa",
-      description: "Conversão produto → tipo de caixa e importação de planilha",
+      description: "Fatores un/cx por produto, tipo de caixa e fornecedor",
       icon: ArrowLeftRight,
       href: "/gestao/conversao",
     },

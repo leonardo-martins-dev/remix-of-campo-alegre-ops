@@ -15,7 +15,7 @@ function Page() {
     <div>
       <PageHeader
         title="Unidades por caixa"
-        subtitle="Quantas unidades de cada produto cabem em cada tipo de caixa"
+        subtitle="Fonte única de un/cx — Conferir e Expedição. Por produto, tipo de caixa e fornecedor"
       />
       <ConversaoCaixasPanel />
     </div>

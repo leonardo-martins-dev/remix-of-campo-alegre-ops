@@ -30,7 +30,6 @@ type ProdutoRow = {
   nome: string;
   unidade?: string | null;
   codigo?: string | null;
-  unidades_por_caixa?: number | null;
   familia_id?: string | null;
   ativo?: boolean;
   familias_produto?: { nome: string } | { nome: string }[] | null;
@@ -41,7 +40,6 @@ type FormState = {
   codigo: string;
   unidade: string;
   familiaId: string;
-  unidades: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -49,7 +47,6 @@ const EMPTY_FORM: FormState = {
   codigo: "",
   unidade: "un",
   familiaId: "",
-  unidades: "",
 };
 
 const UNIDADES = [
@@ -79,7 +76,6 @@ function formFromRow(row: ProdutoRow): FormState {
     codigo: row.codigo ?? "",
     unidade: row.unidade || "un",
     familiaId: row.familia_id ?? "",
-    unidades: row.unidades_por_caixa != null ? String(row.unidades_por_caixa) : "",
   };
 }
 
@@ -88,7 +84,6 @@ function payloadFromForm(form: FormState) {
     nome: form.nome.trim(),
     unidade: form.unidade || "un",
     codigo: form.codigo.trim() || null,
-    unidades_por_caixa: form.unidades.trim() ? Number(form.unidades) : null,
     familia_id: form.familiaId || null,
   };
 }
@@ -264,7 +259,7 @@ export function ProdutosCadastro() {
           <DialogHeader>
             <DialogTitle>{editId ? "Editar produto" : "Novo produto"}</DialogTitle>
             <DialogDescription>
-              Use o código Wise para o vínculo na importação. Família e un/cx são opcionais.
+              Use o código Wise para o vínculo na importação. Família é opcional. Fatores un/cx ficam em Unidades por caixa.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
@@ -305,31 +300,19 @@ export function ProdutosCadastro() {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1">
-                <Label htmlFor="prod-fam">Família</Label>
-                <select
-                  id="prod-fam"
-                  className="h-9 rounded-md border border-border px-2 text-sm bg-background"
-                  value={form.familiaId}
-                  onChange={(e) => setForm((s) => ({ ...s, familiaId: e.target.value }))}
-                >
-                  <option value="">Sem família</option>
-                  {(familias as { id: string; nome: string }[]).map((f) => (
-                    <option key={f.id} value={f.id}>{f.nome}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid gap-1">
-                <Label htmlFor="prod-cx">Unidades por caixa</Label>
-                <Input
-                  id="prod-cx"
-                  type="number"
-                  min={0}
-                  value={form.unidades}
-                  onChange={(e) => setForm((s) => ({ ...s, unidades: e.target.value }))}
-                />
-              </div>
+            <div className="grid gap-1">
+              <Label htmlFor="prod-fam">Família</Label>
+              <select
+                id="prod-fam"
+                className="h-9 rounded-md border border-border px-2 text-sm bg-background"
+                value={form.familiaId}
+                onChange={(e) => setForm((s) => ({ ...s, familiaId: e.target.value }))}
+              >
+                <option value="">Sem família</option>
+                {(familias as { id: string; nome: string }[]).map((f) => (
+                  <option key={f.id} value={f.id}>{f.nome}</option>
+                ))}
+              </select>
             </div>
           </div>
           <DialogFooter>

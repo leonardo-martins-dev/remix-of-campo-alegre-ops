@@ -65,7 +65,7 @@ export function ConversaoCaixasPanel() {
       <CardHeader>
         <CardTitle>Conversão de caixas</CardTitle>
         <p className="text-xs text-muted-foreground mt-1">
-          Quantas unidades de cada produto cabem em cada tipo de caixa. O fator do fornecedor sobrepõe o padrão do produto.
+          Fonte única de un/cx: produto × tipo de caixa (padrão) e fornecedor (sobrepõe). Usado no Conferir e na Expedição.
         </p>
       </CardHeader>
       <CardContent>

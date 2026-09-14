@@ -38,7 +38,7 @@ export function useProdutos() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("produtos")
-        .select("id, nome, unidade, codigo, unidades_por_caixa, familia_id, ativo, familias_produto(nome)")
+        .select("id, nome, unidade, codigo, familia_id, ativo, familias_produto(nome)")
         .order("nome");
       if (error) throw error;
       return data ?? [];
