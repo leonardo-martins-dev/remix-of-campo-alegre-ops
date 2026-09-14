@@ -141,7 +141,7 @@ SELECT
        SELECT tipo_caixa, SUM(quantidade) AS enviadas
        FROM public.movimentacoes_caixa
        WHERE carga_parada_id = c.id
-         AND COALESCE(natureza, tipo) IN ('envio', 'enviada')
+         AND COALESCE(natureza::text, tipo::text) IN ('envio', 'enviada')
        GROUP BY tipo_caixa
      ) mov
     ), '{}'::jsonb
@@ -152,7 +152,7 @@ SELECT
        SELECT tipo_caixa, SUM(quantidade) AS retiradas
        FROM public.movimentacoes_caixa
        WHERE carga_parada_id = c.id
-         AND COALESCE(natureza, tipo) IN ('retorno', 'retirada')
+         AND COALESCE(natureza::text, tipo::text) IN ('retorno', 'retirada')
        GROUP BY tipo_caixa
      ) mov
     ), '{}'::jsonb
