@@ -937,7 +937,155 @@ function ConferenciaItens({
         <MiniStat label="Progresso" value={`${stats.progresso}%`} tone="info" />
       </div>
 
-      <div className="card-base overflow-x-auto">
+      {/* Mobile: Card view */}
+      <div className="sm:hidden space-y-3">
+        {itens.map((it, idx) => {
+          const saldoRow = (
+            saldosItem as {
+              item_pedido_id: string;
+              recebido_acumulado: number;
+              saldo: number;
+            }[]
+          ).find((s) => s.item_pedido_id === it.itemPedidoId);
+          const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
+          const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
+          const pct = it.toleranciaPct ?? toleranciaPct;
+          const limite = Math.max((pct / 100) * it.pedido, toleranciaMin);
+          const totalApos = jaRecebido + it.recebido;
+          const gap = totalApos - it.pedido;
+          const pendente = !it.conferido;
+          const saldoZero = saldo <= 0;
+          const dentroTol = Math.abs(Math.max(0, gap)) <= limite;
+          const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
+          const itemCaixas = caixasItem[it.id] ?? [];
+          
+          const statusClass = saldoZero || (!pendente && gap === 0) ? "item-status-ok" : 
+            it.qualidade || (!pendente && gap > 0 && !dentroTol) ? "item-status-danger" :
+            (!pendente && gap < 0) || pendente ? "item-status-warn" : "";
+
+          return (
+            <div key={it.id} className={`mobile-item-card ${statusClass}`}>
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-navy text-sm leading-tight">{it.produto}</div>
+                  {it.aVincular && <span className="chip chip-warn mt-1">a vincular</span>}
+                </div>
+                <div className="flex flex-wrap gap-1 shrink-0">
+                  {saldoZero && <span className="chip chip-ok">Completo</span>}
+                  {!saldoZero && pendente && <span className="chip chip-muted">Pendente</span>}
+                  {!saldoZero && !pendente && gap === 0 && <span className="chip chip-ok">OK</span>}
+                  {!saldoZero && !pendente && gap < 0 && <span className="chip chip-warn">Saldo {Math.abs(gap)}</span>}
+                  {!saldoZero && !pendente && gap > 0 && dentroTol && <span className="chip chip-info">+{gap}</span>}
+                  {!saldoZero && !pendente && gap > 0 && !dentroTol && <span className="chip chip-danger">+{gap}</span>}
+                  {it.qualidade && <span className="chip" style={{ background: "rgba(240,169,43,0.15)", color: "var(--warning)" }}>Qual.</span>}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2 text-center mb-3">
+                <div className="p-2 rounded-lg bg-secondary/50">
+                  <div className="text-xs text-muted-foreground">Pedido</div>
+                  <div className="font-bold text-navy">{it.pedido}</div>
+                </div>
+                <div className="p-2 rounded-lg bg-secondary/50">
+                  <div className="text-xs text-muted-foreground">Já receb.</div>
+                  <div className="font-bold text-muted-foreground">{jaRecebido}</div>
+                </div>
+                <div className="p-2 rounded-lg bg-secondary/50">
+                  <div className="text-xs text-muted-foreground">Saldo</div>
+                  <div className="font-bold" style={{ color: saldo > 0 ? "var(--warning)" : "var(--success)" }}>{Math.max(0, it.pedido - totalApos)}</div>
+                </div>
+              </div>
+
+              {!readOnly && !it.aVincular && !saldoZero && (
+                <div className="mb-3">
+                  <div className="text-xs text-muted-foreground mb-1.5">Nesta entrega ({it.unid})</div>
+                  <NumberStepper
+                    value={it.recebido}
+                    onChange={(v) => update(idx, v)}
+                    inputMode="numeric"
+                    inputRef={(el) => { stepperRefs.current[idx] = el; }}
+                    onKeyDown={handleStepperKeyDown(idx)}
+                  />
+                </div>
+              )}
+
+              {(readOnly || it.aVincular || saldoZero) && (
+                <div className="mb-3 text-sm">
+                  <span className="text-muted-foreground">Nesta entrega: </span>
+                  <span className="font-semibold">{it.aVincular ? "—" : it.recebido} {it.unid}</span>
+                </div>
+              )}
+
+              {itemCaixas.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-xs text-muted-foreground mb-1.5">Caixas</div>
+                  <CaixasItemEditor
+                    entries={itemCaixas}
+                    onChange={(entries) => updateCaixasItem(it.id, entries)}
+                    tipos={tipos}
+                    sugestao={sugestaoItem}
+                    readOnly={readOnly || it.aVincular}
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+                {!readOnly && pendente && !it.aVincular && !saldoZero && (
+                  <button
+                    type="button"
+                    onClick={() => conferirIgualPedido(idx)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
+                  >
+                    <Check size={16} /> Conferir
+                  </button>
+                )}
+                {!readOnly && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => toggleQualidade(idx)}
+                      className={`h-11 w-11 rounded-lg border flex items-center justify-center transition-colors ${
+                        it.qualidade
+                          ? "border-transparent bg-[rgba(240,169,43,0.15)] text-[var(--warning)]"
+                          : "border-border text-muted-foreground active:bg-secondary"
+                      }`}
+                      aria-label="Marcar problema de qualidade"
+                    >
+                      <AlertTriangle size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      className="h-11 w-11 rounded-lg border border-border text-muted-foreground active:bg-secondary flex items-center justify-center"
+                      aria-label="Adicionar foto"
+                      onClick={() => {
+                        setFotoItemId(it.id);
+                        fotoRef.current?.click();
+                      }}
+                    >
+                      <Camera size={18} />
+                    </button>
+                  </>
+                )}
+                {it.conferido && gap < 0 && !itemJaSolicitouVale(it.id) && (
+                  <button
+                    type="button"
+                    onClick={() => openValeDialog(it, jaRecebido)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-sm font-semibold active:scale-[0.98] transition-transform"
+                  >
+                    <Receipt size={16} /> Vale
+                  </button>
+                )}
+                {itemJaSolicitouVale(it.id) && (
+                  <span className="chip chip-info text-xs">Vale pendente</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: Table view */}
+      <div className="hidden sm:block card-base overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
             <tr>
@@ -1181,31 +1329,33 @@ function ConferenciaItens({
       )}
 
       {!readOnly && (
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setAvulsoOpen(true)}
-            className="inline-flex items-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
-          >
-            <Plus size={14} /> Item avulso
-          </button>
-          <button
-            type="button"
-            onClick={() => salvar("parcial")}
-            disabled={saveMut.isPending}
-            className="inline-flex items-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
-          >
-            <Save size={14} /> Salvar parcial
-          </button>
-          <div className="flex-1" />
-          <div className="text-xs text-muted-foreground">
+        <div className="mt-5 space-y-3 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+          <div className="flex gap-2 sm:contents">
+            <button
+              type="button"
+              onClick={() => setAvulsoOpen(true)}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
+            >
+              <Plus size={14} /> <span className="hidden sm:inline">Item </span>avulso
+            </button>
+            <button
+              type="button"
+              onClick={() => salvar("parcial")}
+              disabled={saveMut.isPending}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
+            >
+              <Save size={14} /> <span className="hidden sm:inline">Salvar </span>parcial
+            </button>
+          </div>
+          <div className="hidden sm:block sm:flex-1" />
+          <div className="text-xs text-muted-foreground text-center sm:text-left">
             Assinatura: <span className="font-semibold text-navy">{conferenteNome}</span>
           </div>
           <button
             type="button"
             onClick={finalizar}
             disabled={saveMut.isPending}
-            className="inline-flex items-center gap-2 min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 min-h-12 sm:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
           >
             <CheckCircle2 size={16} /> Finalizar entrega
           </button>

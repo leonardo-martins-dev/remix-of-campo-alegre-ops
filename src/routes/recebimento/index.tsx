@@ -422,30 +422,30 @@ function Page() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3 mb-3">
-        <Input type="date" className="w-40" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value || todayBRT())} />
-        <Input className="w-64" placeholder="Buscar pedido, fornecedor ou cliente" value={busca} onChange={(e) => setBusca(e.target.value)} />
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3">
+        <Input type="date" className="w-full sm:w-40 h-10 sm:h-9" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value || todayBRT())} />
+        <Input className="w-full sm:w-64 h-10 sm:h-9" placeholder="Buscar pedido, fornecedor..." value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
 
-      <div className="card-base overflow-x-auto">
-        <div className="flex items-center gap-1 p-2 border-b border-border overflow-x-auto">
+      <div className="card-base">
+        <div className="flex items-center gap-1 p-2 border-b border-border overflow-x-auto -webkit-overflow-scrolling-touch">
           {(
             [
               ["todos", "Todos"],
-              ["pendente", "A conferir"],
+              ["pendente", "Conferir"],
               ["parcial", "Parcial"],
               ["aguardando_vinculo", "Vínculo"],
               ["conferido", "Recebidos"],
-              ["aguardando_liberacao", "Aguard. liberação"],
-              ["divergencia", "Com divergência"],
-              ["encerrado", "Encerrado"],
-              ["importacoes", "Importações"],
+              ["aguardando_liberacao", "Aguard."],
+              ["divergencia", "Diverg."],
+              ["encerrado", "Encerr."],
+              ["importacoes", "Import."],
             ] as const
           ).map(([k, l]) => (
             <button
               key={k}
               onClick={() => setTab(k)}
-              className={`px-3 h-8 rounded-md text-xs font-semibold transition-colors ${tab === k ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+              className={`px-2.5 sm:px-3 h-8 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${tab === k ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
             >
               {l}
             </button>

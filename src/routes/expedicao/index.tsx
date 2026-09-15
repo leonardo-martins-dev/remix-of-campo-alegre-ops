@@ -370,48 +370,48 @@ function Page() {
   };
 
   const importHeaderActions = (
-    <>
+    <div className="header-actions-mobile">
       <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcel} />
       <input ref={wiseFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleWiseExcel} />
       <button
         type="button"
         onClick={() => downloadExpedicaoTemplate()}
-        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+        className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
         title={`Colunas: ${EXPEDICAO_EXCEL_COLUNAS.join(", ")}`}
       >
-        <Download size={14} /> Baixar modelo
+        <Download size={14} /> <span className="hidden sm:inline">Baixar </span>modelo
       </button>
       <button
         type="button"
         onClick={() => fileRef.current?.click()}
-        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+        className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
       >
-        <FileSpreadsheet size={14} /> Importar Excel
+        <FileSpreadsheet size={14} /> <span className="hidden sm:inline">Importar </span>Excel
       </button>
       <button
         type="button"
         onClick={openWiseImport}
         disabled={wiseFetch.isPending}
-        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+        className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
       >
-        <RefreshCw size={14} /> Wise API
+        <RefreshCw size={14} /> Wise
       </button>
       <button
         type="button"
         onClick={() => wiseFileRef.current?.click()}
         disabled={importRomaneio.isPending}
-        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+        className="hidden sm:inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
         title="Exportação Wise: Código, Descrição, Unidade, Qtde → carga selecionada"
       >
         <FileSpreadsheet size={14} /> Importar exportação Wise
       </button>
       <Link
         to="/expedicao/tv"
-        className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+        className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
       >
-        <Tv size={14} /> Modo TV
+        <Tv size={14} /> <span className="hidden sm:inline">Modo </span>TV
       </Link>
-    </>
+    </div>
   );
 
   if (loadingCargas) {
@@ -537,24 +537,24 @@ function Page() {
         <CoberturaDiaCard />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 card-base overflow-x-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+        <div className="lg:col-span-2 card-base">
           {loadingDetail ? (
             <div className="p-8 text-center text-sm text-muted-foreground">Carregando romaneio...</div>
           ) : (
             <>
-              <div className="p-5 border-b border-border">
+              <div className="p-4 sm:p-5 border-b border-border">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <h2 className="text-lg font-bold text-navy">{clienteNome}</h2>
+                  <h2 className="text-base sm:text-lg font-bold text-navy">{clienteNome}</h2>
                   <span className="chip chip-info">{statusLabel}</span>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <span className="chip chip-muted">🚚 {placa}</span>
-                  <span className="chip chip-muted">👤 {motorista}</span>
-                  <span className="chip chip-muted">📍 Rota {rota}</span>
-                  <span className="chip chip-muted">⏱ Início {formatTime(detail?.hora_inicio)}</span>
-                  <span className="chip chip-teal">
-                    {totalItens} itens · {realCaixas.G + realCaixas.I + realCaixas.P} caixas
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                  <span className="chip chip-muted text-xs">🚚 {placa}</span>
+                  <span className="chip chip-muted text-xs">👤 {motorista}</span>
+                  <span className="chip chip-muted text-xs hidden sm:inline-flex">📍 Rota {rota}</span>
+                  <span className="chip chip-muted text-xs">⏱ {formatTime(detail?.hora_inicio)}</span>
+                  <span className="chip chip-teal text-xs">
+                    {totalItens} itens · {realCaixas.G + realCaixas.I + realCaixas.P} cx
                   </span>
                 </div>
               </div>
@@ -562,61 +562,114 @@ function Page() {
               <div className="divide-y divide-border">
                 {familias.map((fam, fi) => (
                   <div key={fam.familia}>
-                    <div className="px-5 py-2 bg-secondary/50 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="px-4 sm:px-5 py-2 bg-secondary/50 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                       Família {fi + 1} · {fam.familia}
                     </div>
-                    <table className="w-full text-sm">
-                      <thead className="text-xs text-muted-foreground uppercase tracking-wider">
-                        <tr>
-                          <th className="text-left px-5 py-2">Produto</th>
-                          <th className="text-right px-3 py-2">Romaneio</th>
-                          <th className="text-center px-3 py-2">Real</th>
-                          <th className="text-center px-3 py-2">Caixas {tiposCx.map((t) => t.sigla).join(" / ") || "G / I / P"}</th>
-                          <th className="text-right px-5 py-2">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {fam.itens.map((it) => (
-                          <tr key={it.id} className="border-t border-border">
-                            <td className="px-5 py-3 font-semibold text-navy">{it.produto}</td>
-                            <td className="px-3 py-3 text-right text-ink">{it.romaneio}</td>
-                            <td className="px-3 py-3">
-                              <NumberStepper
-                                size="sm"
-                                value={it.real}
-                                onChange={(v) => updateReal(it.id, it.romaneio, v)}
-                              />
-                            </td>
-                            <td className="px-3 py-3">
-                              <div className="flex items-center justify-center gap-2">
-                                {(tiposCx.length ? tiposCx.map((t) => t.sigla) : (["G", "I", "P"] as const)).map((k) => (
-                                  <div key={k} className="flex items-center gap-1">
-                                    <span className="text-xs font-bold text-muted-foreground w-3">{k}</span>
-                                    <NumberStepper
-                                      size="sm"
-                                      width="w-8"
-                                      value={it.caixas[k] ?? 0}
-                                      onChange={(v) => updateCaixaItem(it.id, k, it.caixas, v)}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="px-5 py-3 text-right">
+                    
+                    {/* Mobile: Card view */}
+                    <div className="sm:hidden p-3 space-y-3">
+                      {fam.itens.map((it) => (
+                        <div key={it.id} className="p-3 rounded-lg border border-border">
+                          <div className="flex items-start justify-between gap-2 mb-3">
+                            <div className="font-semibold text-navy text-sm">{it.produto}</div>
+                            <div>
                               {it.status === "ok" && <span className="chip chip-ok">OK</span>}
                               {it.status === "corrigido" && (
                                 <span className="chip chip-warn">
-                                  {it.real > it.romaneio
-                                    ? `Sobra +${it.real - it.romaneio}`
-                                    : `Corrigido −${it.romaneio - it.real}`}
+                                  {it.real > it.romaneio ? `+${it.real - it.romaneio}` : `−${it.romaneio - it.real}`}
                                 </span>
                               )}
                               {it.status === "pendente" && <span className="chip chip-muted">Pendente</span>}
-                            </td>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-1">Romaneio</div>
+                              <div className="font-bold text-navy text-lg">{it.romaneio}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-1">Real</div>
+                              <NumberStepper
+                                value={it.real}
+                                onChange={(v) => updateReal(it.id, it.romaneio, v)}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground mb-1.5">Caixas</div>
+                            <div className="flex flex-wrap gap-2">
+                              {(tiposCx.length ? tiposCx.map((t) => t.sigla) : (["G", "I", "P"] as const)).map((k) => (
+                                <div key={k} className="flex items-center gap-1.5">
+                                  <span className="text-xs font-bold text-muted-foreground">{k}</span>
+                                  <NumberStepper
+                                    size="sm"
+                                    width="w-14"
+                                    value={it.caixas[k] ?? 0}
+                                    onChange={(v) => updateCaixaItem(it.id, k, it.caixas, v)}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Desktop: Table view */}
+                    <div className="hidden sm:block overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="text-xs text-muted-foreground uppercase tracking-wider">
+                          <tr>
+                            <th className="text-left px-5 py-2">Produto</th>
+                            <th className="text-right px-3 py-2">Romaneio</th>
+                            <th className="text-center px-3 py-2">Real</th>
+                            <th className="text-center px-3 py-2">Caixas {tiposCx.map((t) => t.sigla).join(" / ") || "G / I / P"}</th>
+                            <th className="text-right px-5 py-2">Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {fam.itens.map((it) => (
+                            <tr key={it.id} className="border-t border-border">
+                              <td className="px-5 py-3 font-semibold text-navy">{it.produto}</td>
+                              <td className="px-3 py-3 text-right text-ink">{it.romaneio}</td>
+                              <td className="px-3 py-3">
+                                <NumberStepper
+                                  size="sm"
+                                  value={it.real}
+                                  onChange={(v) => updateReal(it.id, it.romaneio, v)}
+                                />
+                              </td>
+                              <td className="px-3 py-3">
+                                <div className="flex items-center justify-center gap-2">
+                                  {(tiposCx.length ? tiposCx.map((t) => t.sigla) : (["G", "I", "P"] as const)).map((k) => (
+                                    <div key={k} className="flex items-center gap-1">
+                                      <span className="text-xs font-bold text-muted-foreground w-3">{k}</span>
+                                      <NumberStepper
+                                        size="sm"
+                                        width="w-8"
+                                        value={it.caixas[k] ?? 0}
+                                        onChange={(v) => updateCaixaItem(it.id, k, it.caixas, v)}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-5 py-3 text-right">
+                                {it.status === "ok" && <span className="chip chip-ok">OK</span>}
+                                {it.status === "corrigido" && (
+                                  <span className="chip chip-warn">
+                                    {it.real > it.romaneio
+                                      ? `Sobra +${it.real - it.romaneio}`
+                                      : `Corrigido −${it.romaneio - it.real}`}
+                                  </span>
+                                )}
+                                {it.status === "pendente" && <span className="chip chip-muted">Pendente</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -624,14 +677,14 @@ function Page() {
           )}
         </div>
 
-        <div className="card-base p-5 self-start sticky top-4">
-          <h3 className="text-sm font-bold text-navy mb-4">Resumo da carga</h3>
-          <div className="flex items-center justify-center my-3">
+        <div className="card-base p-4 sm:p-5 self-start lg:sticky lg:top-4 order-first lg:order-none">
+          <h3 className="text-sm font-bold text-navy mb-3 sm:mb-4">Resumo da carga</h3>
+          <div className="flex items-center justify-center my-2 sm:my-3">
             <ProgressRing value={progresso} label="Conferido" />
           </div>
-          <div className="flex items-center justify-between text-sm py-3 border-y border-border">
+          <div className="flex items-center justify-between text-sm py-2 sm:py-3 border-y border-border">
             <span className="flex items-center gap-2 text-muted-foreground">
-              <Clock size={14} /> Tempo de carga
+              <Clock size={14} /> Tempo
             </span>
             <span className="font-mono font-bold text-navy text-lg">
               {mm}:{ss}
@@ -724,16 +777,16 @@ function Page() {
         </div>
       </div>
 
-      <div className="mt-6">
-        <div className="flex items-center justify-between mb-3">
+      <div className="mt-5 sm:mt-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
           <h3 className="text-sm font-bold text-navy flex items-center gap-2">
             <Truck size={14} /> Outras cargas hoje
           </h3>
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary/50">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary/50 overflow-x-auto">
             {(
               [
                 ["todas", "Todas"],
-                ["carregando", "Em carregamento"],
+                ["carregando", "Carregando"],
                 ["aguardando", "Aguardando"],
                 ["concluida", "Finalizadas"],
               ] as const
@@ -741,7 +794,7 @@ function Page() {
               <button
                 key={k}
                 onClick={() => setTab(k)}
-                className={`px-3 h-7 rounded-md text-xs font-semibold transition-colors ${
+                className={`px-3 h-8 sm:h-7 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${
                   tab === k ? "bg-card text-navy shadow-sm" : "text-muted-foreground hover:text-navy"
                 }`}
               >
@@ -750,7 +803,7 @@ function Page() {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {cargasFiltradas.length === 0 && (
             <div className="col-span-full text-center py-8 text-sm text-muted-foreground">
               Nenhuma carga neste filtro.

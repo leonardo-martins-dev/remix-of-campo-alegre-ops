@@ -197,6 +197,53 @@
   }
 }
 
+@media (max-width: 480px) {
+  .login-shell {
+    padding: 1rem;
+  }
+
+  .login-brand {
+    padding-bottom: 1.5rem;
+  }
+
+  .login-brand-title {
+    font-size: 1.75rem;
+  }
+
+  .login-brand-desc {
+    font-size: 0.875rem;
+  }
+
+  .login-card {
+    padding: 1.5rem;
+    border-radius: 16px;
+  }
+
+  .login-card-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .login-card-header p {
+    font-size: 0.8125rem;
+  }
+
+  .login-field input {
+    height: 48px;
+    font-size: 16px; /* prevents iOS zoom on focus */
+    padding: 0.75rem 1rem;
+  }
+
+  .login-password-wrap input {
+    padding-right: 3.25rem;
+  }
+
+  .login-submit {
+    height: 52px;
+    font-size: 1rem;
+    border-radius: 14px;
+  }
+}
+
 .login-form-panel {
   display: flex;
   align-items: center;

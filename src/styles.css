@@ -161,4 +161,168 @@
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
+
+  /* ─────────────────────────────────────────────────────────────
+     MOBILE RESPONSIVE UTILITIES
+     Target: width ≤ 390px (iPhone SE / small Android)
+     ───────────────────────────────────────────────────────────── */
+
+  /* Touch target: minimum 44px for primary actions */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Mobile-friendly button sizing */
+  .btn-mobile {
+    min-height: 44px;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* Hide on mobile, show as table on larger screens */
+  .table-desktop {
+    display: none;
+  }
+  @media (min-width: 640px) {
+    .table-desktop {
+      display: table;
+    }
+  }
+
+  /* Card stack: show on mobile, hide on larger screens */
+  .cards-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  @media (min-width: 640px) {
+    .cards-mobile {
+      display: none;
+    }
+  }
+
+  /* Mobile item card styling */
+  .mobile-item-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+  }
+  .mobile-item-card:has(.item-status-danger) {
+    border-left: 3px solid var(--danger);
+  }
+  .mobile-item-card:has(.item-status-ok) {
+    border-left: 3px solid var(--success);
+  }
+  .mobile-item-card:has(.item-status-warn) {
+    border-left: 3px solid var(--warning);
+  }
+
+  /* Mobile row: label + value pairs */
+  .mobile-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.375rem 0;
+    font-size: 0.875rem;
+  }
+  .mobile-row + .mobile-row {
+    border-top: 1px solid var(--border);
+  }
+  .mobile-row-label {
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .mobile-row-value {
+    font-weight: 600;
+    color: var(--navy);
+  }
+
+  /* Actions wrapper for mobile */
+  .mobile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+  .mobile-actions > button,
+  .mobile-actions > a {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Compact stats grid for mobile */
+  .stats-mobile {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+  @media (min-width: 640px) {
+    .stats-mobile {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .stats-mobile {
+      grid-template-columns: repeat(5, 1fr);
+    }
+  }
+
+  /* Mobile-first spacing */
+  .section-mobile {
+    padding: 1rem;
+  }
+  @media (min-width: 640px) {
+    .section-mobile {
+      padding: 1.5rem;
+    }
+  }
+
+  /* Stacked form layout for mobile */
+  .form-stack-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  @media (min-width: 640px) {
+    .form-stack-mobile {
+      flex-direction: row;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+  }
+
+  /* Full-width buttons on mobile */
+  @media (max-width: 639px) {
+    .btn-full-mobile {
+      width: 100%;
+    }
+  }
+
+  /* Responsive header actions */
+  .header-actions-mobile {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  @media (max-width: 639px) {
+    .header-actions-mobile > button,
+    .header-actions-mobile > a {
+      flex: 1 1 calc(50% - 0.25rem);
+      min-width: 0;
+      font-size: 0.75rem;
+      padding: 0.5rem;
+    }
+    .header-actions-mobile > button svg,
+    .header-actions-mobile > a svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
 }

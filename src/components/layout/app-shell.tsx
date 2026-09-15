@@ -169,17 +169,17 @@ export function AppShell() {
       </Sheet>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <header className="h-14 sm:h-16 shrink-0 bg-card border-b border-border flex items-center px-3 sm:px-5 gap-2 sm:gap-4">
+        <header className="h-14 sm:h-16 shrink-0 bg-card border-b border-border flex items-center px-2 sm:px-5 gap-1.5 sm:gap-4">
           <button
             type="button"
             onClick={toggleNav}
             aria-label="Abrir menu"
-            className="h-9 w-9 shrink-0 rounded-md hover:bg-secondary flex items-center justify-center text-navy"
+            className="h-11 w-11 sm:h-9 sm:w-9 shrink-0 rounded-md hover:bg-secondary active:bg-secondary/80 flex items-center justify-center text-navy touch-target"
           >
-            <div className="space-y-1">
-              <div className="h-0.5 w-4 bg-navy rounded" />
-              <div className="h-0.5 w-4 bg-navy rounded" />
-              <div className="h-0.5 w-4 bg-navy rounded" />
+            <div className="space-y-1.5 sm:space-y-1">
+              <div className="h-0.5 w-5 sm:w-4 bg-navy rounded" />
+              <div className="h-0.5 w-5 sm:w-4 bg-navy rounded" />
+              <div className="h-0.5 w-5 sm:w-4 bg-navy rounded" />
             </div>
           </button>
 
@@ -189,7 +189,7 @@ export function AppShell() {
               placeholder={isNarrow ? "Buscar..." : "Buscar pedido, fornecedor, cliente..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-9 pl-9 pr-3 rounded-lg bg-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full h-10 sm:h-9 pl-9 pr-3 rounded-lg bg-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
             {search.length >= 2 && searchResults && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-64 overflow-auto text-sm">
@@ -236,16 +236,16 @@ export function AppShell() {
             )}
           </div>
 
-          <div className="ml-auto flex items-center gap-1 sm:gap-3 shrink-0">
+          <div className="ml-auto flex items-center gap-0.5 sm:gap-3 shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="h-9 w-9 rounded-md hover:bg-secondary flex items-center justify-center relative text-navy"
+                  className="h-11 w-11 sm:h-9 sm:w-9 rounded-md hover:bg-secondary active:bg-secondary/80 flex items-center justify-center relative text-navy touch-target"
                 >
-                  <Bell size={16} />
+                  <Bell size={18} className="sm:w-4 sm:h-4" />
                   {alertas.length > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full" style={{ background: "var(--danger)" }} />
+                    <span className="absolute top-2 right-2 sm:top-1.5 sm:right-1.5 h-2 w-2 sm:h-1.5 sm:w-1.5 rounded-full" style={{ background: "var(--danger)" }} />
                   )}
                 </button>
               </DropdownMenuTrigger>
@@ -270,9 +270,9 @@ export function AppShell() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-border">
+                <button type="button" className="flex items-center gap-2 pl-1.5 sm:pl-3 border-l border-border min-h-[44px] sm:min-h-0 touch-target">
                   <div
-                    className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                    className="h-9 w-9 sm:h-8 sm:w-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
                     style={{ background: "var(--navy)" }}
                   >
                     {initials(profile?.nome ?? "U")}
@@ -303,7 +303,7 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 min-h-0 overflow-auto overscroll-contain p-4 sm:p-6">
+        <main className="flex-1 min-h-0 overflow-auto overscroll-contain p-3 sm:p-6">
           <div className="mx-auto w-full max-w-[1400px]">
             <Outlet />
           </div>

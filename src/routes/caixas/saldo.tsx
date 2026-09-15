@@ -307,24 +307,25 @@ function Page() {
         </div>
       )}
 
-      <div className="card-base p-5 mb-5">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
+      <div className="card-base p-4 sm:p-5 mb-5">
+        <div className="space-y-3 sm:space-y-0 sm:flex sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
+          <div className="mb-2 sm:mb-0">
             <h3 className="text-sm font-bold text-navy">Custo unitário das caixas</h3>
-            <p className="text-xs text-muted-foreground mt-1">Edite e saia do campo para salvar no cadastro</p>
+            <p className="text-xs text-muted-foreground mt-1">Edite e saia do campo para salvar</p>
           </div>
-          <div className="flex flex-wrap gap-4">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 sm:gap-4">
             {tipos.map((c) => {
               const display = draftCustos[c.id] !== undefined ? draftCustos[c.id] : String(c.custo_unitario);
               return (
                 <div key={c.id}>
                   <label className="text-xs uppercase tracking-wider text-muted-foreground">{c.nome}</label>
                   <div className="flex items-center mt-1">
-                    <span className="px-2.5 h-9 bg-secondary border border-r-0 border-border rounded-l-md text-xs font-semibold text-muted-foreground flex items-center">
+                    <span className="px-2 sm:px-2.5 h-10 sm:h-9 bg-secondary border border-r-0 border-border rounded-l-md text-xs font-semibold text-muted-foreground flex items-center">
                       R$
                     </span>
                     <input
                       type="number"
+                      inputMode="decimal"
                       step="0.5"
                       value={display}
                       onChange={(e) => setDraftCustos((prev) => ({ ...prev, [c.id]: e.target.value }))}
@@ -335,7 +336,7 @@ function Page() {
                           handleCustoSave(c);
                         }
                       }}
-                      className="h-9 w-24 px-2 border border-border rounded-r-md text-sm font-bold text-navy focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className="h-10 sm:h-9 w-full sm:w-24 px-2 border border-border rounded-r-md text-sm font-bold text-navy focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                   </div>
                 </div>
@@ -412,13 +413,13 @@ function Page() {
         </div>
       </div>
 
-      <div className="card-base overflow-x-auto">
+      <div className="card-base">
         <div className="p-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-sm font-bold text-navy">Saldo por cliente</h3>
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary/50">
+          <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary/50 overflow-x-auto">
             <button
               onClick={() => setFiltro("ALL")}
-              className={`px-3 h-7 rounded-md text-xs font-semibold ${filtro === "ALL" ? "bg-card text-navy shadow-sm" : "text-muted-foreground hover:text-navy"}`}
+              className={`px-3 h-8 sm:h-7 rounded-md text-xs font-semibold whitespace-nowrap ${filtro === "ALL" ? "bg-card text-navy shadow-sm" : "text-muted-foreground hover:text-navy"}`}
             >
               Todos
             </button>
@@ -426,7 +427,7 @@ function Page() {
               <button
                 key={t.id}
                 onClick={() => setFiltro(t.sigla)}
-                className={`px-3 h-7 rounded-md text-xs font-semibold ${filtro === t.sigla ? "bg-card text-navy shadow-sm" : "text-muted-foreground hover:text-navy"}`}
+                className={`px-3 h-8 sm:h-7 rounded-md text-xs font-semibold whitespace-nowrap ${filtro === t.sigla ? "bg-card text-navy shadow-sm" : "text-muted-foreground hover:text-navy"}`}
               >
                 {t.nome}
               </button>
@@ -436,67 +437,123 @@ function Page() {
         {clientes.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhum saldo registrado.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                <th className="text-left px-4 py-3">Cliente</th>
-                {tipos.filter((t) => filtro === "ALL" || filtro === t.sigla).map((t) => (
-                  <th key={t.id} className="text-right px-3 py-3">
-                    {t.nome}
-                    <br />
-                    <span className="font-normal normal-case">env / ret</span>
-                  </th>
-                ))}
-                <th className="text-right px-3 py-3">Saldo</th>
-                <th className="text-right px-3 py-3">Aging</th>
-                <th className="text-right px-3 py-3">R$ em aberto</th>
-                <th className="text-right px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Mobile: Card view */}
+            <div className="sm:hidden p-3 space-y-3">
               {clientes.map((c) => {
                 const visible = tipos.filter((t) => filtro === "ALL" || filtro === t.sigla);
                 const saldo = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo, 0);
                 const valor = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo * (custoById[t.sigla] ?? 0), 0);
-                const trend = tipos.map((t) => qtyOf(c, t.sigla).saldo);
                 const days = agingByCliente.get(c.cliente_id) ?? 0;
                 return (
-                  <tr key={c.cliente_id} className="border-t border-border hover:bg-secondary/30">
-                    <td className="px-4 py-3 font-semibold text-navy">{c.cliente}</td>
-                    {visible.map((t) => {
-                      const q = qtyOf(c, t.sigla);
-                      return (
-                        <td key={t.id} className="px-3 py-3 text-right text-ink">
-                          {q.env}/{q.ret}
-                        </td>
-                      );
-                    })}
-                    <td className="px-3 py-3 text-right font-bold text-navy">{saldo}</td>
-                    <td className="px-3 py-3 text-right" style={{ color: days >= 7 ? "var(--danger)" : "var(--muted-foreground)" }}>
-                      {days ? `${days}d` : "—"}
-                    </td>
-                    <td className="px-3 py-3 text-right font-bold" style={{ color: "var(--danger)" }}>
-                      R$ {valor.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      <Sparkline data={trend} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
+                  <div key={c.cliente_id} className="p-3 rounded-lg border border-border">
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="font-semibold text-navy">{c.cliente}</div>
+                      {days > 0 && (
+                        <span className={`chip ${days >= 7 ? "chip-danger" : "chip-muted"}`}>
+                          {days}d
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-sm mb-3">
+                      {visible.map((t) => {
+                        const q = qtyOf(c, t.sigla);
+                        return (
+                          <div key={t.id} className="p-2 rounded bg-secondary/50">
+                            <div className="text-xs text-muted-foreground">{t.sigla}</div>
+                            <div className="font-semibold text-navy">{q.saldo}</div>
+                            <div className="text-[10px] text-muted-foreground">{q.env}/{q.ret}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
+                      <div>
+                        <div className="text-xs text-muted-foreground">Total: <span className="font-bold text-navy">{saldo} cx</span></div>
+                        <div className="font-bold text-sm" style={{ color: "var(--danger)" }}>
+                          R$ {valor.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                        </div>
+                      </div>
                       <button
                         onClick={() => {
                           setExtratoId(c.cliente_id);
                           setExtratoNome(c.cliente);
                         }}
-                        className="text-xs text-primary-dark font-semibold hover:underline"
+                        className="min-h-10 px-4 rounded-lg bg-primary-soft text-primary-dark text-xs font-semibold active:bg-primary active:text-primary-foreground"
                       >
                         Extrato
                       </button>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+            
+            {/* Desktop: Table view */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
+                  <tr>
+                    <th className="text-left px-4 py-3">Cliente</th>
+                    {tipos.filter((t) => filtro === "ALL" || filtro === t.sigla).map((t) => (
+                      <th key={t.id} className="text-right px-3 py-3">
+                        {t.nome}
+                        <br />
+                        <span className="font-normal normal-case">env / ret</span>
+                      </th>
+                    ))}
+                    <th className="text-right px-3 py-3">Saldo</th>
+                    <th className="text-right px-3 py-3">Aging</th>
+                    <th className="text-right px-3 py-3">R$ em aberto</th>
+                    <th className="text-right px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientes.map((c) => {
+                    const visible = tipos.filter((t) => filtro === "ALL" || filtro === t.sigla);
+                    const saldo = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo, 0);
+                    const valor = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo * (custoById[t.sigla] ?? 0), 0);
+                    const trend = tipos.map((t) => qtyOf(c, t.sigla).saldo);
+                    const days = agingByCliente.get(c.cliente_id) ?? 0;
+                    return (
+                      <tr key={c.cliente_id} className="border-t border-border hover:bg-secondary/30">
+                        <td className="px-4 py-3 font-semibold text-navy">{c.cliente}</td>
+                        {visible.map((t) => {
+                          const q = qtyOf(c, t.sigla);
+                          return (
+                            <td key={t.id} className="px-3 py-3 text-right text-ink">
+                              {q.env}/{q.ret}
+                            </td>
+                          );
+                        })}
+                        <td className="px-3 py-3 text-right font-bold text-navy">{saldo}</td>
+                        <td className="px-3 py-3 text-right" style={{ color: days >= 7 ? "var(--danger)" : "var(--muted-foreground)" }}>
+                          {days ? `${days}d` : "—"}
+                        </td>
+                        <td className="px-3 py-3 text-right font-bold" style={{ color: "var(--danger)" }}>
+                          R$ {valor.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <Sparkline data={trend} />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => {
+                              setExtratoId(c.cliente_id);
+                              setExtratoNome(c.cliente);
+                            }}
+                            className="text-xs text-primary-dark font-semibold hover:underline"
+                          >
+                            Extrato
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
