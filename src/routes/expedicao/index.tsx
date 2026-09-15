@@ -11,6 +11,7 @@ import {
   Package,
   RefreshCw,
   HelpCircle,
+  ShoppingCart,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -26,6 +27,7 @@ import {
   useIniciarCarga,
   useImportCargasExcel,
   useImportRomaneioItens,
+  useImportRelatorioVenda,
   useFilaExpedicao,
   useGerarCargasPedido,
 } from "@/hooks/use-cargas";
@@ -41,6 +43,10 @@ import {
   downloadExpedicaoTemplate,
   EXPEDICAO_EXCEL_COLUNAS,
 } from "@/lib/excel-expedicao";
+import {
+  isRelatorioVendaHtml,
+  parseRelatorioVendaHtml,
+} from "@/lib/excel-relatorio-venda";
 import * as XLSX from "xlsx";
 import { useWiseCarregamentos, useImportWiseCarregamento } from "@/hooks/use-wise-import";
 import {
@@ -123,6 +129,7 @@ function Page() {
   const { user } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const wiseFileRef = useRef<HTMLInputElement>(null);
+  const vendaFileRef = useRef<HTMLInputElement>(null);
   const { data: cargas = [], isLoading: loadingCargas } = useCargasDia();
   const { data: fila = [], isLoading: loadingFila } = useFilaExpedicao();
   const gerarCargas = useGerarCargasPedido();
@@ -132,6 +139,7 @@ function Page() {
   const { data: tiposCx = [] } = useTiposCaixa();
   const importExcel = useImportCargasExcel();
   const importRomaneio = useImportRomaneioItens();
+  const importRelatorioVenda = useImportRelatorioVenda();
   const wiseFetch = useWiseCarregamentos();
   const importWise = useImportWiseCarregamento();
   const iniciar = useIniciarCarga();
@@ -300,12 +308,64 @@ function Page() {
     });
   };
 
+  const handleRelatorioVenda = async (buffer: ArrayBuffer) => {
+    if (!user?.id) return;
+    const rows = parseRelatorioVendaHtml(buffer);
+    if (!rows.length) {
+      toast.error("Relatório de venda sem pedidos/itens reconhecidos");
+      return;
+    }
+    const toastId = toast.loading(
+      `Importando ${new Set(rows.map((r) => r.numero_pedido)).size} pedidos de venda…`
+    );
+    try {
+      const result = await importRelatorioVenda.mutateAsync({
+        created_by: user.id,
+        rows,
+        clientes: clientes.map((c) => ({ id: c.id, nome: c.nome })),
+        produtos: produtos.map((p) => ({
+          id: p.id,
+          nome: p.nome,
+          codigo: p.codigo ?? null,
+        })),
+      });
+      toast.success(
+        `${result.criadas} carga(s) criada(s) · ${result.itens} itens`,
+        {
+          id: toastId,
+          description: [
+            result.clientesCriados ? `${result.clientesCriados} clientes novos` : null,
+            result.puladas ? `${result.puladas} já existiam hoje` : null,
+            result.produtosFaltantes.length
+              ? `${result.produtosFaltantes.length} produtos sem cadastro (ex.: ${result.produtosFaltantes
+                  .slice(0, 3)
+                  .map((p) => p.codigo || p.produto)
+                  .join(", ")})`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined,
+        }
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao importar pedido de venda", {
+        id: toastId,
+      });
+    }
+  };
+
   const handleExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !user?.id) return;
     try {
       const buffer = await file.arrayBuffer();
+
+      if (isRelatorioVendaHtml(buffer)) {
+        await handleRelatorioVenda(buffer);
+        return;
+      }
+
       const wb = XLSX.read(buffer, { type: "array" });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
@@ -326,6 +386,17 @@ function Page() {
       toast.success(`${built.length} carga(s) importada(s)`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao importar");
+    }
+  };
+
+  const handleVendaFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      await handleRelatorioVenda(await file.arrayBuffer());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao ler relatório de venda");
     }
   };
 
@@ -373,6 +444,13 @@ function Page() {
     <div className="header-actions-mobile">
       <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcel} />
       <input ref={wiseFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleWiseExcel} />
+      <input
+        ref={vendaFileRef}
+        type="file"
+        accept=".xlsx,.xls,.html"
+        className="hidden"
+        onChange={handleVendaFile}
+      />
       <button
         type="button"
         onClick={() => downloadExpedicaoTemplate()}
@@ -380,6 +458,16 @@ function Page() {
         title={`Colunas: ${EXPEDICAO_EXCEL_COLUNAS.join(", ")}`}
       >
         <Download size={14} /> <span className="hidden sm:inline">Baixar </span>modelo
+      </button>
+      <button
+        type="button"
+        onClick={() => vendaFileRef.current?.click()}
+        disabled={importRelatorioVenda.isPending}
+        className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
+        title="Relatório de pedidos de venda (Nr. Ped. + itens por loja)"
+      >
+        <ShoppingCart size={14} />{" "}
+        <span className="hidden sm:inline">Pedido de </span>venda
       </button>
       <button
         type="button"
@@ -434,7 +522,8 @@ function Page() {
         />
         <p className="text-sm text-muted-foreground text-center py-4 flex items-center justify-center gap-1">
           <HelpCircle size={14} />
-          Nenhuma carga programada para hoje. Importe Excel, use a fila da conferência ou aguarde pedidos conferidos.
+          Nenhuma carga programada para hoje. Importe pedido de venda, Excel, use a fila da conferência ou aguarde
+          pedidos conferidos.
         </p>
         <WiseDialog
           open={wiseOpen}

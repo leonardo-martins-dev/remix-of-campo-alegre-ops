@@ -249,6 +249,125 @@ export function useImportCargasExcel() {
   });
 }
 
+/** Importa relatório de pedido de venda: cria clientes faltantes e cargas PV-{nr}. */
+export function useImportRelatorioVenda() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      created_by: string;
+      rows: import("@/lib/excel-relatorio-venda").RelatorioVendaRow[];
+      clientes: { id: string; nome: string }[];
+      produtos: { id: string; nome: string; codigo?: string | null }[];
+    }) => {
+      const {
+        buildMapsRelatorioVenda,
+        buildCargasFromRelatorioVenda,
+      } = await import("@/lib/excel-relatorio-venda");
+      const { normalizeKey } = await import("@/lib/normalize");
+
+      const maps = buildMapsRelatorioVenda({
+        clientes: payload.clientes,
+        produtos: payload.produtos,
+      });
+
+      const nomesClientes = [...new Set(payload.rows.map((r) => r.cliente.trim()).filter(Boolean))];
+      const faltantes = nomesClientes.filter((n) => !maps.clienteByName.has(normalizeKey(n)));
+
+      const clienteIdsByName = new Map<string, string>();
+      if (faltantes.length) {
+        const { data: created, error } = await supabase
+          .from("clientes")
+          .insert(faltantes.map((nome) => ({ nome, ativo: true })))
+          .select("id, nome");
+        if (error) throw error;
+        for (const c of created ?? []) {
+          clienteIdsByName.set(normalizeKey(c.nome), c.id);
+          maps.clienteByName.set(normalizeKey(c.nome), c.id);
+        }
+      }
+
+      const built = buildCargasFromRelatorioVenda(payload.rows, maps, {
+        clienteIdsByName,
+      });
+
+      const hoje = todayBRT();
+      const codigos = built.cargas.map((c) => c.codigo);
+      const jaTem = new Set<string>();
+      for (let i = 0; i < codigos.length; i += 80) {
+        const chunk = codigos.slice(i, i + 80);
+        const { data: existentes } = await supabase
+          .from("cargas")
+          .select("codigo")
+          .eq("data_carga", hoje)
+          .in("codigo", chunk);
+        for (const c of existentes ?? []) jaTem.add(c.codigo);
+      }
+
+      let criadas = 0;
+      let puladas = 0;
+      let itens = 0;
+
+      for (const c of built.cargas) {
+        if (jaTem.has(c.codigo)) {
+          puladas += 1;
+          continue;
+        }
+
+        const { data: carga, error } = await supabase
+          .from("cargas")
+          .insert({
+            codigo: c.codigo,
+            cliente_id: c.cliente_id,
+            created_by: payload.created_by,
+            data_carga: hoje,
+            status: "aguardando",
+            origem: "excel",
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+
+        if (c.itens.length) {
+          const { error: rErr } = await supabase.from("romaneio_itens").insert(
+            c.itens.map((it) => ({
+              carga_id: carga.id,
+              produto_id: it.produto_id,
+              quantidade_romaneio: it.quantidade_romaneio,
+              caixas_g: it.caixas_g,
+              caixas_i: it.caixas_i,
+              caixas_p: it.caixas_p,
+              quantidade_real: 0,
+              status: "pendente",
+            }))
+          );
+          if (rErr) throw rErr;
+          itens += c.itens.length;
+        }
+        await supabase.from("carga_caixas_resumo").insert({ carga_id: carga.id });
+        criadas += 1;
+      }
+
+      return {
+        criadas,
+        puladas,
+        itens,
+        clientesCriados: faltantes.length,
+        produtosFaltantes: built.produtosFaltantes,
+        pedidosArquivo: built.pedidos,
+        itensArquivo: built.itens,
+      };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cargas"] });
+      qc.invalidateQueries({ queryKey: ["cadastros", "clientes"] });
+      qc.invalidateQueries({ queryKey: ["expedicao-por-rota"] });
+      qc.invalidateQueries({ queryKey: ["produtos-por-rota"] });
+      qc.invalidateQueries({ queryKey: ["cargas-loja-rota"] });
+      qc.invalidateQueries({ queryKey: ["clientes-por-rota"] });
+    },
+  });
+}
+
 export function useImportRomaneioItens() {
   const qc = useQueryClient();
   return useMutation({
