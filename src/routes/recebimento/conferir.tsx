@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { TableWrapper } from "@/components/table-wrapper";
 import { NumberStepper } from "@/components/number-stepper";
 import {
   Dialog,
@@ -1085,22 +1086,23 @@ function ConferenciaItens({
       </div>
 
       {/* Desktop: Table view */}
-      <div className="hidden sm:block card-base overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
-            <tr>
-              <th className="text-left px-4 py-3">Produto</th>
-              <th className="text-left px-4 py-3">Un.</th>
-              <th className="text-right px-4 py-3">Pedido</th>
-              <th className="text-left px-4 py-3">Caixas</th>
-              <th className="text-right px-4 py-3">Já recebido</th>
-              <th className="text-center px-4 py-3">Nesta entrega</th>
-              <th className="text-right px-4 py-3">Saldo</th>
-              <th className="text-right px-4 py-3">Tol.</th>
-              <th className="text-left px-4 py-3">Status</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
+      <div className="hidden sm:block card-base">
+        <TableWrapper stickyFirstColumn>
+          <table className="w-full text-sm">
+            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
+              <tr>
+                <th className="text-left px-4 py-3 whitespace-nowrap">Produto</th>
+                <th className="text-left px-4 py-3 whitespace-nowrap">Un.</th>
+                <th className="text-right px-4 py-3 whitespace-nowrap">Pedido</th>
+                <th className="text-left px-4 py-3 whitespace-nowrap">Caixas</th>
+                <th className="text-right px-4 py-3 whitespace-nowrap">Já receb.</th>
+                <th className="text-center px-4 py-3 whitespace-nowrap">Nesta entr.</th>
+                <th className="text-right px-4 py-3 whitespace-nowrap">Saldo</th>
+                <th className="text-right px-4 py-3 whitespace-nowrap">Tol.</th>
+                <th className="text-left px-4 py-3 whitespace-nowrap">Status</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
           <tbody>
             {itens.map((it, idx) => {
               const saldoRow = (
@@ -1244,8 +1246,9 @@ function ConferenciaItens({
                 </tr>
               );
             })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </TableWrapper>
       </div>
 
       {tipos.length > 0 && (

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { TableWrapper } from "@/components/table-wrapper";
 import { StatStrip } from "@/components/stat-strip";
 import { Button } from "@/components/ui/button";
 import {
@@ -315,36 +316,38 @@ function ProdutosView({
                 {fam.totalCaixas} caixa{fam.totalCaixas !== 1 ? "s" : ""}
               </span>
             </div>
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-5 py-2">Produto</th>
-                  <th className="text-right px-3 py-2">Qtd total</th>
-                  <th className="text-right px-3 py-2">Un/cx</th>
-                  <th className="text-right px-3 py-2">Caixas sug.</th>
-                  <th className="text-right px-5 py-2">Lojas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fam.produtos.map((p) => (
-                  <tr key={p.produto_id} className="border-t border-border">
-                    <td className="px-5 py-3 font-semibold text-navy">{p.produto_nome}</td>
-                    <td className="px-3 py-3 text-right text-ink">
-                      {Number(p.quantidade_total).toFixed(0)} {p.unidade ?? "un"}
-                    </td>
-                    <td className="px-3 py-3 text-right text-muted-foreground">
-                      {p.unidades_por_caixa ?? "—"}
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <span className="chip chip-info">{p.caixas_sugeridas}</span>
-                    </td>
-                    <td className="px-5 py-3 text-right text-muted-foreground">
-                      {p.num_lojas}
-                    </td>
+            <TableWrapper stickyFirstColumn>
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground uppercase tracking-wider">
+                  <tr>
+                    <th className="text-left px-5 py-2 whitespace-nowrap">Produto</th>
+                    <th className="text-right px-3 py-2 whitespace-nowrap">Qtd total</th>
+                    <th className="text-right px-3 py-2 whitespace-nowrap">Un/cx</th>
+                    <th className="text-right px-3 py-2 whitespace-nowrap">Caixas sug.</th>
+                    <th className="text-right px-5 py-2 whitespace-nowrap">Lojas</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {fam.produtos.map((p) => (
+                    <tr key={p.produto_id} className="border-t border-border">
+                      <td className="px-5 py-3 font-semibold text-navy whitespace-nowrap">{p.produto_nome}</td>
+                      <td className="px-3 py-3 text-right text-ink whitespace-nowrap">
+                        {Number(p.quantidade_total).toFixed(0)} {p.unidade ?? "un"}
+                      </td>
+                      <td className="px-3 py-3 text-right text-muted-foreground">
+                        {p.unidades_por_caixa ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <span className="chip chip-info">{p.caixas_sugeridas}</span>
+                      </td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">
+                        {p.num_lojas}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrapper>
           </div>
         ))}
       </div>
@@ -530,38 +533,40 @@ function LojaDetail({
             <div className="px-4 py-2 bg-secondary/20 text-xs font-bold uppercase tracking-wider text-muted-foreground">
               {familia}
             </div>
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-4 py-2">Produto</th>
-                  <th className="text-right px-3 py-2">Qtd</th>
-                  <th className="text-right px-3 py-2">Caixas sug.</th>
-                  <th className="text-right px-4 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {prods.map((it) => (
-                  <tr key={it.id} className="border-t border-border/50">
-                    <td className="px-4 py-2 font-medium text-navy">{it.produto_nome}</td>
-                    <td className="px-3 py-2 text-right">
-                      {Number(it.quantidade_romaneio).toFixed(0)} {it.unidade ?? "un"}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <span className="chip chip-info text-xs">{it.caixas_sugeridas}</span>
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      {it.status === "ok" && <span className="chip chip-ok text-xs">OK</span>}
-                      {it.status === "pendente" && (
-                        <span className="chip chip-muted text-xs">Pendente</span>
-                      )}
-                      {it.status === "corrigido" && (
-                        <span className="chip chip-warn text-xs">Corrigido</span>
-                      )}
-                    </td>
+            <TableWrapper stickyFirstColumn>
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground uppercase tracking-wider">
+                  <tr>
+                    <th className="text-left px-4 py-2 whitespace-nowrap">Produto</th>
+                    <th className="text-right px-3 py-2 whitespace-nowrap">Qtd</th>
+                    <th className="text-right px-3 py-2 whitespace-nowrap">Caixas sug.</th>
+                    <th className="text-right px-4 py-2 whitespace-nowrap">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {prods.map((it) => (
+                    <tr key={it.id} className="border-t border-border/50">
+                      <td className="px-4 py-2 font-medium text-navy whitespace-nowrap">{it.produto_nome}</td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        {Number(it.quantidade_romaneio).toFixed(0)} {it.unidade ?? "un"}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <span className="chip chip-info text-xs">{it.caixas_sugeridas}</span>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        {it.status === "ok" && <span className="chip chip-ok text-xs">OK</span>}
+                        {it.status === "pendente" && (
+                          <span className="chip chip-muted text-xs">Pendente</span>
+                        )}
+                        {it.status === "corrigido" && (
+                          <span className="chip chip-warn text-xs">Corrigido</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrapper>
           </div>
         ))}
       </div>

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { FileSpreadsheet, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { TableWrapper } from "@/components/table-wrapper";
 import { KpiCard } from "@/components/kpi-card";
 import { BarRow } from "@/components/charts";
 import { Percent, TrendingDown, AlertTriangle, DollarSign } from "lucide-react";
@@ -273,111 +274,115 @@ function Page() {
       </div>
 
       {modo === "resumo" ? (
-        <div className="card-base overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
-              <tr>
-                <th className="text-left px-4 py-3">Fornecedor</th>
-                <th className="text-right px-4 py-3">Itens</th>
-                <th className="text-right px-4 py-3">Qtd divergência</th>
-                <th className="text-left px-4 py-3">Encerramento</th>
-                <th className="text-right px-4 py-3">Impacto R$</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resumoFiltrado.map((r) => (
-                <tr key={r.fornecedor} className="border-t border-border">
-                  <td className="px-4 py-3 font-semibold text-navy">{r.fornecedor}</td>
-                  <td className="px-4 py-3 text-right">{r.itens}</td>
-                  <td className="px-4 py-3 text-right">{r.qty.toFixed(1)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {r.encerrados.map((e) => (
-                        <span key={e} className="chip chip-muted text-xs">{e}</span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold">R$ {r.impacto.toFixed(2)}</td>
+        <div className="card-base">
+          <TableWrapper stickyFirstColumn>
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
+                <tr>
+                  <th className="text-left px-4 py-3 whitespace-nowrap">Fornecedor</th>
+                  <th className="text-right px-4 py-3 whitespace-nowrap">Itens</th>
+                  <th className="text-right px-4 py-3 whitespace-nowrap">Qtd diverg.</th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap">Encerramento</th>
+                  <th className="text-right px-4 py-3 whitespace-nowrap">Impacto R$</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {resumoFiltrado.map((r) => (
+                  <tr key={r.fornecedor} className="border-t border-border">
+                    <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{r.fornecedor}</td>
+                    <td className="px-4 py-3 text-right">{r.itens}</td>
+                    <td className="px-4 py-3 text-right">{r.qty.toFixed(1)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {r.encerrados.map((e) => (
+                          <span key={e} className="chip chip-muted text-xs">{e}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold whitespace-nowrap">R$ {r.impacto.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrapper>
         </div>
       ) : (
-        <div className="card-base overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
-              <tr>
-                <th className="text-left px-4 py-3">Pedido</th>
-                <th className="text-left px-4 py-3">Fornecedor</th>
-                <th className="text-left px-4 py-3">Produto</th>
-                <th className="text-right px-4 py-3">Pedido</th>
-                <th className="text-right px-4 py-3">Recebido</th>
-                <th className="text-right px-4 py-3">Divergência</th>
-                <th className="text-left px-4 py-3">Encerramento</th>
-                <th className="text-right px-4 py-3">Impacto</th>
-                {isAdmin && <th className="px-4 py-3" />}
-              </tr>
-            </thead>
-            <tbody>
-              {faltasComImpacto.map((i) => (
-                <tr key={i.id} className="border-t border-border">
-                  <td className="px-4 py-3">{i.codigo}</td>
-                  <td className="px-4 py-3 font-semibold text-navy">{i.fornecedor}</td>
-                  <td className="px-4 py-3">{i.produto}</td>
-                  <td className="px-4 py-3 text-right">{i.pedido}</td>
-                  <td className="px-4 py-3 text-right">{i.recebido}</td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="chip chip-danger text-xs">{i.tipo} · {i.falta}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {i.encerrado_em && (
-                      <span className="chip chip-muted text-xs">
-                        encerrado em {formatDateBRT(i.encerrado_em)} por {i.encerrado_por_nome ?? "—"} — {i.motivo_encerramento ?? "—"}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold">R$ {i.impacto.toFixed(2)}</td>
-                  {isAdmin && (
-                    <td className="px-4 py-3 text-right">
-                      {i.tipo === "falta" && i.pedido_id && i.fornecedor_id && !valeItemIds.has(i.item_conferencia_id) ? (
-                        <button
-                          type="button"
-                          disabled={createVale.isPending}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900 hover:underline disabled:opacity-50"
-                          onClick={async () => {
-                            if (!user?.id || !i.pedido_id || !i.fornecedor_id) return;
-                            try {
-                              await createVale.mutateAsync({
-                                pedido_id: i.pedido_id,
-                                item_conferencia_id: i.item_conferencia_id,
-                                fornecedor_id: i.fornecedor_id,
-                                conferente_id: user.id,
-                                produto_nome: i.produto,
-                                quantidade_pedida: i.pedido,
-                                quantidade_recebida: i.recebido,
-                                diferenca: i.falta,
-                                preco_unitario: i.preco !== valorUnitario ? i.preco : null,
-                                valor_calculado: i.impacto,
-                                estimado: i.estimado,
-                              });
-                              toast.success("Vale solicitado com sucesso");
-                            } catch (err) {
-                              toast.error(err instanceof Error ? err.message : "Erro ao solicitar vale");
-                            }
-                          }}
-                        >
-                          <Receipt size={12} /> Solicitar vale
-                        </button>
-                      ) : valeItemIds.has(i.item_conferencia_id) ? (
-                        <span className="text-xs text-muted-foreground">Vale criado</span>
-                      ) : null}
-                    </td>
-                  )}
+        <div className="card-base">
+          <TableWrapper stickyFirstColumn>
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
+                <tr>
+                  <th className="text-left px-4 py-3 whitespace-nowrap">Pedido</th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap">Fornecedor</th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap">Produto</th>
+                  <th className="text-right px-4 py-3 whitespace-nowrap">Pedido</th>
+                  <th className="text-right px-4 py-3 whitespace-nowrap">Recebido</th>
+                  <th className="text-right px-4 py-3 whitespace-nowrap">Diverg.</th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap">Encerramento</th>
+                  <th className="text-right px-4 py-3 whitespace-nowrap">Impacto</th>
+                  {isAdmin && <th className="px-4 py-3" />}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {faltasComImpacto.map((i) => (
+                  <tr key={i.id} className="border-t border-border">
+                    <td className="px-4 py-3 whitespace-nowrap">{i.codigo}</td>
+                    <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{i.fornecedor}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{i.produto}</td>
+                    <td className="px-4 py-3 text-right">{i.pedido}</td>
+                    <td className="px-4 py-3 text-right">{i.recebido}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="chip chip-danger text-xs whitespace-nowrap">{i.tipo} · {i.falta}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {i.encerrado_em && (
+                        <span className="chip chip-muted text-xs">
+                          {formatDateBRT(i.encerrado_em)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold whitespace-nowrap">R$ {i.impacto.toFixed(2)}</td>
+                    {isAdmin && (
+                      <td className="px-4 py-3 text-right">
+                        {i.tipo === "falta" && i.pedido_id && i.fornecedor_id && !valeItemIds.has(i.item_conferencia_id) ? (
+                          <button
+                            type="button"
+                            disabled={createVale.isPending}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900 hover:underline disabled:opacity-50 min-h-[44px] min-w-[44px] px-2"
+                            onClick={async () => {
+                              if (!user?.id || !i.pedido_id || !i.fornecedor_id) return;
+                              try {
+                                await createVale.mutateAsync({
+                                  pedido_id: i.pedido_id,
+                                  item_conferencia_id: i.item_conferencia_id,
+                                  fornecedor_id: i.fornecedor_id,
+                                  conferente_id: user.id,
+                                  produto_nome: i.produto,
+                                  quantidade_pedida: i.pedido,
+                                  quantidade_recebida: i.recebido,
+                                  diferenca: i.falta,
+                                  preco_unitario: i.preco !== valorUnitario ? i.preco : null,
+                                  valor_calculado: i.impacto,
+                                  estimado: i.estimado,
+                                });
+                                toast.success("Vale solicitado com sucesso");
+                              } catch (err) {
+                                toast.error(err instanceof Error ? err.message : "Erro ao solicitar vale");
+                              }
+                            }}
+                          >
+                            <Receipt size={12} /> Vale
+                          </button>
+                        ) : valeItemIds.has(i.item_conferencia_id) ? (
+                          <span className="text-xs text-muted-foreground">Vale criado</span>
+                        ) : null}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrapper>
         </div>
       )}
 

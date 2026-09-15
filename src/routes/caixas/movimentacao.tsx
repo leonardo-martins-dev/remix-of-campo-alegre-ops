@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { TableWrapper } from "@/components/table-wrapper";
 import { StatStrip } from "@/components/stat-strip";
 import { Donut } from "@/components/charts";
 import { BarRow } from "@/components/charts";
@@ -868,65 +869,67 @@ function RankingPanel() {
           </div>
         </div>
 
-        <div className="card-base overflow-x-auto">
+        <div className="card-base">
           <div className="p-4 border-b border-border">
             <h3 className="text-sm font-bold text-navy">Últimos registros</h3>
           </div>
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                <th className="text-left px-4 py-2">Hora</th>
-                <th className="text-left px-4 py-2">Motorista</th>
-                <th className="text-left px-4 py-2">Loja</th>
-                {tipos.map((t) => (
-                  <th key={t.id} className="text-right px-4 py-2">
-                    {t.sigla}
-                  </th>
-                ))}
-                <th className="text-right px-4 py-2">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {retornos.map(
-                (r: {
-                  id: string;
-                  created_at: string;
-                  caixas?: Record<string, number> | null;
-                  caixas_g: number;
-                  caixas_i: number;
-                  caixas_p: number;
-                  clientes: { nome: string } | { nome: string }[] | null;
-                  motoristas: { nome: string } | { nome: string }[] | null;
-                  profiles: { nome: string } | { nome: string }[] | null;
-                }) => {
-                  const map = fromLegacyColumns(r);
-                  return (
-                    <tr key={r.id} className="border-t border-border">
-                      <td className="px-4 py-2.5 font-mono text-muted-foreground">
-                        {formatTime(r.created_at)}
-                      </td>
-                      <td className="px-4 py-2.5 text-ink">
-                        {(Array.isArray(r.motoristas) ? r.motoristas[0] : r.motoristas)?.nome ??
-                          (Array.isArray(r.profiles) ? r.profiles[0] : r.profiles)?.nome ??
-                          "—"}
-                      </td>
-                      <td className="px-4 py-2.5 font-semibold text-navy">
-                        {(Array.isArray(r.clientes) ? r.clientes[0] : r.clientes)?.nome ?? "—"}
-                      </td>
-                      {tipos.map((t) => (
-                        <td key={t.id} className="px-4 py-2.5 text-right">
-                          {map[t.sigla] ?? 0}
+          <TableWrapper stickyFirstColumn>
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
+                <tr>
+                  <th className="text-left px-4 py-2 whitespace-nowrap">Hora</th>
+                  <th className="text-left px-4 py-2 whitespace-nowrap">Motorista</th>
+                  <th className="text-left px-4 py-2 whitespace-nowrap">Loja</th>
+                  {tipos.map((t) => (
+                    <th key={t.id} className="text-right px-4 py-2 whitespace-nowrap">
+                      {t.sigla}
+                    </th>
+                  ))}
+                  <th className="text-right px-4 py-2 whitespace-nowrap">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {retornos.map(
+                  (r: {
+                    id: string;
+                    created_at: string;
+                    caixas?: Record<string, number> | null;
+                    caixas_g: number;
+                    caixas_i: number;
+                    caixas_p: number;
+                    clientes: { nome: string } | { nome: string }[] | null;
+                    motoristas: { nome: string } | { nome: string }[] | null;
+                    profiles: { nome: string } | { nome: string }[] | null;
+                  }) => {
+                    const map = fromLegacyColumns(r);
+                    return (
+                      <tr key={r.id} className="border-t border-border">
+                        <td className="px-4 py-2.5 font-mono text-muted-foreground whitespace-nowrap">
+                          {formatTime(r.created_at)}
                         </td>
-                      ))}
-                      <td className="px-4 py-2.5 text-right font-bold text-navy">
-                        {sumCaixas(map)}
-                      </td>
-                    </tr>
-                  );
-                },
-              )}
-            </tbody>
-          </table>
+                        <td className="px-4 py-2.5 text-ink whitespace-nowrap">
+                          {(Array.isArray(r.motoristas) ? r.motoristas[0] : r.motoristas)?.nome ??
+                            (Array.isArray(r.profiles) ? r.profiles[0] : r.profiles)?.nome ??
+                            "—"}
+                        </td>
+                        <td className="px-4 py-2.5 font-semibold text-navy whitespace-nowrap">
+                          {(Array.isArray(r.clientes) ? r.clientes[0] : r.clientes)?.nome ?? "—"}
+                        </td>
+                        {tipos.map((t) => (
+                          <td key={t.id} className="px-4 py-2.5 text-right">
+                            {map[t.sigla] ?? 0}
+                          </td>
+                        ))}
+                        <td className="px-4 py-2.5 text-right font-bold text-navy">
+                          {sumCaixas(map)}
+                        </td>
+                      </tr>
+                    );
+                  },
+                )}
+              </tbody>
+            </table>
+          </TableWrapper>
         </div>
       </div>
     </div>

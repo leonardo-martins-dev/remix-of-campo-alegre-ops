@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
+import { TableWrapper } from "@/components/table-wrapper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -727,50 +728,52 @@ function ImportarConversaoTab() {
             <Stat label="Pendentes (fator 0)" value={preview.filter((i) => i.status === "pendente").length} />
           </div>
           
-          <div className="max-h-[300px] overflow-auto border rounded-md">
-            <table className="w-full text-sm">
-              <thead className="bg-muted sticky top-0">
-                <tr>
-                  <th className="text-left p-2">Linha</th>
-                  <th className="text-left p-2">Código</th>
-                  <th className="text-left p-2">Produto</th>
-                  <th className="text-left p-2">Fornecedor</th>
-                  <th className="text-left p-2">Tipo</th>
-                  <th className="text-left p-2">Fator</th>
-                  <th className="text-left p-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.slice(0, 100).map((item, i) => (
-                  <tr
-                    key={i}
-                    className={
-                      item.status === "pendente"
-                        ? "bg-warning/10"
-                        : item.status === "rejeitado"
-                          ? "bg-destructive/10"
-                          : ""
-                    }
-                  >
-                    <td className="p-2">{item.linha}</td>
-                    <td className="p-2">{item.produtoCodigo}</td>
-                    <td className="p-2">{item.produtoNome}</td>
-                    <td className="p-2">{item.fornecedorNome || "—"}</td>
-                    <td className="p-2">{item.tipoCaixa}</td>
-                    <td className="p-2">{item.fator ?? "—"}</td>
-                    <td className="p-2">
-                      {item.status === "ok" && <span className="text-green-600">OK</span>}
-                      {item.status === "pendente" && (
-                        <span className="text-warning">{item.motivo}</span>
-                      )}
-                      {item.status === "rejeitado" && (
-                        <span className="text-destructive">{item.motivo}</span>
-                      )}
-                    </td>
+          <div className="max-h-[300px] border rounded-md">
+            <TableWrapper stickyFirstColumn>
+              <table className="w-full text-sm">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="text-left p-2 whitespace-nowrap">Linha</th>
+                    <th className="text-left p-2 whitespace-nowrap">Código</th>
+                    <th className="text-left p-2 whitespace-nowrap">Produto</th>
+                    <th className="text-left p-2 whitespace-nowrap">Fornecedor</th>
+                    <th className="text-left p-2 whitespace-nowrap">Tipo</th>
+                    <th className="text-left p-2 whitespace-nowrap">Fator</th>
+                    <th className="text-left p-2 whitespace-nowrap">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {preview.slice(0, 100).map((item, i) => (
+                    <tr
+                      key={i}
+                      className={
+                        item.status === "pendente"
+                          ? "bg-warning/10"
+                          : item.status === "rejeitado"
+                            ? "bg-destructive/10"
+                            : ""
+                      }
+                    >
+                      <td className="p-2">{item.linha}</td>
+                      <td className="p-2 whitespace-nowrap">{item.produtoCodigo}</td>
+                      <td className="p-2 whitespace-nowrap">{item.produtoNome}</td>
+                      <td className="p-2 whitespace-nowrap">{item.fornecedorNome || "—"}</td>
+                      <td className="p-2">{item.tipoCaixa}</td>
+                      <td className="p-2">{item.fator ?? "—"}</td>
+                      <td className="p-2">
+                        {item.status === "ok" && <span className="text-green-600">OK</span>}
+                        {item.status === "pendente" && (
+                          <span className="text-warning">{item.motivo}</span>
+                        )}
+                        {item.status === "rejeitado" && (
+                          <span className="text-destructive">{item.motivo}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrapper>
           </div>
           
           <div className="flex gap-2">

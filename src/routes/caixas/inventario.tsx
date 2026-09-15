@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Box, Clock, Minus, Plus, Smartphone, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { TableWrapper } from "@/components/table-wrapper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -233,16 +234,16 @@ function VisaoGeralInventario() {
       {/* Total por tipo de caixa */}
       <div className="card-base p-5">
         <h3 className="font-semibold text-navy mb-4">Total geral por tipo de caixa</h3>
-        <div className="overflow-x-auto">
+        <TableWrapper stickyFirstColumn>
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground uppercase">
               <tr>
-                <th className="text-left py-2 px-3">Tipo</th>
-                <th className="text-right py-2 px-3">Galpão</th>
-                <th className="text-right py-2 px-3">Fornecedores</th>
-                <th className="text-right py-2 px-3">Clientes</th>
-                <th className="text-right py-2 px-3 font-bold">Total</th>
-                <th className="text-right py-2 px-3">Valor</th>
+                <th className="text-left py-2 px-3 whitespace-nowrap">Tipo</th>
+                <th className="text-right py-2 px-3 whitespace-nowrap">Galpão</th>
+                <th className="text-right py-2 px-3 whitespace-nowrap">Fornecedores</th>
+                <th className="text-right py-2 px-3 whitespace-nowrap">Clientes</th>
+                <th className="text-right py-2 px-3 font-bold whitespace-nowrap">Total</th>
+                <th className="text-right py-2 px-3 whitespace-nowrap">Valor</th>
               </tr>
             </thead>
             <tbody>
@@ -254,12 +255,12 @@ function VisaoGeralInventario() {
                 const valor = total * t.custo_unitario;
                 return (
                   <tr key={t.id} className="border-t">
-                    <td className="py-2 px-3 font-medium">{t.nome} ({t.sigla})</td>
+                    <td className="py-2 px-3 font-medium whitespace-nowrap">{t.nome} ({t.sigla})</td>
                     <td className="py-2 px-3 text-right">{galpao}</td>
                     <td className="py-2 px-3 text-right">{forn}</td>
                     <td className="py-2 px-3 text-right">{cli}</td>
                     <td className="py-2 px-3 text-right font-bold">{total}</td>
-                    <td className="py-2 px-3 text-right text-muted-foreground">{formatBRL(valor)}</td>
+                    <td className="py-2 px-3 text-right text-muted-foreground whitespace-nowrap">{formatBRL(valor)}</td>
                   </tr>
                 );
               })}
@@ -277,11 +278,11 @@ function VisaoGeralInventario() {
                   {Object.values(saldoPorPosicaoTipo.cliente).reduce((a, b) => a + b, 0)}
                 </td>
                 <td className="py-2 px-3 text-right font-bold">{totalGeral.qty}</td>
-                <td className="py-2 px-3 text-right font-bold">{formatBRL(totalGeral.valor)}</td>
+                <td className="py-2 px-3 text-right font-bold whitespace-nowrap">{formatBRL(totalGeral.valor)}</td>
               </tr>
             </tfoot>
           </table>
-        </div>
+        </TableWrapper>
       </div>
 
       {/* Posições pendentes por tipo */}
@@ -318,40 +319,40 @@ function VisaoGeralInventario() {
             <AlertTriangle size={16} className="text-warning" />
             Fornecedores abaixo do estoque mínimo
           </h3>
-          <div className="overflow-x-auto">
+          <TableWrapper stickyFirstColumn>
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground uppercase">
                 <tr>
-                  <th className="text-left py-2 px-3">Fornecedor</th>
-                  <th className="text-center py-2 px-3">Tipo</th>
-                  <th className="text-right py-2 px-3">Mínimo</th>
-                  <th className="text-right py-2 px-3">Atual</th>
-                  <th className="text-right py-2 px-3">Faltam</th>
-                  <th className="text-right py-2 px-3">Valor</th>
+                  <th className="text-left py-2 px-3 whitespace-nowrap">Fornecedor</th>
+                  <th className="text-center py-2 px-3 whitespace-nowrap">Tipo</th>
+                  <th className="text-right py-2 px-3 whitespace-nowrap">Mínimo</th>
+                  <th className="text-right py-2 px-3 whitespace-nowrap">Atual</th>
+                  <th className="text-right py-2 px-3 whitespace-nowrap">Faltam</th>
+                  <th className="text-right py-2 px-3 whitespace-nowrap">Valor</th>
                 </tr>
               </thead>
               <tbody>
                 {abaixoMinimo.map((f, i) => (
                   <tr key={`${f.fornecedor_id}-${f.tipo_caixa}-${i}`} className="border-t">
-                    <td className="py-2 px-3 font-medium">{f.fornecedor_nome}</td>
+                    <td className="py-2 px-3 font-medium whitespace-nowrap">{f.fornecedor_nome}</td>
                     <td className="py-2 px-3 text-center font-semibold">{f.tipo_caixa}</td>
                     <td className="py-2 px-3 text-right">{f.qtd_minima}</td>
                     <td className="py-2 px-3 text-right text-danger font-bold">{f.saldo_atual}</td>
                     <td className="py-2 px-3 text-right text-danger font-bold">{f.faltando}</td>
-                    <td className="py-2 px-3 text-right">{formatBRL(f.valor_faltando)}</td>
+                    <td className="py-2 px-3 text-right whitespace-nowrap">{formatBRL(f.valor_faltando)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="bg-secondary/30">
                 <tr>
                   <td colSpan={5} className="py-2 px-3 text-right font-bold">Total faltando:</td>
-                  <td className="py-2 px-3 text-right font-bold text-danger">
+                  <td className="py-2 px-3 text-right font-bold text-danger whitespace-nowrap">
                     {formatBRL(totalValorFaltando)}
                   </td>
                 </tr>
               </tfoot>
             </table>
-          </div>
+          </TableWrapper>
         </div>
       )}
 

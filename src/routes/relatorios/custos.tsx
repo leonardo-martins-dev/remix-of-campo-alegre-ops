@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { DollarSign, Package, AlertTriangle, Scale, ClipboardList, FileSpreadsheet, TrendingDown, Building2 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { TableWrapper } from "@/components/table-wrapper";
 import { KpiCard } from "@/components/kpi-card";
 import { Button } from "@/components/ui/button";
 import { exportToExcel } from "@/lib/excel";
@@ -298,24 +299,26 @@ function Page() {
               {perdaPorPosicao.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhuma perda no período.</p>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-secondary/50 text-xs uppercase">
-                    <tr>
-                      <th className="text-left px-3 py-2">Posição</th>
-                      <th className="text-right px-3 py-2">Caixas</th>
-                      <th className="text-right px-3 py-2">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {perdaPorPosicao.map((r) => (
-                      <tr key={r.posicao} className="border-t">
-                        <td className="px-3 py-2">{r.posicao}</td>
-                        <td className="px-3 py-2 text-right">{r.quantidade}</td>
-                        <td className="px-3 py-2 text-right font-semibold">{formatBRL(r.valor)}</td>
+                <TableWrapper stickyFirstColumn>
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/50 text-xs uppercase">
+                      <tr>
+                        <th className="text-left px-3 py-2 whitespace-nowrap">Posição</th>
+                        <th className="text-right px-3 py-2 whitespace-nowrap">Caixas</th>
+                        <th className="text-right px-3 py-2 whitespace-nowrap">Valor</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {perdaPorPosicao.map((r) => (
+                        <tr key={r.posicao} className="border-t">
+                          <td className="px-3 py-2 whitespace-nowrap">{r.posicao}</td>
+                          <td className="px-3 py-2 text-right">{r.quantidade}</td>
+                          <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{formatBRL(r.valor)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </TableWrapper>
               )}
             </div>
             <div className="card-base p-4">
@@ -325,24 +328,26 @@ function Page() {
               {perdaPorRotaMotorista.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sem dados de perda por rota.</p>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-secondary/50 text-xs uppercase">
-                    <tr>
-                      <th className="text-left px-3 py-2">Rota</th>
-                      <th className="text-left px-3 py-2">Motorista</th>
-                      <th className="text-right px-3 py-2">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {perdaPorRotaMotorista.map((r) => (
-                      <tr key={r.carga_id} className="border-t">
-                        <td className="px-3 py-2">{r.rota_nome ?? "—"}</td>
-                        <td className="px-3 py-2">{r.motorista_nome ?? "—"}</td>
-                        <td className="px-3 py-2 text-right font-semibold">{formatBRL(Number(r.valor_perda_total))}</td>
+                <TableWrapper stickyFirstColumn>
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/50 text-xs uppercase">
+                      <tr>
+                        <th className="text-left px-3 py-2 whitespace-nowrap">Rota</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap">Motorista</th>
+                        <th className="text-right px-3 py-2 whitespace-nowrap">Valor</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {perdaPorRotaMotorista.map((r) => (
+                        <tr key={r.carga_id} className="border-t">
+                          <td className="px-3 py-2 whitespace-nowrap">{r.rota_nome ?? "—"}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{r.motorista_nome ?? "—"}</td>
+                          <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{formatBRL(Number(r.valor_perda_total))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </TableWrapper>
               )}
             </div>
           </div>
@@ -355,26 +360,28 @@ function Page() {
             {recebimentoPorFornecedor.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma divergência no período.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-secondary/50 text-xs uppercase">
-                  <tr>
-                    <th className="text-left px-3 py-2">Fornecedor</th>
-                    <th className="text-right px-3 py-2">Faltas</th>
-                    <th className="text-right px-3 py-2">Qualidade</th>
-                    <th className="text-right px-3 py-2">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recebimentoPorFornecedor.map((r) => (
-                    <tr key={r.fornecedor} className="border-t">
-                      <td className="px-3 py-2">{r.fornecedor}</td>
-                      <td className="px-3 py-2 text-right">{formatBRL(r.faltas)}</td>
-                      <td className="px-3 py-2 text-right">{formatBRL(r.qualidade)}</td>
-                      <td className="px-3 py-2 text-right font-semibold">{formatBRL(r.total)}</td>
+              <TableWrapper stickyFirstColumn>
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary/50 text-xs uppercase">
+                    <tr>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Fornecedor</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap">Faltas</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap">Qualidade</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap">Total</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {recebimentoPorFornecedor.map((r) => (
+                      <tr key={r.fornecedor} className="border-t">
+                        <td className="px-3 py-2 whitespace-nowrap">{r.fornecedor}</td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap">{formatBRL(r.faltas)}</td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap">{formatBRL(r.qualidade)}</td>
+                        <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{formatBRL(r.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrapper>
             )}
           </div>
 
@@ -386,24 +393,26 @@ function Page() {
             {quebraPorFornecedor.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma quebra no período.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-secondary/50 text-xs uppercase">
-                  <tr>
-                    <th className="text-left px-3 py-2">Fornecedor</th>
-                    <th className="text-right px-3 py-2">Ocorrências</th>
-                    <th className="text-right px-3 py-2">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quebraPorFornecedor.map((r) => (
-                    <tr key={r.fornecedor} className="border-t">
-                      <td className="px-3 py-2">{r.fornecedor}</td>
-                      <td className="px-3 py-2 text-right">{r.ocorrencias}</td>
-                      <td className="px-3 py-2 text-right font-semibold">{formatBRL(r.valor)}</td>
+              <TableWrapper stickyFirstColumn>
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary/50 text-xs uppercase">
+                    <tr>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Fornecedor</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap">Ocorrências</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap">Valor</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {quebraPorFornecedor.map((r) => (
+                      <tr key={r.fornecedor} className="border-t">
+                        <td className="px-3 py-2 whitespace-nowrap">{r.fornecedor}</td>
+                        <td className="px-3 py-2 text-right">{r.ocorrencias}</td>
+                        <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{formatBRL(r.valor)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrapper>
             )}
           </div>
 
@@ -415,28 +424,30 @@ function Page() {
             {fatorRealTop.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhum item com desvio significativo.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-secondary/50 text-xs uppercase">
-                  <tr>
-                    <th className="text-left px-3 py-2">Fornecedor</th>
-                    <th className="text-left px-3 py-2">Produto</th>
-                    <th className="text-right px-3 py-2">Entregas</th>
-                    <th className="text-right px-3 py-2">Desvio %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fatorRealTop.map((r, i) => (
-                    <tr key={i} className="border-t">
-                      <td className="px-3 py-2">{r.fornecedor_nome}</td>
-                      <td className="px-3 py-2">{r.produto_nome}</td>
-                      <td className="px-3 py-2 text-right">{r.entregas}</td>
-                      <td className={`px-3 py-2 text-right font-semibold ${Number(r.desvio_pct) < 0 ? "text-destructive" : "text-[var(--success)]"}`}>
-                        {Number(r.desvio_pct) > 0 ? "+" : ""}{Number(r.desvio_pct).toFixed(1)}%
-                      </td>
+              <TableWrapper stickyFirstColumn>
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary/50 text-xs uppercase">
+                    <tr>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Fornecedor</th>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Produto</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap">Entregas</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap">Desvio %</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {fatorRealTop.map((r, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="px-3 py-2 whitespace-nowrap">{r.fornecedor_nome}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{r.produto_nome}</td>
+                        <td className="px-3 py-2 text-right">{r.entregas}</td>
+                        <td className={`px-3 py-2 text-right font-semibold whitespace-nowrap ${Number(r.desvio_pct) < 0 ? "text-destructive" : "text-[var(--success)]"}`}>
+                          {Number(r.desvio_pct) > 0 ? "+" : ""}{Number(r.desvio_pct).toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrapper>
             )}
           </div>
 
@@ -458,24 +469,26 @@ function Page() {
             {contagensPendentes.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma contagem pendente.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-secondary/50 text-xs uppercase">
-                  <tr>
-                    <th className="text-left px-3 py-2">Posição</th>
-                    <th className="text-right px-3 py-2">Dias pendente</th>
-                    <th className="text-right px-3 py-2">Diferença</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contagensPendentes.slice(0, 10).map((r) => (
-                    <tr key={r.contagem_id} className="border-t">
-                      <td className="px-3 py-2">{r.posicao_nome}</td>
-                      <td className="px-3 py-2 text-right">{r.dias_pendente}</td>
-                      <td className="px-3 py-2 text-right font-semibold">{r.total_diferenca ?? 0}</td>
+              <TableWrapper stickyFirstColumn>
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary/50 text-xs uppercase">
+                    <tr>
+                      <th className="text-left px-3 py-2 whitespace-nowrap">Posição</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap">Dias pend.</th>
+                      <th className="text-right px-3 py-2 whitespace-nowrap">Diferença</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {contagensPendentes.slice(0, 10).map((r) => (
+                      <tr key={r.contagem_id} className="border-t">
+                        <td className="px-3 py-2 whitespace-nowrap">{r.posicao_nome}</td>
+                        <td className="px-3 py-2 text-right">{r.dias_pendente}</td>
+                        <td className="px-3 py-2 text-right font-semibold">{r.total_diferenca ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableWrapper>
             )}
           </div>
 
@@ -488,24 +501,26 @@ function Page() {
               {rankingFornecedor.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sem dados.</p>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-secondary/50 text-xs uppercase">
-                    <tr>
-                      <th className="text-left px-3 py-2">#</th>
-                      <th className="text-left px-3 py-2">Fornecedor</th>
-                      <th className="text-right px-3 py-2">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rankingFornecedor.slice(0, 10).map((r, i) => (
-                      <tr key={r.fornecedor_id} className="border-t">
-                        <td className="px-3 py-2 font-semibold">{i + 1}</td>
-                        <td className="px-3 py-2">{r.fornecedor_nome}</td>
-                        <td className="px-3 py-2 text-right font-semibold">{formatBRL(r.custo_total)}</td>
+                <TableWrapper stickyFirstColumn>
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/50 text-xs uppercase">
+                      <tr>
+                        <th className="text-left px-3 py-2">#</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap">Fornecedor</th>
+                        <th className="text-right px-3 py-2 whitespace-nowrap">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {rankingFornecedor.slice(0, 10).map((r, i) => (
+                        <tr key={r.fornecedor_id} className="border-t">
+                          <td className="px-3 py-2 font-semibold">{i + 1}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{r.fornecedor_nome}</td>
+                          <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{formatBRL(r.custo_total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </TableWrapper>
               )}
             </div>
             <div className="card-base p-4">
@@ -515,24 +530,26 @@ function Page() {
               {rankingCliente.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sem dados.</p>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-secondary/50 text-xs uppercase">
-                    <tr>
-                      <th className="text-left px-3 py-2">#</th>
-                      <th className="text-left px-3 py-2">Supermercado</th>
-                      <th className="text-right px-3 py-2">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rankingCliente.slice(0, 10).map((r, i) => (
-                      <tr key={r.cliente_id} className="border-t">
-                        <td className="px-3 py-2 font-semibold">{i + 1}</td>
-                        <td className="px-3 py-2">{r.cliente_nome}</td>
-                        <td className="px-3 py-2 text-right font-semibold">{formatBRL(r.custo_total)}</td>
+                <TableWrapper stickyFirstColumn>
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/50 text-xs uppercase">
+                      <tr>
+                        <th className="text-left px-3 py-2">#</th>
+                        <th className="text-left px-3 py-2 whitespace-nowrap">Supermercado</th>
+                        <th className="text-right px-3 py-2 whitespace-nowrap">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {rankingCliente.slice(0, 10).map((r, i) => (
+                        <tr key={r.cliente_id} className="border-t">
+                          <td className="px-3 py-2 font-semibold">{i + 1}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{r.cliente_nome}</td>
+                          <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{formatBRL(r.custo_total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </TableWrapper>
               )}
             </div>
           </div>

@@ -39,6 +39,7 @@ import { downloadWiseModelo, type AliasRow } from "@/lib/excel-wise-pedidos";
 import { useConfirmWiseImport, usePreviewWiseImport, useSyncWisePedidos, type ImportPreview, type ImportWiseResult } from "@/hooks/use-wise-pedidos";
 import { ImportacaoWiseDialog } from "@/components/importacao-wise-dialog";
 import { ImportacoesPanel } from "@/components/importacoes-panel";
+import { TableWrapper } from "@/components/table-wrapper";
 import { usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { formatDateBRT, formatTime, todayBRT } from "@/lib/utils-date";
 import { Textarea } from "@/components/ui/textarea";
@@ -454,95 +455,97 @@ function Page() {
         {tab === "importacoes" ? (
           <ImportacoesPanel canAdmin={canAdmin} />
         ) : (
-        <table className="w-full text-sm">
-          <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
-            <tr>
-              <th className="text-left px-4 py-3 font-semibold">Pedido</th>
-              <th className="text-left px-4 py-3 font-semibold">Fornecedor</th>
-              <th className="text-left px-4 py-3 font-semibold">Itens</th>
-              <th className="text-left px-4 py-3 font-semibold">Cliente</th>
-              <th className="text-left px-4 py-3 font-semibold">Origem</th>
-              <th className="text-left px-4 py-3 font-semibold">Chegada</th>
-              <th className="text-left px-4 py-3 font-semibold">Prevista</th>
-              <th className="text-left px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
+        <TableWrapper stickyFirstColumn>
+          <table className="w-full text-sm">
+            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
-                  Carregando pedidos…
-                </td>
+                <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">Pedido</th>
+                <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">Fornecedor</th>
+                <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">Itens</th>
+                <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">Cliente</th>
+                <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">Origem</th>
+                <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">Chegada</th>
+                <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">Prevista</th>
+                <th className="text-left px-4 py-3 font-semibold whitespace-nowrap">Status</th>
+                <th className="px-4 py-3" />
               </tr>
-            )}
-            {!isLoading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
-                  Nenhum pedido encontrado
-                </td>
-              </tr>
-            )}
-            {filtered.map((p) => (
-              <tr key={p.id} className="border-t border-border hover:bg-secondary/30">
-                <td className="px-4 py-3 font-semibold text-navy">{p.codigo}</td>
-                <td className="px-4 py-3 text-ink">
-                  {p.fornecedores?.nome ?? (p.status === "aguardando_vinculo" ? "fornecedor não reconhecido" : "—")}
-                </td>
-                <td className="px-4 py-3 text-ink">{p.itens_pedido?.length ?? 0}</td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {getClienteChips(p).map((d) => (
-                      <span key={d} className="chip chip-muted">
-                        {d}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`chip ${p.origem === "wisetec" ? "chip-info" : "chip-muted"}`}
-                  >
-                    {origemLabel(p.origem)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-ink">{formatTime(p.hora_chegada)}</td>
-                <td className="px-4 py-3 text-ink">{formatDateBRT(p.data_prevista)}</td>
-                <td className="px-4 py-3">{statusChip(p.status)}</td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    {pedidoActionLink(p)}
-                    {canAdmin && p.status === "parcial" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEncerrarId(p.id);
-                          setEncerrarMotivo("");
-                        }}
-                        className="inline-flex items-center gap-1 text-xs text-destructive hover:underline"
-                      >
-                        <Ban size={12} /> Encerrar pedido
-                      </button>
-                    )}
-                    {canAdmin && (p.status === "conferido" || p.status === "pendente" || p.status === "parcial") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditPedido(p);
-                          setEditCodigo(p.codigo);
-                          setEditPrevista(p.data_prevista ?? "");
-                        }}
-                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-navy"
-                      >
-                        <Pencil size={12} /> Editar
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {isLoading && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                    Carregando pedidos…
+                  </td>
+                </tr>
+              )}
+              {!isLoading && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                    Nenhum pedido encontrado
+                  </td>
+                </tr>
+              )}
+              {filtered.map((p) => (
+                <tr key={p.id} className="border-t border-border hover:bg-secondary/30">
+                  <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{p.codigo}</td>
+                  <td className="px-4 py-3 text-ink whitespace-nowrap">
+                    {p.fornecedores?.nome ?? (p.status === "aguardando_vinculo" ? "fornecedor não reconhecido" : "—")}
+                  </td>
+                  <td className="px-4 py-3 text-ink">{p.itens_pedido?.length ?? 0}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {getClienteChips(p).map((d) => (
+                        <span key={d} className="chip chip-muted">
+                          {d}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`chip ${p.origem === "wisetec" ? "chip-info" : "chip-muted"}`}
+                    >
+                      {origemLabel(p.origem)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-ink whitespace-nowrap">{formatTime(p.hora_chegada)}</td>
+                  <td className="px-4 py-3 text-ink whitespace-nowrap">{formatDateBRT(p.data_prevista)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">{statusChip(p.status)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                      {pedidoActionLink(p)}
+                      {canAdmin && p.status === "parcial" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEncerrarId(p.id);
+                            setEncerrarMotivo("");
+                          }}
+                          className="inline-flex items-center gap-1 text-xs text-destructive hover:underline"
+                        >
+                          <Ban size={12} /> Encerrar
+                        </button>
+                      )}
+                      {canAdmin && (p.status === "conferido" || p.status === "pendente" || p.status === "parcial") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditPedido(p);
+                            setEditCodigo(p.codigo);
+                            setEditPrevista(p.data_prevista ?? "");
+                          }}
+                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-navy"
+                        >
+                          <Pencil size={12} /> Editar
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrapper>
         )}
       </div>
 

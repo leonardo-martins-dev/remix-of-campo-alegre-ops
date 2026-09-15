@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Clock, PackageCheck, Truck, RotateCcw, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { TableWrapper } from "@/components/table-wrapper";
 import { KpiCard } from "@/components/kpi-card";
 import { useIndicadores } from "@/hooks/use-dashboard";
 import { formatTime, formatDurationMinutes } from "@/lib/utils-date";
@@ -136,65 +137,69 @@ function Page() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="card-base overflow-x-auto">
+        <div className="card-base">
           <div className="p-4 border-b border-border">
             <h3 className="text-sm font-bold text-navy">Tempo de carregamento por loja</h3>
           </div>
           {tempoCargaPorLoja.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">Sem cargas finalizadas.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-4 py-3">Loja</th>
-                  <th className="text-right px-3 py-3">Início</th>
-                  <th className="text-right px-3 py-3">Fim</th>
-                  <th className="text-right px-3 py-3">Duração</th>
-                  <th className="text-right px-4 py-3">Itens/min</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tempoCargaPorLoja.map((t) => (
-                  <tr key={t.loja + t.inicio} className="border-t border-border">
-                    <td className="px-4 py-3 font-semibold text-navy">{t.loja}</td>
-                    <td className="px-3 py-3 text-right text-muted-foreground font-mono">{t.inicio}</td>
-                    <td className="px-3 py-3 text-right text-muted-foreground font-mono">{t.fim}</td>
-                    <td className="px-3 py-3 text-right font-semibold">{t.duracao} min</td>
-                    <td className="px-4 py-3 text-right font-bold text-primary-dark">
-                      {t.ipm.toFixed(2)}
-                    </td>
+            <TableWrapper stickyFirstColumn>
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
+                  <tr>
+                    <th className="text-left px-4 py-3 whitespace-nowrap">Loja</th>
+                    <th className="text-right px-3 py-3 whitespace-nowrap">Início</th>
+                    <th className="text-right px-3 py-3 whitespace-nowrap">Fim</th>
+                    <th className="text-right px-3 py-3 whitespace-nowrap">Duração</th>
+                    <th className="text-right px-4 py-3 whitespace-nowrap">Itens/min</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {tempoCargaPorLoja.map((t) => (
+                    <tr key={t.loja + t.inicio} className="border-t border-border">
+                      <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{t.loja}</td>
+                      <td className="px-3 py-3 text-right text-muted-foreground font-mono whitespace-nowrap">{t.inicio}</td>
+                      <td className="px-3 py-3 text-right text-muted-foreground font-mono whitespace-nowrap">{t.fim}</td>
+                      <td className="px-3 py-3 text-right font-semibold whitespace-nowrap">{t.duracao} min</td>
+                      <td className="px-4 py-3 text-right font-bold text-primary-dark whitespace-nowrap">
+                        {t.ipm.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrapper>
           )}
         </div>
 
-        <div className="card-base overflow-x-auto">
+        <div className="card-base">
           <div className="p-4 border-b border-border">
             <h3 className="text-sm font-bold text-navy">Tempo de conferência por pedido</h3>
           </div>
           {conferenciasRows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">Sem conferências finalizadas.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-4 py-3">Pedido</th>
-                  <th className="text-left px-3 py-3">Fornecedor</th>
-                  <th className="text-right px-3 py-3">Duração</th>
-                </tr>
-              </thead>
-              <tbody>
-                {conferenciasRows.map((r) => (
-                  <tr key={r.codigo} className="border-t border-border">
-                    <td className="px-4 py-3 font-semibold text-navy">{r.codigo}</td>
-                    <td className="px-3 py-3 text-ink">{r.fornecedor}</td>
-                    <td className="px-3 py-3 text-right font-semibold">{r.duracao} min</td>
+            <TableWrapper stickyFirstColumn>
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
+                  <tr>
+                    <th className="text-left px-4 py-3 whitespace-nowrap">Pedido</th>
+                    <th className="text-left px-3 py-3 whitespace-nowrap">Fornecedor</th>
+                    <th className="text-right px-3 py-3 whitespace-nowrap">Duração</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {conferenciasRows.map((r) => (
+                    <tr key={r.codigo} className="border-t border-border">
+                      <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{r.codigo}</td>
+                      <td className="px-3 py-3 text-ink whitespace-nowrap">{r.fornecedor}</td>
+                      <td className="px-3 py-3 text-right font-semibold whitespace-nowrap">{r.duracao} min</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrapper>
           )}
         </div>
       </div>

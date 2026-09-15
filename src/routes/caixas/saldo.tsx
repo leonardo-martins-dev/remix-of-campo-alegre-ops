@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { parseCustoValor, shouldSaveCusto } from "@/lib/custo-unitario";
 import { Box, RotateCcw, Clock, Users, FileSpreadsheet } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { TableWrapper } from "@/components/table-wrapper";
 import { KpiCard } from "@/components/kpi-card";
 import { Donut, BarRow, Sparkline } from "@/components/charts";
 import { useSaldoCaixas, useMovimentacoesCliente, useCobrarCaixa } from "@/hooks/use-caixas";
@@ -257,53 +258,55 @@ function Page() {
       </div>
 
       {aba !== "cliente" && (
-        <div className="card-base overflow-x-auto mb-5">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
-              <tr>
-                <th className="text-left px-4 py-3">{aba === "fornecedor" ? "Fornecedor" : "Posição"}</th>
-                <th className="text-left px-4 py-3">Tipo</th>
-                <th className="text-right px-3 py-3">Env</th>
-                <th className="text-right px-3 py-3">Ret</th>
-                <th className="text-right px-3 py-3">Saldo</th>
-                {aba === "fornecedor" && <th className="text-right px-4 py-3">Ação</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {parceiros.map((s, i) => {
-                const nomeForn = fornecedores.find((f) => f.id === s.ref_id)?.nome ?? s.ref_id?.slice(0, 8);
-                return (
-                <tr key={`${s.ref_id}-${s.tipo_caixa}-${i}`} className="border-t">
-                  <td className="px-4 py-2 font-medium">{aba === "fornecedor" ? nomeForn : "Galpão"}</td>
-                  <td className="px-4 py-2 font-semibold">{s.tipo_caixa}</td>
-                  <td className="px-3 py-2 text-right">{s.enviadas}</td>
-                  <td className="px-3 py-2 text-right">{s.retornadas}</td>
-                  <td className="px-3 py-2 text-right font-bold">{s.saldo}</td>
-                  {aba === "fornecedor" && (
-                    <td className="px-4 py-2 text-right">
-                      {s.saldo > 0 ? (
-                        <button
-                          type="button"
-                          className="text-xs font-semibold text-primary-dark hover:underline"
-                          onClick={() => handleCobrarFornecedor(s.ref_id, s.tipo_caixa, s.saldo)}
-                        >
-                          Cobrar
-                        </button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  )}
-                </tr>
-                );
-              })}
-              {!parceiros.length && (
+        <div className="card-base mb-5">
+          <TableWrapper stickyFirstColumn>
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
                 <tr>
-                  <td colSpan={aba === "fornecedor" ? 6 : 5} className="px-4 py-6 text-center text-muted-foreground">Sem saldo nesta posição.</td>
+                  <th className="text-left px-4 py-3 whitespace-nowrap">{aba === "fornecedor" ? "Fornecedor" : "Posição"}</th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap">Tipo</th>
+                  <th className="text-right px-3 py-3 whitespace-nowrap">Env</th>
+                  <th className="text-right px-3 py-3 whitespace-nowrap">Ret</th>
+                  <th className="text-right px-3 py-3 whitespace-nowrap">Saldo</th>
+                  {aba === "fornecedor" && <th className="text-right px-4 py-3 whitespace-nowrap">Ação</th>}
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {parceiros.map((s, i) => {
+                  const nomeForn = fornecedores.find((f) => f.id === s.ref_id)?.nome ?? s.ref_id?.slice(0, 8);
+                  return (
+                  <tr key={`${s.ref_id}-${s.tipo_caixa}-${i}`} className="border-t">
+                    <td className="px-4 py-2 font-medium whitespace-nowrap">{aba === "fornecedor" ? nomeForn : "Galpão"}</td>
+                    <td className="px-4 py-2 font-semibold">{s.tipo_caixa}</td>
+                    <td className="px-3 py-2 text-right">{s.enviadas}</td>
+                    <td className="px-3 py-2 text-right">{s.retornadas}</td>
+                    <td className="px-3 py-2 text-right font-bold">{s.saldo}</td>
+                    {aba === "fornecedor" && (
+                      <td className="px-4 py-2 text-right">
+                        {s.saldo > 0 ? (
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-primary-dark hover:underline min-h-[44px] min-w-[44px]"
+                            onClick={() => handleCobrarFornecedor(s.ref_id, s.tipo_caixa, s.saldo)}
+                          >
+                            Cobrar
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                  );
+                })}
+                {!parceiros.length && (
+                  <tr>
+                    <td colSpan={aba === "fornecedor" ? 6 : 5} className="px-4 py-6 text-center text-muted-foreground">Sem saldo nesta posição.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </TableWrapper>
         </div>
       )}
 
@@ -490,68 +493,70 @@ function Page() {
             </div>
             
             {/* Desktop: Table view */}
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
-                  <tr>
-                    <th className="text-left px-4 py-3">Cliente</th>
-                    {tipos.filter((t) => filtro === "ALL" || filtro === t.sigla).map((t) => (
-                      <th key={t.id} className="text-right px-3 py-3">
-                        {t.nome}
-                        <br />
-                        <span className="font-normal normal-case">env / ret</span>
-                      </th>
-                    ))}
-                    <th className="text-right px-3 py-3">Saldo</th>
-                    <th className="text-right px-3 py-3">Aging</th>
-                    <th className="text-right px-3 py-3">R$ em aberto</th>
-                    <th className="text-right px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {clientes.map((c) => {
-                    const visible = tipos.filter((t) => filtro === "ALL" || filtro === t.sigla);
-                    const saldo = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo, 0);
-                    const valor = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo * (custoById[t.sigla] ?? 0), 0);
-                    const trend = tipos.map((t) => qtyOf(c, t.sigla).saldo);
-                    const days = agingByCliente.get(c.cliente_id) ?? 0;
-                    return (
-                      <tr key={c.cliente_id} className="border-t border-border hover:bg-secondary/30">
-                        <td className="px-4 py-3 font-semibold text-navy">{c.cliente}</td>
-                        {visible.map((t) => {
-                          const q = qtyOf(c, t.sigla);
-                          return (
-                            <td key={t.id} className="px-3 py-3 text-right text-ink">
-                              {q.env}/{q.ret}
-                            </td>
-                          );
-                        })}
-                        <td className="px-3 py-3 text-right font-bold text-navy">{saldo}</td>
-                        <td className="px-3 py-3 text-right" style={{ color: days >= 7 ? "var(--danger)" : "var(--muted-foreground)" }}>
-                          {days ? `${days}d` : "—"}
-                        </td>
-                        <td className="px-3 py-3 text-right font-bold" style={{ color: "var(--danger)" }}>
-                          R$ {valor.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <Sparkline data={trend} />
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => {
-                              setExtratoId(c.cliente_id);
-                              setExtratoNome(c.cliente);
-                            }}
-                            className="text-xs text-primary-dark font-semibold hover:underline"
-                          >
-                            Extrato
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="hidden sm:block">
+              <TableWrapper stickyFirstColumn>
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
+                    <tr>
+                      <th className="text-left px-4 py-3 whitespace-nowrap">Cliente</th>
+                      {tipos.filter((t) => filtro === "ALL" || filtro === t.sigla).map((t) => (
+                        <th key={t.id} className="text-right px-3 py-3 whitespace-nowrap">
+                          {t.nome}
+                          <br />
+                          <span className="font-normal normal-case">env / ret</span>
+                        </th>
+                      ))}
+                      <th className="text-right px-3 py-3 whitespace-nowrap">Saldo</th>
+                      <th className="text-right px-3 py-3 whitespace-nowrap">Aging</th>
+                      <th className="text-right px-3 py-3 whitespace-nowrap">R$ em aberto</th>
+                      <th className="text-right px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clientes.map((c) => {
+                      const visible = tipos.filter((t) => filtro === "ALL" || filtro === t.sigla);
+                      const saldo = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo, 0);
+                      const valor = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo * (custoById[t.sigla] ?? 0), 0);
+                      const trend = tipos.map((t) => qtyOf(c, t.sigla).saldo);
+                      const days = agingByCliente.get(c.cliente_id) ?? 0;
+                      return (
+                        <tr key={c.cliente_id} className="border-t border-border hover:bg-secondary/30">
+                          <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{c.cliente}</td>
+                          {visible.map((t) => {
+                            const q = qtyOf(c, t.sigla);
+                            return (
+                              <td key={t.id} className="px-3 py-3 text-right text-ink whitespace-nowrap">
+                                {q.env}/{q.ret}
+                              </td>
+                            );
+                          })}
+                          <td className="px-3 py-3 text-right font-bold text-navy">{saldo}</td>
+                          <td className="px-3 py-3 text-right whitespace-nowrap" style={{ color: days >= 7 ? "var(--danger)" : "var(--muted-foreground)" }}>
+                            {days ? `${days}d` : "—"}
+                          </td>
+                          <td className="px-3 py-3 text-right font-bold whitespace-nowrap" style={{ color: "var(--danger)" }}>
+                            R$ {valor.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <Sparkline data={trend} />
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={() => {
+                                setExtratoId(c.cliente_id);
+                                setExtratoNome(c.cliente);
+                              }}
+                              className="text-xs text-primary-dark font-semibold hover:underline min-h-[44px] min-w-[44px] px-2"
+                            >
+                              Extrato
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </TableWrapper>
             </div>
           </>
         )}
@@ -567,26 +572,28 @@ function Page() {
           ) : movimentacoes.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4">Sem movimentações recentes.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground uppercase">
-                <tr>
-                  <th className="text-left py-2">Data</th>
-                  <th className="text-left py-2">Tipo</th>
-                  <th className="text-center py-2">Cx</th>
-                  <th className="text-right py-2">Qtd</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movimentacoes.map((m) => (
-                  <tr key={m.id} className="border-t border-border">
-                    <td className="py-2 text-muted-foreground">{m.data_movimento}</td>
-                    <td className="py-2">{statusLabel(m.natureza || m.tipo)}</td>
-                    <td className="py-2 text-center font-semibold">{m.tipo_caixa}</td>
-                    <td className="py-2 text-right font-bold">{m.quantidade}</td>
+            <TableWrapper>
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground uppercase">
+                  <tr>
+                    <th className="text-left py-2 px-2 whitespace-nowrap">Data</th>
+                    <th className="text-left py-2 px-2 whitespace-nowrap">Tipo</th>
+                    <th className="text-center py-2 px-2 whitespace-nowrap">Cx</th>
+                    <th className="text-right py-2 px-2 whitespace-nowrap">Qtd</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {movimentacoes.map((m) => (
+                    <tr key={m.id} className="border-t border-border">
+                      <td className="py-2 px-2 text-muted-foreground whitespace-nowrap">{m.data_movimento}</td>
+                      <td className="py-2 px-2 whitespace-nowrap">{statusLabel(m.natureza || m.tipo)}</td>
+                      <td className="py-2 px-2 text-center font-semibold">{m.tipo_caixa}</td>
+                      <td className="py-2 px-2 text-right font-bold">{m.quantidade}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrapper>
           )}
         </DialogContent>
       </Dialog>

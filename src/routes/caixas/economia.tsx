@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { DollarSign, TrendingDown, PiggyBank, FileSpreadsheet, Lightbulb } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { TableWrapper } from "@/components/table-wrapper";
 import { KpiCard } from "@/components/kpi-card";
 import { Sparkline } from "@/components/charts";
 import { usePerdaClientes, useSaldoCaixas, useCobrarCaixa } from "@/hooks/use-caixas";
@@ -296,67 +297,69 @@ function Page() {
         </div>
       )}
 
-      <div className="card-base overflow-x-auto">
+      <div className="card-base">
         {dados.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhum dado de perda.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                <th className="text-left px-4 py-3">Cliente</th>
-                <th className="text-right px-3 py-3">Enviadas</th>
-                <th className="text-right px-3 py-3">Perdidas</th>
-                <th className="text-left px-3 py-3">Tipo dominante</th>
-                <th className="text-right px-3 py-3">Custo da perda</th>
-                <th className="text-center px-3 py-3">Taxa de perda</th>
-                <th className="text-center px-3 py-3">Tendência</th>
-                <th className="text-right px-4 py-3">Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dados.map((c) => (
-                <tr key={c.cliente_id} className="border-t border-border hover:bg-secondary/30">
-                  <td className="px-4 py-3 font-semibold text-navy">{c.cliente}</td>
-                  <td className="px-3 py-3 text-right text-ink">{c.enviadas}</td>
-                  <td className="px-3 py-3 text-right font-bold" style={{ color: "var(--danger)" }}>
-                    {c.perdidas}
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className="chip chip-muted">{c.pior}</span>
-                  </td>
-                  <td className="px-3 py-3 text-right font-bold text-navy">
-                    {formatBRL(c.custoPerda)}
-                  </td>
-                  <td className="px-3 py-3 text-center">
-                    <span
-                      className={`chip ${c.taxa >= 5 ? "chip-danger" : c.taxa >= 3 ? "chip-warn" : "chip-ok"}`}
-                    >
-                      {c.taxa.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-center">
-                    <Sparkline
-                      data={c.trend}
-                      color={c.taxa >= 5 ? "var(--danger)" : "var(--warning)"}
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => handleCobrar(c)}
-                      disabled={c.perdidas <= 0 || cobrandoId === c.cliente_id || cobradoIds.has(c.cliente_id)}
-                      className="h-7 px-3 rounded-md bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary hover:text-primary-foreground active:scale-95 transition disabled:opacity-50"
-                    >
-                      {cobrandoId === c.cliente_id
-                        ? "Cobrando…"
-                        : cobradoIds.has(c.cliente_id)
-                          ? "Cobrado"
-                          : "Cobrar"}
-                    </button>
-                  </td>
+          <TableWrapper stickyFirstColumn>
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
+                <tr>
+                  <th className="text-left px-4 py-3 whitespace-nowrap">Cliente</th>
+                  <th className="text-right px-3 py-3 whitespace-nowrap">Enviadas</th>
+                  <th className="text-right px-3 py-3 whitespace-nowrap">Perdidas</th>
+                  <th className="text-left px-3 py-3 whitespace-nowrap">Tipo dom.</th>
+                  <th className="text-right px-3 py-3 whitespace-nowrap">Custo</th>
+                  <th className="text-center px-3 py-3 whitespace-nowrap">Taxa</th>
+                  <th className="text-center px-3 py-3 whitespace-nowrap">Tend.</th>
+                  <th className="text-right px-4 py-3 whitespace-nowrap">Ação</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {dados.map((c) => (
+                  <tr key={c.cliente_id} className="border-t border-border hover:bg-secondary/30">
+                    <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{c.cliente}</td>
+                    <td className="px-3 py-3 text-right text-ink">{c.enviadas}</td>
+                    <td className="px-3 py-3 text-right font-bold" style={{ color: "var(--danger)" }}>
+                      {c.perdidas}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className="chip chip-muted">{c.pior}</span>
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-navy whitespace-nowrap">
+                      {formatBRL(c.custoPerda)}
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <span
+                        className={`chip ${c.taxa >= 5 ? "chip-danger" : c.taxa >= 3 ? "chip-warn" : "chip-ok"}`}
+                      >
+                        {c.taxa.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <Sparkline
+                        data={c.trend}
+                        color={c.taxa >= 5 ? "var(--danger)" : "var(--warning)"}
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => handleCobrar(c)}
+                        disabled={c.perdidas <= 0 || cobrandoId === c.cliente_id || cobradoIds.has(c.cliente_id)}
+                        className="min-h-[44px] px-3 rounded-md bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary hover:text-primary-foreground active:scale-95 transition disabled:opacity-50"
+                      >
+                        {cobrandoId === c.cliente_id
+                          ? "Cobrando…"
+                          : cobradoIds.has(c.cliente_id)
+                            ? "Cobrado"
+                            : "Cobrar"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrapper>
         )}
       </div>
     </div>

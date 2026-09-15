@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
 import { toast } from "sonner";
+import { TableWrapper } from "@/components/table-wrapper";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -43,20 +44,21 @@ export function ImportacoesPanel({ canAdmin }: { canAdmin: boolean }) {
   const alvo = lotes.find((l) => l.id === open);
 
   return (
-    <div className="overflow-hidden">
-      <table className="w-full text-sm">
+    <div>
+      <TableWrapper stickyFirstColumn>
+        <table className="w-full text-sm">
         <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
           <tr>
-            <th className="text-left px-4 py-3">Quando</th>
-            <th className="text-left px-4 py-3">Autor</th>
-            <th className="text-left px-4 py-3">Arquivo</th>
-            <th className="text-left px-4 py-3">Origem</th>
-            <th className="text-right px-4 py-3">Novos</th>
-            <th className="text-right px-4 py-3">Atualiz.</th>
-            <th className="text-right px-4 py-3">Itens</th>
-            <th className="text-right px-4 py-3">Pend.</th>
-            <th className="text-right px-4 py-3">Ignoradas</th>
-            <th className="text-left px-4 py-3">Status</th>
+            <th className="text-left px-4 py-3 whitespace-nowrap">Quando</th>
+            <th className="text-left px-4 py-3 whitespace-nowrap">Autor</th>
+            <th className="text-left px-4 py-3 whitespace-nowrap">Arquivo</th>
+            <th className="text-left px-4 py-3 whitespace-nowrap">Origem</th>
+            <th className="text-right px-4 py-3 whitespace-nowrap">Novos</th>
+            <th className="text-right px-4 py-3 whitespace-nowrap">Atualiz.</th>
+            <th className="text-right px-4 py-3 whitespace-nowrap">Itens</th>
+            <th className="text-right px-4 py-3 whitespace-nowrap">Pend.</th>
+            <th className="text-right px-4 py-3 whitespace-nowrap">Ignoradas</th>
+            <th className="text-left px-4 py-3 whitespace-nowrap">Status</th>
             <th className="px-4 py-3" />
           </tr>
         </thead>
@@ -114,6 +116,7 @@ export function ImportacoesPanel({ canAdmin }: { canAdmin: boolean }) {
           })}
         </tbody>
       </table>
+    </TableWrapper>
 
       <AlertDialog open={!!open} onOpenChange={(o) => !o && setOpen(null)}>
         <AlertDialogContent>

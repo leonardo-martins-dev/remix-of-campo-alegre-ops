@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { TableWrapper } from "@/components/table-wrapper";
 import { Button } from "@/components/ui/button";
 import { exportToExcel } from "@/lib/excel";
 import { dateRangeBRT, isoWeekKeyBRT } from "@/lib/utils-date";
@@ -203,20 +204,20 @@ function Page() {
           30 dias
         </Button>
       </div>
-      <div className="overflow-x-auto">
+      <TableWrapper stickyFirstColumn>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left border-b">
-              <th className="py-2">Fornecedor</th>
-              <th>Pedidos</th>
-              <th>Fill</th>
-              <th>Faltas</th>
-              <th title="Recebimento">Qual. (rec)</th>
-              <th title="Galpão">Quebra (gal)</th>
-              <th title="Galpão">Qual. (gal)</th>
-              <th>Vales</th>
-              <th>Caixas</th>
-              <th>Impacto</th>
+              <th className="py-2 px-2 whitespace-nowrap">Fornecedor</th>
+              <th className="px-2 whitespace-nowrap">Pedidos</th>
+              <th className="px-2 whitespace-nowrap">Fill</th>
+              <th className="px-2 whitespace-nowrap">Faltas</th>
+              <th className="px-2 whitespace-nowrap" title="Recebimento">Qual. (rec)</th>
+              <th className="px-2 whitespace-nowrap" title="Galpão">Quebra (gal)</th>
+              <th className="px-2 whitespace-nowrap" title="Galpão">Qual. (gal)</th>
+              <th className="px-2 whitespace-nowrap">Vales</th>
+              <th className="px-2 whitespace-nowrap">Caixas</th>
+              <th className="px-2 whitespace-nowrap">Impacto</th>
             </tr>
           </thead>
           <tbody>
@@ -226,39 +227,39 @@ function Page() {
                 className="border-b cursor-pointer hover:bg-secondary/40"
                 onClick={() => setFichaId(r.id)}
               >
-                <td className="py-2 font-medium">{r.nome}</td>
-                <td>
+                <td className="py-2 px-2 font-medium whitespace-nowrap">{r.nome}</td>
+                <td className="px-2 whitespace-nowrap">
                   {r.pedidos}/{r.entregas}
                 </td>
                 <td
-                  className={
+                  className={`px-2 whitespace-nowrap ${
                     r.fill < alvo
                       ? "text-destructive"
                       : r.fill >= alvo
                         ? "text-[var(--success)]"
                         : ""
-                  }
+                  }`}
                 >
                   <span
                     className={`inline-block h-2 w-2 rounded-full mr-1 ${r.fill < alvo * 0.9 ? "bg-destructive" : r.fill < alvo ? "bg-[var(--warning)]" : "bg-[var(--success)]"}`}
                   />
                   {r.fill.toFixed(0)}%
                 </td>
-                <td>
+                <td className="px-2 whitespace-nowrap">
                   {r.faltaCx} un · {formatBRL(r.faltaR)} {r.acima ? `(${r.acima} acima)` : ""}
                 </td>
-                <td>{r.qualidadeCx}</td>
+                <td className="px-2">{r.qualidadeCx}</td>
                 <td
-                  className={
+                  className={`px-2 whitespace-nowrap ${
                     r.quebraCx && (r.quebraCx / Math.max(1, r.pedidos)) * 100 > benchQ
                       ? "text-destructive"
                       : ""
-                  }
+                  }`}
                 >
                   {r.quebraCx} · {formatBRL(r.quebraR)}
                 </td>
-                <td>{r.galQualCx > 0 ? `${r.galQualCx} · ${formatBRL(r.galQualR)}` : "—"}</td>
-                <td>
+                <td className="px-2 whitespace-nowrap">{r.galQualCx > 0 ? `${r.galQualCx} · ${formatBRL(r.galQualR)}` : "—"}</td>
+                <td className="px-2 whitespace-nowrap">
                   {r.valesPend > 0 && <span className="text-amber-600">{r.valesPend} pend</span>}
                   {r.valesApl > 0 && (
                     <span className="text-[var(--success)] ml-1">
@@ -267,13 +268,13 @@ function Page() {
                   )}
                   {r.valesPend === 0 && r.valesApl === 0 && "—"}
                 </td>
-                <td>{r.caixaAberto}</td>
-                <td className="font-semibold">{formatBRL(r.impacto)}</td>
+                <td className="px-2">{r.caixaAberto}</td>
+                <td className="px-2 font-semibold whitespace-nowrap">{formatBRL(r.impacto)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </TableWrapper>
       {ficha && (
         <div className="mt-6 rounded-xl border p-4 space-y-3">
           <div className="flex justify-between">
