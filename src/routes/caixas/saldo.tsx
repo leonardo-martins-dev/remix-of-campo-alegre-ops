@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { parseCustoValor, shouldSaveCusto } from "@/lib/custo-unitario";
-import { Box, RotateCcw, Clock, Users, FileSpreadsheet } from "lucide-react";
+import { Box, RotateCcw, Clock, Users, FileSpreadsheet, Search } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { TableWrapper } from "@/components/table-wrapper";
 import { KpiCard } from "@/components/kpi-card";
@@ -13,7 +13,7 @@ import { useTiposCaixa, useUpdateTipoCaixa, type TipoCaixa } from "@/hooks/use-t
 import { exportToExcel } from "@/lib/excel";
 import { formatBRL } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
-import { useFornecedores } from "@/hooks/use-cadastros";
+import { useClientes, useFornecedores } from "@/hooks/use-cadastros";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { capitalNaRua, computeFifoAging, taxaRetornoHonesta, tipoColor } from "@/lib/caixas-map";
@@ -25,6 +25,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/caixas/saldo")({
   component: Page,
@@ -73,14 +80,31 @@ function Page() {
   const { data: saldoRows = [], isLoading } = useSaldoCaixas();
   const { data: tipos = [], isLoading: loadingTipos } = useTiposCaixa();
   const { data: saldosAll = [] } = useSaldosCaixa();
-  const { data: fornecedores = [] } = useFornecedores();
+  const { data: fornecedoresAll = [] } = useFornecedores();
+  const { data: clientesCadastro = [] } = useClientes();
   const updateTipo = useUpdateTipoCaixa();
   const cobrar = useCobrarCaixa();
   const [aba, setAba] = useState<"cliente" | "fornecedor" | "galpao">("cliente");
+  const [parceiroId, setParceiroId] = useState<string>("ALL");
+  const [buscaParceiro, setBuscaParceiro] = useState("");
   const [filtro, setFiltro] = useState<string>("ALL");
   const [draftCustos, setDraftCustos] = useState<Record<string, string>>({});
   const [extratoId, setExtratoId] = useState<string | null>(null);
   const [extratoNome, setExtratoNome] = useState("");
+
+  useEffect(() => {
+    setParceiroId("ALL");
+    setBuscaParceiro("");
+  }, [aba]);
+
+  const fornecedores = useMemo(
+    () => (fornecedoresAll as { id: string; nome: string; ativo: boolean }[]).filter((f) => f.ativo !== false),
+    [fornecedoresAll],
+  );
+  const clientesAtivos = useMemo(
+    () => (clientesCadastro as { id: string; nome: string; ativo: boolean }[]).filter((c) => c.ativo !== false),
+    [clientesCadastro],
+  );
 
   const clientes = useMemo(() => pivotSaldo(saldoRows), [saldoRows]);
   const { data: movimentacoes = [], isLoading: loadingExtrato } = useMovimentacoesCliente(extratoId);
@@ -97,14 +121,53 @@ function Page() {
     },
   });
   const aging = useMemo(() => computeFifoAging(movsAging), [movsAging]);
-  const agingByCliente = useMemo(() => {
+  const agingByFornecedor = useMemo(() => {
     const m = new Map<string, number>();
     for (const a of aging) {
-      if (a.partnerKind !== "cliente") continue;
+      if (a.partnerKind !== "fornecedor") continue;
       m.set(a.partnerId, Math.max(m.get(a.partnerId) ?? 0, a.oldestDays));
     }
     return m;
   }, [aging]);
+
+  const opcoesParceiro = useMemo(() => {
+    const q = buscaParceiro.trim().toLowerCase();
+    const base =
+      aba === "cliente"
+        ? clientesAtivos
+        : aba === "fornecedor"
+          ? fornecedores
+          : [];
+    const sorted = [...base].sort((a, b) => a.nome.localeCompare(b.nome));
+    if (!q) return sorted;
+    const filtered = sorted.filter((p) => p.nome.toLowerCase().includes(q));
+    // Mantém o selecionado na lista mesmo se a busca o ocultar
+    if (parceiroId !== "ALL" && !filtered.some((p) => p.id === parceiroId)) {
+      const selected = sorted.find((p) => p.id === parceiroId);
+      if (selected) return [selected, ...filtered];
+    }
+    return filtered;
+  }, [aba, clientesAtivos, fornecedores, buscaParceiro, parceiroId]);
+
+  const clientesFiltrados = useMemo(() => {
+    if (parceiroId === "ALL") return clientes;
+    return clientes.filter((c) => c.cliente_id === parceiroId);
+  }, [clientes, parceiroId]);
+
+  const parceirosSaldo = useMemo(() => {
+    const rows = (
+      saldosAll as {
+        posicao_tipo: string;
+        tipo_caixa: string;
+        saldo: number;
+        enviadas: number;
+        retornadas: number;
+        ref_id: string;
+      }[]
+    ).filter((s) => s.posicao_tipo === aba);
+    if (aba === "galpao" || parceiroId === "ALL") return rows;
+    return rows.filter((s) => s.ref_id === parceiroId);
+  }, [saldosAll, aba, parceiroId]);
 
   const custoById = useMemo(() => {
     const m: Record<string, number> = {};
@@ -180,7 +243,7 @@ function Page() {
     exportToExcel(
       `saldo-caixas-${new Date().toISOString().slice(0, 10)}.xlsx`,
       "Saldo",
-      clientes.map((c) => {
+      clientesFiltrados.map((c) => {
         const row: Record<string, string | number> = { Cliente: c.cliente };
         let saldo = 0;
         let valor = 0;
@@ -194,7 +257,6 @@ function Page() {
         }
         row["Saldo total"] = saldo;
         row["R$ em aberto"] = valor;
-        row["Aging (dias)"] = agingByCliente.get(c.cliente_id) ?? 0;
         return row;
       })
     );
@@ -225,18 +287,18 @@ function Page() {
     );
   }
 
-  const parceiros = (saldosAll as { posicao_tipo: string; tipo_caixa: string; saldo: number; enviadas: number; retornadas: number; ref_id: string }[])
-    .filter((s) => s.posicao_tipo === aba);
+  const parceiroLabel =
+    aba === "cliente" ? "Cliente" : aba === "fornecedor" ? "Fornecedor" : "Galpão";
 
   return (
     <div>
       <PageHeader
         title="Saldo por parceiro"
-        subtitle="Clientes, fornecedores e galpão · aging FIFO"
+        subtitle="Clientes, fornecedores e galpão · aging FIFO só fornecedor"
         actions={
           <button
             onClick={handleExport}
-            disabled={!clientes.length}
+            disabled={!clientesFiltrados.length}
             className="inline-flex items-center gap-2 h-9 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary-dark disabled:opacity-50"
           >
             <FileSpreadsheet size={14} /> Exportar
@@ -244,17 +306,47 @@ function Page() {
         }
       />
 
-      <div className="flex gap-2 mb-4">
-        {(["cliente", "fornecedor", "galpao"] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setAba(k)}
-            className={`h-8 px-3 rounded-md text-xs font-semibold ${aba === k ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
-          >
-            {k === "cliente" ? "Clientes" : k === "fornecedor" ? "Fornecedores" : "Galpão"}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-end gap-3 mb-4">
+        <div className="flex gap-2">
+          {(["cliente", "fornecedor", "galpao"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setAba(k)}
+              className={`h-8 px-3 rounded-md text-xs font-semibold ${aba === k ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+            >
+              {k === "cliente" ? "Clientes" : k === "fornecedor" ? "Fornecedores" : "Galpão"}
+            </button>
+          ))}
+        </div>
+
+        {aba !== "galpao" && (
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-end flex-1 min-w-[220px] max-w-md">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder={`Buscar ${parceiroLabel.toLowerCase()}...`}
+                value={buscaParceiro}
+                onChange={(e) => setBuscaParceiro(e.target.value)}
+                className="w-full h-9 pl-8 pr-3 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <Select value={parceiroId} onValueChange={setParceiroId}>
+              <SelectTrigger className="w-full sm:w-56 h-9">
+                <SelectValue placeholder={`Todas · ${parceiroLabel}`} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todas</SelectItem>
+                {opcoesParceiro.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {aba !== "cliente" && (
@@ -268,12 +360,14 @@ function Page() {
                   <th className="text-right px-3 py-3 whitespace-nowrap">Env</th>
                   <th className="text-right px-3 py-3 whitespace-nowrap">Ret</th>
                   <th className="text-right px-3 py-3 whitespace-nowrap">Saldo</th>
+                  {aba === "fornecedor" && <th className="text-right px-3 py-3 whitespace-nowrap">Aging</th>}
                   {aba === "fornecedor" && <th className="text-right px-4 py-3 whitespace-nowrap">Ação</th>}
                 </tr>
               </thead>
               <tbody>
-                {parceiros.map((s, i) => {
+                {parceirosSaldo.map((s, i) => {
                   const nomeForn = fornecedores.find((f) => f.id === s.ref_id)?.nome ?? s.ref_id?.slice(0, 8);
+                  const days = aba === "fornecedor" ? (agingByFornecedor.get(s.ref_id) ?? 0) : 0;
                   return (
                   <tr key={`${s.ref_id}-${s.tipo_caixa}-${i}`} className="border-t">
                     <td className="px-4 py-2 font-medium whitespace-nowrap">{aba === "fornecedor" ? nomeForn : "Galpão"}</td>
@@ -281,6 +375,11 @@ function Page() {
                     <td className="px-3 py-2 text-right">{s.enviadas}</td>
                     <td className="px-3 py-2 text-right">{s.retornadas}</td>
                     <td className="px-3 py-2 text-right font-bold">{s.saldo}</td>
+                    {aba === "fornecedor" && (
+                      <td className="px-3 py-2 text-right whitespace-nowrap" style={{ color: days >= 7 ? "var(--danger)" : "var(--muted-foreground)" }}>
+                        {days ? `${days}d` : "—"}
+                      </td>
+                    )}
                     {aba === "fornecedor" && (
                       <td className="px-4 py-2 text-right">
                         {s.saldo > 0 ? (
@@ -299,9 +398,9 @@ function Page() {
                   </tr>
                   );
                 })}
-                {!parceiros.length && (
+                {!parceirosSaldo.length && (
                   <tr>
-                    <td colSpan={aba === "fornecedor" ? 6 : 5} className="px-4 py-6 text-center text-muted-foreground">Sem saldo nesta posição.</td>
+                    <td colSpan={aba === "fornecedor" ? 7 : 5} className="px-4 py-6 text-center text-muted-foreground">Sem saldo nesta posição.</td>
                   </tr>
                 )}
               </tbody>
@@ -416,6 +515,7 @@ function Page() {
         </div>
       </div>
 
+      {aba === "cliente" && (
       <div className="card-base">
         <div className="p-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-sm font-bold text-navy">Saldo por cliente</h3>
@@ -437,26 +537,20 @@ function Page() {
             ))}
           </div>
         </div>
-        {clientes.length === 0 ? (
+        {clientesFiltrados.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">Nenhum saldo registrado.</p>
         ) : (
           <>
             {/* Mobile: Card view */}
             <div className="sm:hidden p-3 space-y-3">
-              {clientes.map((c) => {
+              {clientesFiltrados.map((c) => {
                 const visible = tipos.filter((t) => filtro === "ALL" || filtro === t.sigla);
                 const saldo = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo, 0);
                 const valor = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo * (custoById[t.sigla] ?? 0), 0);
-                const days = agingByCliente.get(c.cliente_id) ?? 0;
                 return (
                   <div key={c.cliente_id} className="p-3 rounded-lg border border-border">
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div className="font-semibold text-navy">{c.cliente}</div>
-                      {days > 0 && (
-                        <span className={`chip ${days >= 7 ? "chip-danger" : "chip-muted"}`}>
-                          {days}d
-                        </span>
-                      )}
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center text-sm mb-3">
                       {visible.map((t) => {
@@ -507,18 +601,16 @@ function Page() {
                         </th>
                       ))}
                       <th className="text-right px-3 py-3 whitespace-nowrap">Saldo</th>
-                      <th className="text-right px-3 py-3 whitespace-nowrap">Aging</th>
                       <th className="text-right px-3 py-3 whitespace-nowrap">R$ em aberto</th>
                       <th className="text-right px-4 py-3" />
                     </tr>
                   </thead>
                   <tbody>
-                    {clientes.map((c) => {
+                    {clientesFiltrados.map((c) => {
                       const visible = tipos.filter((t) => filtro === "ALL" || filtro === t.sigla);
                       const saldo = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo, 0);
                       const valor = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo * (custoById[t.sigla] ?? 0), 0);
                       const trend = tipos.map((t) => qtyOf(c, t.sigla).saldo);
-                      const days = agingByCliente.get(c.cliente_id) ?? 0;
                       return (
                         <tr key={c.cliente_id} className="border-t border-border hover:bg-secondary/30">
                           <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{c.cliente}</td>
@@ -531,9 +623,6 @@ function Page() {
                             );
                           })}
                           <td className="px-3 py-3 text-right font-bold text-navy">{saldo}</td>
-                          <td className="px-3 py-3 text-right whitespace-nowrap" style={{ color: days >= 7 ? "var(--danger)" : "var(--muted-foreground)" }}>
-                            {days ? `${days}d` : "—"}
-                          </td>
                           <td className="px-3 py-3 text-right font-bold whitespace-nowrap" style={{ color: "var(--danger)" }}>
                             R$ {valor.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
                           </td>
@@ -561,6 +650,7 @@ function Page() {
           </>
         )}
       </div>
+      )}
 
       <Dialog open={!!extratoId} onOpenChange={(open) => !open && setExtratoId(null)}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">

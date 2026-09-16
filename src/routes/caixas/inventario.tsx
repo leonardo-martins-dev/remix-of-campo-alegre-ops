@@ -1,12 +1,34 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Box, Clock, Minus, Plus, Smartphone, Warehouse } from "lucide-react";
+import {
+  AlertTriangle,
+  Box,
+  Building2,
+  ChevronLeft,
+  Clock,
+  Minus,
+  Plus,
+  Search,
+  Smartphone,
+  Store,
+  Warehouse,
+} from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { TableWrapper } from "@/components/table-wrapper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { NumberStepper } from "@/components/number-stepper";
 import { KpiCard } from "@/components/kpi-card";
 import { useAuth } from "@/lib/auth";
@@ -26,28 +48,42 @@ import {
   useTotalGeralCaixas,
   useMinimosEstoque,
   useSaveMinimoEstoque,
+  useDeleteMinimoEstoque,
 } from "@/hooks/use-minimo-estoque";
+import {
+  ensurePosicao,
+  TIPO_LABEL,
+  useEntidadesMovimentacao,
+  type Entidade,
+  type PosicaoTipo,
+} from "@/hooks/use-movimentacao";
 import { one } from "@/lib/embed";
 import { formatDateBRT } from "@/lib/utils-date";
 import { formatBRL } from "@/lib/format";
 import { statusLabel } from "@/lib/labels";
 
-type Search = { posicao?: string };
+type SearchParams = { posicao?: string };
 
 export const Route = createFileRoute("/caixas/inventario")({
   component: Page,
-  validateSearch: (s: Record<string, unknown>): Search => ({
+  validateSearch: (s: Record<string, unknown>): SearchParams => ({
     posicao: typeof s.posicao === "string" ? s.posicao : undefined,
   }),
   head: () => ({ meta: [{ title: "Inventário de caixas · Campo Alegre" }] }),
 });
+
+const TIPO_ICON: Record<PosicaoTipo, typeof Store> = {
+  cliente: Store,
+  fornecedor: Building2,
+  galpao: Warehouse,
+};
 
 function posicaoLabel(
   p: { id: string; tipo: string; ref_id: string | null },
   clientes: { id: string; nome: string }[],
   fornecedores: { id: string; nome: string }[]
 ) {
-  if (p.tipo === "galpao") return "Galpão";
+  if (p.tipo === "galpao") return "Packing";
   if (p.tipo === "cliente") return `Loja · ${clientes.find((c) => c.id === p.ref_id)?.nome ?? p.ref_id}`;
   return `Fornecedor · ${fornecedores.find((f) => f.id === p.ref_id)?.nome ?? p.ref_id}`;
 }
@@ -109,8 +145,6 @@ function VisaoGeralInventario() {
   const { data: abaixoMinimo = [] } = useFornecedoresAbaixoMinimo();
   const { data: divergencias = [] } = useDivergenciasPendentes();
   const { data: saldos = [] } = useSaldosCaixa();
-  const { data: fornecedores = [] } = useFornecedores();
-  const { data: clientes = [] } = useClientes();
 
   const saldoPorPosicaoTipo = useMemo(() => {
     const result: Record<string, Record<string, number>> = {
@@ -363,13 +397,19 @@ function VisaoGeralInventario() {
 }
 
 function ConfigurarMinimoEstoque() {
-  const { data: fornecedores = [] } = useFornecedores();
+  const { data: fornecedoresAll = [] } = useFornecedores();
+  const fornecedores = useMemo(
+    () => (fornecedoresAll as { id: string; nome: string; ativo: boolean }[]).filter((f) => f.ativo !== false),
+    [fornecedoresAll],
+  );
   const { data: tipos = [] } = useTiposCaixa();
   const { data: minimos = [] } = useMinimosEstoque();
   const saveMinimo = useSaveMinimoEstoque();
+  const deleteMinimo = useDeleteMinimoEstoque();
   const [fornId, setFornId] = useState("");
   const [tipoSel, setTipoSel] = useState("");
   const [qtd, setQtd] = useState(0);
+  const [pendingDesativar, setPendingDesativar] = useState<{ id: string; label: string } | null>(null);
 
   async function handleSave() {
     if (!fornId || !tipoSel) {
@@ -438,16 +478,57 @@ function ConfigurarMinimoEstoque() {
           <p className="text-xs text-muted-foreground mb-2">Mínimos configurados:</p>
           <div className="flex flex-wrap gap-2">
             {minimos.map((m) => {
-              const forn = fornecedores.find((f) => f.id === m.fornecedor_id);
+              const forn = fornecedoresAll.find((f) => f.id === m.fornecedor_id);
+              const label = `${forn?.nome ?? "?"} · ${m.tipo_caixa} ≥ ${m.qtd_minima}`;
               return (
-                <span key={m.id} className="px-2 py-1 bg-secondary rounded text-xs">
-                  {forn?.nome ?? "?"} · {m.tipo_caixa} ≥ {m.qtd_minima}
+                <span key={m.id} className="inline-flex items-center gap-2 px-2 py-1 bg-secondary rounded text-xs">
+                  {label}
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => setPendingDesativar({ id: m.id, label })}
+                  >
+                    Desativar
+                  </Button>
                 </span>
               );
             })}
           </div>
         </div>
       )}
+
+      <AlertDialog open={!!pendingDesativar} onOpenChange={(open) => !open && setPendingDesativar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar este mínimo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDesativar
+                ? `${pendingDesativar.label} deixará de gerar alertas de estoque mínimo.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!pendingDesativar) return;
+                deleteMinimo.mutate(pendingDesativar.id, {
+                  onSuccess: () => {
+                    toast.success("Mínimo desativado");
+                    setPendingDesativar(null);
+                  },
+                  onError: (e) => toast.error(e.message),
+                });
+              }}
+            >
+              Desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -460,39 +541,120 @@ function useInventarioState(initialTipo?: string) {
   const { data: clientes = [] } = useClientes();
   const { data: fornecedores = [] } = useFornecedores();
   const { data: motivos = [] } = useMotivosAjuste();
+  const {
+    data: entidadesData,
+    isLoading: loadingEntidades,
+    error: errorEntidades,
+  } = useEntidadesMovimentacao();
   const registrar = useRegistrarInventario();
   const conciliar = useConciliarInventario();
 
-  const allowedPosicoes = useMemo(() => {
-    const list = (posicoes as { id: string; tipo: string; ref_id: string | null }[]).filter((p) => {
+  const tiposPermitidos = useMemo((): PosicaoTipo[] => {
+    if (isAdmin || profile?.role === "user") return ["cliente", "fornecedor", "galpao"];
+    if (profile?.fornecedor_id) return ["fornecedor"];
+    if (profile?.motorista_id) return ["cliente"];
+    return ["galpao"];
+  }, [isAdmin, profile?.role, profile?.fornecedor_id, profile?.motorista_id]);
+
+  const posicoesAtivas = useMemo(() => {
+    return (posicoes as { id: string; tipo: string; ref_id: string | null }[]).filter((p) => {
       if (p.tipo === "cliente") return clientes.some((c) => c.id === p.ref_id && c.ativo !== false);
       if (p.tipo === "fornecedor") return fornecedores.some((f) => f.id === p.ref_id && f.ativo !== false);
       return true;
     });
-    if (isAdmin || profile?.role === "user") return list;
-    if (profile?.fornecedor_id) return list.filter((p) => p.tipo === "fornecedor" && p.ref_id === profile.fornecedor_id);
-    if (profile?.motorista_id) return list.filter((p) => p.tipo === "cliente");
-    return list.filter((p) => p.tipo === "galpao");
-  }, [posicoes, isAdmin, profile, clientes, fornecedores]);
+  }, [posicoes, clientes, fornecedores]);
 
+  const [tipoSel, setTipoSel] = useState<PosicaoTipo | null>(null);
+  const [busca, setBusca] = useState("");
   const [posicaoId, setPosicaoId] = useState("");
+  const [parceiroNome, setParceiroNome] = useState("");
   const [contagem, setContagem] = useState<Record<string, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [motivoId, setMotivoId] = useState("");
   const [obs, setObs] = useState("");
   const [contrariaId, setContrariaId] = useState("");
+  const [picking, setPicking] = useState(false);
+
+  const resetContagem = () => {
+    setContagem({});
+    setSubmitted(false);
+  };
+
+  const pickTipo = async (tipo: PosicaoTipo) => {
+    setTipoSel(tipo);
+    setBusca("");
+    resetContagem();
+    if (tipo === "galpao") {
+      setPicking(true);
+      try {
+        const id = await ensurePosicao("galpao", null);
+        setPosicaoId(id);
+        setParceiroNome("Packing House");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Erro ao abrir packing");
+        setTipoSel(null);
+        setPosicaoId("");
+        setParceiroNome("");
+      } finally {
+        setPicking(false);
+      }
+    } else {
+      setPosicaoId("");
+      setParceiroNome("");
+    }
+  };
+
+  const pickEntidade = async (ent: Entidade) => {
+    setPicking(true);
+    try {
+      const id =
+        ent.posicao_id ??
+        (await ensurePosicao(ent.tipo, ent.tipo === "galpao" ? null : ent.id));
+      setPosicaoId(id);
+      setParceiroNome(ent.nome);
+      resetContagem();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao selecionar");
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  const voltarSelecao = () => {
+    if (posicaoId && tipoSel && tipoSel !== "galpao") {
+      setPosicaoId("");
+      setParceiroNome("");
+      resetContagem();
+      return;
+    }
+    setTipoSel(null);
+    setPosicaoId("");
+    setParceiroNome("");
+    setBusca("");
+    resetContagem();
+  };
 
   useEffect(() => {
-    if (posicaoId || !allowedPosicoes.length) return;
-    const wanted = initialTipo === "galpao"
-      ? allowedPosicoes.find((p) => p.tipo === "galpao")
-      : initialTipo
-        ? allowedPosicoes.find((p) => p.id === initialTipo || p.tipo === initialTipo)
-        : profile?.motorista_id
-          ? allowedPosicoes.find((p) => p.tipo === "cliente")
-          : allowedPosicoes.find((p) => p.tipo === "galpao");
-    if (wanted) setPosicaoId(wanted.id);
-  }, [allowedPosicoes, initialTipo, posicaoId, profile?.motorista_id]);
+    if (!initialTipo || tipoSel) return;
+    if (
+      (initialTipo === "galpao" || initialTipo === "cliente" || initialTipo === "fornecedor") &&
+      tiposPermitidos.includes(initialTipo)
+    ) {
+      void pickTipo(initialTipo);
+    }
+  }, [initialTipo, tiposPermitidos, tipoSel]);
+
+  const listaFiltrada = useMemo(() => {
+    if (!tipoSel || tipoSel === "galpao" || !entidadesData) return [];
+    let list =
+      tipoSel === "cliente" ? entidadesData.clientes : entidadesData.fornecedores;
+    if (profile?.fornecedor_id && tipoSel === "fornecedor") {
+      list = list.filter((f) => f.id === profile.fornecedor_id);
+    }
+    if (!busca.trim()) return list;
+    const q = busca.toLowerCase();
+    return list.filter((e) => e.nome.toLowerCase().includes(q));
+  }, [tipoSel, entidadesData, busca, profile?.fornecedor_id]);
 
   const { data: fila = [] } = useContagensCaixa(isAdmin ? null : posicaoId || null);
 
@@ -538,10 +700,21 @@ function useInventarioState(initialTipo?: string) {
     clientes,
     fornecedores,
     motivos,
-    allowedPosicoes,
-    posicoes: posicoes as { id: string; tipo: string; ref_id: string | null }[],
+    tiposPermitidos,
+    tipoSel,
+    busca,
+    setBusca,
     posicaoId,
-    setPosicaoId,
+    parceiroNome,
+    listaFiltrada,
+    loadingEntidades,
+    errorEntidades,
+    clientesHojeIds: entidadesData?.clientesHojeIds ?? new Set<string>(),
+    pickTipo,
+    pickEntidade,
+    voltarSelecao,
+    picking,
+    posicoes: posicoesAtivas,
     contagem,
     setContagem,
     submitted,
@@ -561,6 +734,93 @@ function useInventarioState(initialTipo?: string) {
   };
 }
 
+function SeletorPosicao({ s }: { s: ReturnType<typeof useInventarioState> }) {
+  if (!s.tipoSel) {
+    return (
+      <div className="space-y-3">
+        <h2 className="text-base font-bold text-navy">Onde contar as caixas?</h2>
+        <div className="grid grid-cols-3 gap-3">
+          {s.tiposPermitidos.map((tipo) => {
+            const Icon = TIPO_ICON[tipo];
+            return (
+              <button
+                key={tipo}
+                type="button"
+                disabled={s.picking}
+                onClick={() => void s.pickTipo(tipo)}
+                className="flex flex-col items-center gap-2 rounded-2xl border-2 border-border bg-card p-4 hover:border-primary transition-colors disabled:opacity-50"
+              >
+                <Icon size={28} className="text-primary" />
+                <span className="text-sm font-bold text-navy">{TIPO_LABEL[tipo]}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (s.tipoSel !== "galpao" && !s.posicaoId) {
+    return (
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={s.voltarSelecao}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-navy"
+        >
+          <ChevronLeft size={14} /> Voltar
+        </button>
+        <h2 className="text-base font-bold text-navy">
+          Selecione {s.tipoSel === "cliente" ? "a loja" : "o fornecedor"}
+        </h2>
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Buscar..."
+            value={s.busca}
+            onChange={(e) => s.setBusca(e.target.value)}
+            className="w-full h-10 pl-9 pr-3 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <div className="space-y-1 max-h-[40vh] overflow-y-auto rounded-xl border border-border bg-card">
+          {s.loadingEntidades && (
+            <p className="p-4 text-sm text-muted-foreground">Carregando...</p>
+          )}
+          {s.errorEntidades && (
+            <p className="p-4 text-sm text-danger">Não foi possível carregar a lista.</p>
+          )}
+          {!s.loadingEntidades && !s.errorEntidades && s.listaFiltrada.length === 0 && (
+            <p className="p-4 text-sm text-muted-foreground">
+              {s.busca.trim()
+                ? "Nenhum resultado para a busca."
+                : `Nenhum${s.tipoSel === "cliente" ? "a loja" : " fornecedor"} ativo(a) cadastrado(a).`}
+            </p>
+          )}
+          {s.listaFiltrada.map((ent) => (
+            <button
+              key={ent.id}
+              type="button"
+              disabled={s.picking}
+              onClick={() => void s.pickEntidade(ent)}
+              className="w-full text-left px-4 py-3 hover:bg-secondary/50 flex items-center justify-between border-b border-border last:border-0 disabled:opacity-50"
+            >
+              <span className="font-semibold text-navy">{ent.nome}</span>
+              {ent.tipo === "cliente" && s.clientesHojeIds.has(ent.id) && (
+                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-semibold">
+                  rota hoje
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function PainelInventario({ initialTipo }: { initialTipo?: string }) {
   const s = useInventarioState(initialTipo);
   const motivoSel = s.motivos.find((m) => m.id === s.motivoId);
@@ -568,59 +828,58 @@ function PainelInventario({ initialTipo }: { initialTipo?: string }) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="rounded-xl border border-border bg-card p-4 space-y-4">
-        <div className="space-y-1">
-          <Label>Posição</Label>
-          <select
-            className="h-10 w-full rounded-md border px-2"
-            value={s.posicaoId}
-            onChange={(e) => {
-              s.setPosicaoId(e.target.value);
-              s.setContagem({});
-            }}
-          >
-            <option value="">Selecione…</option>
-            {s.allowedPosicoes.map((p) => (
-              <option key={p.id} value={p.id}>
-                {posicaoLabel(p, s.clientes, s.fornecedores)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Informe o que há no local, por tipo. O saldo esperado aparece após o registro.
-        </p>
-        {s.tipos.map((t) => (
-          <div key={t.id} className="flex items-center justify-between gap-3">
-            <span className="font-medium">{t.nome} ({t.sigla})</span>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground">
-                Esperado: {s.calculado[t.sigla] ?? 0}
+        <SeletorPosicao s={s} />
+        {s.posicaoId && (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={s.voltarSelecao}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-navy"
+              >
+                <ChevronLeft size={14} /> Trocar posição
+              </button>
+              <span className="text-sm font-semibold text-navy truncate">
+                {s.tipoSel ? TIPO_LABEL[s.tipoSel] : ""} · {s.parceiroNome}
               </span>
-              <NumberStepper
-                value={s.contagem[t.sigla] ?? 0}
-                onChange={(n) => s.setContagem((prev) => ({ ...prev, [t.sigla]: n }))}
-              />
             </div>
-          </div>
-        ))}
-        <Button className="min-h-11 w-full" onClick={s.handleRegistrar} disabled={s.registrar.isPending || !s.posicaoId}>
-          Registrar contagem
-        </Button>
-        {s.submitted && (
-          <div className="text-sm space-y-1 p-3 bg-secondary/50 rounded-lg">
-            <p className="font-medium mb-2">Divergência esperado × contado:</p>
-            {s.tipos.map((t) => {
-              const c = Number(s.contagem[t.sigla] ?? 0);
-              const calc = Number(s.calculado[t.sigla] ?? 0);
-              const diff = c - calc;
-              return (
-                <p key={t.id} className={diff !== 0 ? "text-danger" : ""}>
-                  {t.sigla}: contado {c} · esperado {calc} · diferença{" "}
-                  <span className="font-bold">{diff > 0 ? "+" : ""}{diff}</span>
-                </p>
-              );
-            })}
-          </div>
+            <p className="text-sm text-muted-foreground">
+              Informe o que há no local, por tipo. O saldo esperado aparece após o registro.
+            </p>
+            {s.tipos.map((t) => (
+              <div key={t.id} className="flex items-center justify-between gap-3">
+                <span className="font-medium">{t.nome} ({t.sigla})</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    Esperado: {s.calculado[t.sigla] ?? 0}
+                  </span>
+                  <NumberStepper
+                    value={s.contagem[t.sigla] ?? 0}
+                    onChange={(n) => s.setContagem((prev) => ({ ...prev, [t.sigla]: n }))}
+                  />
+                </div>
+              </div>
+            ))}
+            <Button className="min-h-11 w-full" onClick={s.handleRegistrar} disabled={s.registrar.isPending || !s.posicaoId}>
+              Registrar contagem
+            </Button>
+            {s.submitted && (
+              <div className="text-sm space-y-1 p-3 bg-secondary/50 rounded-lg">
+                <p className="font-medium mb-2">Divergência esperado × contado:</p>
+                {s.tipos.map((t) => {
+                  const c = Number(s.contagem[t.sigla] ?? 0);
+                  const calc = Number(s.calculado[t.sigla] ?? 0);
+                  const diff = c - calc;
+                  return (
+                    <p key={t.id} className={diff !== 0 ? "text-danger" : ""}>
+                      {t.sigla}: contado {c} · esperado {calc} · diferença{" "}
+                      <span className="font-bold">{diff > 0 ? "+" : ""}{diff}</span>
+                    </p>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
       <FilaConciliacao s={s} motivoSel={motivoSel} />
@@ -630,7 +889,6 @@ function PainelInventario({ initialTipo }: { initialTipo?: string }) {
 
 function CampoInventario({ initialTipo }: { initialTipo?: string }) {
   const s = useInventarioState(initialTipo);
-  const pos = s.allowedPosicoes.find((p) => p.id === s.posicaoId);
 
   return (
     <div className="max-w-sm mx-auto">
@@ -644,65 +902,126 @@ function CampoInventario({ initialTipo }: { initialTipo?: string }) {
               </span>
             </div>
             <h2 className="text-2xl font-bold">Contar caixas</h2>
-            <select
-              className="w-full h-12 rounded-2xl px-3 text-sm text-navy"
-              value={s.posicaoId}
-              onChange={(e) => {
-                s.setPosicaoId(e.target.value);
-                s.setContagem({});
-              }}
-            >
-              <option value="">Posição…</option>
-              {s.allowedPosicoes.map((p) => (
-                <option key={p.id} value={p.id}>{posicaoLabel(p, s.clientes, s.fornecedores)}</option>
-              ))}
-            </select>
-            {s.tipos.map((t) => (
-              <div key={t.id} className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.06)" }}>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs uppercase tracking-wider opacity-60">{t.nome}</span>
-                  <span className="text-xs opacity-50">Esperado: {s.calculado[t.sigla] ?? 0}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    aria-label={`Diminuir ${t.nome}`}
-                    onClick={() => s.setContagem((prev) => ({ ...prev, [t.sigla]: Math.max(0, (prev[t.sigla] ?? 0) - 1) }))}
-                    className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center"
-                  >
-                    <Minus size={18} />
-                  </button>
-                  <span className="text-5xl font-bold tabular-nums">{s.contagem[t.sigla] ?? 0}</span>
-                  <button
-                    type="button"
-                    aria-label={`Aumentar ${t.nome}`}
-                    onClick={() => s.setContagem((prev) => ({ ...prev, [t.sigla]: (prev[t.sigla] ?? 0) + 1 }))}
-                    className="h-12 w-12 rounded-2xl flex items-center justify-center"
-                    style={{ background: "var(--primary)" }}
-                  >
-                    <Plus size={18} />
-                  </button>
-                </div>
+
+            {!s.posicaoId ? (
+              <div className="space-y-3 text-navy">
+                {!s.tipoSel && (
+                  <div className="grid grid-cols-1 gap-2">
+                    {s.tiposPermitidos.map((tipo) => {
+                      const Icon = TIPO_ICON[tipo];
+                      return (
+                        <button
+                          key={tipo}
+                          type="button"
+                          disabled={s.picking}
+                          onClick={() => void s.pickTipo(tipo)}
+                          className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 disabled:opacity-50"
+                        >
+                          <Icon size={22} className="text-primary" />
+                          <span className="text-sm font-bold">{TIPO_LABEL[tipo]}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {s.tipoSel && s.tipoSel !== "galpao" && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={s.voltarSelecao}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-white/70"
+                    >
+                      <ChevronLeft size={14} /> Voltar
+                    </button>
+                    <div className="relative">
+                      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder="Buscar..."
+                        value={s.busca}
+                        onChange={(e) => s.setBusca(e.target.value)}
+                        className="w-full h-11 pl-9 pr-3 rounded-2xl text-sm text-navy"
+                      />
+                    </div>
+                    <div className="max-h-[320px] overflow-y-auto rounded-2xl bg-white">
+                      {s.listaFiltrada.map((ent) => (
+                        <button
+                          key={ent.id}
+                          type="button"
+                          disabled={s.picking}
+                          onClick={() => void s.pickEntidade(ent)}
+                          className="w-full text-left px-4 py-3 border-b border-border last:border-0 font-semibold disabled:opacity-50"
+                        >
+                          {ent.nome}
+                        </button>
+                      ))}
+                      {!s.listaFiltrada.length && (
+                        <p className="p-4 text-sm text-muted-foreground">Nenhum ativo encontrado.</p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
-            ))}
-            <Button className="min-h-12 w-full" onClick={s.handleRegistrar} disabled={s.registrar.isPending || !s.posicaoId}>
-              Registrar {pos ? posicaoLabel(pos, s.clientes, s.fornecedores) : ""}
-            </Button>
-            {s.submitted && (
-              <div className="text-xs opacity-70 space-y-1">
-                <p>Contagem enviada. O admin concilia no painel.</p>
-                {s.tipos.map((t) => {
-                  const c = Number(s.contagem[t.sigla] ?? 0);
-                  const calc = Number(s.calculado[t.sigla] ?? 0);
-                  const diff = c - calc;
-                  if (diff === 0) return null;
-                  return (
-                    <p key={t.id}>
-                      {t.sigla}: {diff > 0 ? "+" : ""}{diff} divergência
-                    </p>
-                  );
-                })}
-              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={s.voltarSelecao}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-white/70"
+                >
+                  <ChevronLeft size={14} /> Trocar posição
+                </button>
+                <p className="text-sm opacity-80">
+                  {s.tipoSel ? TIPO_LABEL[s.tipoSel] : ""} · {s.parceiroNome}
+                </p>
+                {s.tipos.map((t) => (
+                  <div key={t.id} className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.06)" }}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs uppercase tracking-wider opacity-60">{t.nome}</span>
+                      <span className="text-xs opacity-50">Esperado: {s.calculado[t.sigla] ?? 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        aria-label={`Diminuir ${t.nome}`}
+                        onClick={() => s.setContagem((prev) => ({ ...prev, [t.sigla]: Math.max(0, (prev[t.sigla] ?? 0) - 1) }))}
+                        className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center"
+                      >
+                        <Minus size={18} />
+                      </button>
+                      <span className="text-5xl font-bold tabular-nums">{s.contagem[t.sigla] ?? 0}</span>
+                      <button
+                        type="button"
+                        aria-label={`Aumentar ${t.nome}`}
+                        onClick={() => s.setContagem((prev) => ({ ...prev, [t.sigla]: (prev[t.sigla] ?? 0) + 1 }))}
+                        className="h-12 w-12 rounded-2xl flex items-center justify-center"
+                        style={{ background: "var(--primary)" }}
+                      >
+                        <Plus size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <Button className="min-h-12 w-full" onClick={s.handleRegistrar} disabled={s.registrar.isPending || !s.posicaoId}>
+                  Registrar {s.parceiroNome || "contagem"}
+                </Button>
+                {s.submitted && (
+                  <div className="text-xs opacity-70 space-y-1">
+                    <p>Contagem enviada. O admin concilia no painel.</p>
+                    {s.tipos.map((t) => {
+                      const c = Number(s.contagem[t.sigla] ?? 0);
+                      const calc = Number(s.calculado[t.sigla] ?? 0);
+                      const diff = c - calc;
+                      if (diff === 0) return null;
+                      return (
+                        <p key={t.id}>
+                          {t.sigla}: {diff > 0 ? "+" : ""}{diff} divergência
+                        </p>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

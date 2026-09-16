@@ -47,12 +47,12 @@ export function NumberStepper({
   const commitDraft = (raw: string) => {
     const trimmed = raw.trim();
     if (trimmed === "" || trimmed === "-" || trimmed === "." || trimmed === "-.") {
-      onChange(min);
+      if (value !== min) onChange(min);
       setDraft(String(min));
       return;
     }
     const n = clamp(parseFloat(trimmed.replace(",", ".")));
-    onChange(n);
+    if (n !== value) onChange(n);
     setDraft(String(n));
   };
 

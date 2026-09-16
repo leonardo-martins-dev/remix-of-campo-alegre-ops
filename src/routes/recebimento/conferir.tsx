@@ -513,6 +513,8 @@ function ConferenciaItens({
 
   useEffect(() => {
     if (focusedRef.current || readOnly || itens.length === 0) return;
+    // Espera a hidratação de caixas — senão o focus+blur com qty 0 zera a sugestão.
+    if (!conferencia?.id || caixasInitRef.current !== conferencia.id) return;
     const firstIdx = itens.findIndex((it) => {
       if (it.conferido || it.aVincular) return false;
       const sr = (saldosItem as { item_pedido_id: string; saldo: number }[])
@@ -523,7 +525,7 @@ function ConferenciaItens({
       focusedRef.current = true;
       setTimeout(() => stepperRefs.current[firstIdx]?.focus(), 200);
     }
-  }, [itens, readOnly, saldosItem]);
+  }, [itens, readOnly, saldosItem, caixasItem, conferencia?.id]);
 
   const handleStepperKeyDown = (idx: number) => (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -590,7 +592,9 @@ function ConferenciaItens({
     if (!it) return;
     const entries = caixasItem[it.id] ?? [];
     if (unidadesDasCaixas(entries) != null) {
-      // Com fator: caixas × fator é a fonte do saldo — ajusta caixas e sincroniza qty.
+      // Autofocus/blur do stepper com qty 0 (ainda não tocado) não pode
+      // zerar a sugestão de caixas (ficava só a sigla, ex.: "V").
+      if (newVal === 0 && !it.conferido && it.recebido === 0) return;
       autoUpdateCaixas(it.id, newVal);
       return;
     }

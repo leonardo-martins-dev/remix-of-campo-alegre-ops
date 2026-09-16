@@ -4,6 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Sheet,
   SheetContent,
   SheetFooter,
@@ -38,6 +48,7 @@ export function ClientesPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [nome, setNome] = useState("");
   const [cnpj, setCnpj] = useState("");
+  const [pendingDesativar, setPendingDesativar] = useState<ClienteRow | null>(null);
 
   const rows = useMemo(() => {
     const q = normalizeKey(busca);
@@ -158,23 +169,33 @@ export function ClientesPage() {
                 )}
               </span>
               <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7"
-                  onClick={() =>
-                    update.mutate(
-                      { id: row.id, ativo: row.ativo === false },
-                      {
-                        onSuccess: () =>
-                          toast.success(row.ativo === false ? "Reativado" : "Inativado"),
-                        onError: (e) => toast.error(e.message),
-                      }
-                    )
-                  }
-                >
-                  {row.ativo === false ? "Reativar" : "Inativar"}
-                </Button>
+                {row.ativo === false ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7"
+                    onClick={() =>
+                      update.mutate(
+                        { id: row.id, ativo: true },
+                        {
+                          onSuccess: () => toast.success("Reativado"),
+                          onError: (e) => toast.error(e.message),
+                        }
+                      )
+                    }
+                  >
+                    Reativar
+                  </Button>
+                ) : (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-7"
+                    onClick={() => setPendingDesativar(row)}
+                  >
+                    Desativar
+                  </Button>
+                )}
               </div>
             </li>
           ))}
@@ -183,6 +204,40 @@ export function ClientesPage() {
           )}
         </ul>
       )}
+
+      <AlertDialog open={!!pendingDesativar} onOpenChange={(open) => !open && setPendingDesativar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar este cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDesativar
+                ? `${pendingDesativar.nome} sai das listas de movimentação e inventário. O histórico permanece.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!pendingDesativar) return;
+                update.mutate(
+                  { id: pendingDesativar.id, ativo: false },
+                  {
+                    onSuccess: () => {
+                      toast.success("Cliente desativado");
+                      setPendingDesativar(null);
+                    },
+                    onError: (e) => toast.error(e.message),
+                  }
+                );
+              }}
+            >
+              Desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
