@@ -216,13 +216,6 @@ export function useAlertas() {
             href: "/caixas/inventario",
           });
         }
-      } else {
-        warn.push({
-          tone: "info",
-          title: "Nenhum inventário do galpão",
-          desc: "Faça a primeira contagem cega.",
-          href: "/caixas/inventario",
-        });
       }
 
       const atrasadas = (movs ?? []).filter((m: { confirmacao_status?: string; created_at?: string }) => {

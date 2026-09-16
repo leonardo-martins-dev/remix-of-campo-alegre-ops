@@ -165,7 +165,10 @@ export function usePosicoesPendentes() {
         .from("v_posicoes_contagem_pendente")
         .select("*");
       if (error) throw error;
-      return (data ?? []) as PosicaoPendente[];
+      // Sem primeira contagem não é atraso — evita alerta em massa após go-live / wipe.
+      return ((data ?? []) as PosicaoPendente[]).filter(
+        (p) => p.ultima_contagem_data != null && Number(p.dias_desde_contagem) < 999,
+      );
     },
   });
 }
