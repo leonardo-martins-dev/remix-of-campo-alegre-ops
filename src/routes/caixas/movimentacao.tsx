@@ -106,7 +106,8 @@ function MovimentacaoWizard() {
   const { user, profile, isAdmin } = useAuth();
   const { data: tipos = [] } = useTiposCaixa();
   const { data: motoristas = [] } = useMotoristas();
-  const { data: entidades } = useEntidadesMovimentacao();
+  const { data: entidades, isLoading: loadingEntidades, isError: errorEntidades } =
+    useEntidadesMovimentacao();
   const registrar = useRegistrarMovimentacao();
 
   const [step, setStep] = useState(1);
@@ -388,7 +389,7 @@ function MovimentacaoWizard() {
 
   /* ─── render ─── */
   return (
-    <div className="max-w-lg mx-auto space-y-4">
+    <div className="w-full max-w-lg space-y-4 sm:max-w-2xl">
       {/* step indicator */}
       <div className="flex items-center gap-1 text-xs text-muted-foreground">
         {["Origem", "Destino", "Qtd", "Confirmar"].map((label, i) => (
@@ -468,8 +469,18 @@ function MovimentacaoWizard() {
             />
           </div>
           <div className="space-y-1 max-h-[50vh] overflow-y-auto rounded-xl border border-border bg-card">
-            {filteredList.length === 0 && (
-              <p className="p-4 text-sm text-muted-foreground">Nenhum resultado.</p>
+            {loadingEntidades && (
+              <p className="p-4 text-sm text-muted-foreground">Carregando...</p>
+            )}
+            {errorEntidades && (
+              <p className="p-4 text-sm text-danger">Não foi possível carregar a lista.</p>
+            )}
+            {!loadingEntidades && !errorEntidades && filteredList.length === 0 && (
+              <p className="p-4 text-sm text-muted-foreground">
+                {busca.trim()
+                  ? "Nenhum resultado para a busca."
+                  : `Nenhuma ${TIPO_LABEL[origemTipo].toLowerCase()} ativa cadastrada.`}
+              </p>
             )}
             {filteredList.map((ent) => (
               <button
@@ -497,7 +508,7 @@ function MovimentacaoWizard() {
             Origem: <span className="font-semibold text-navy">{origem.nome}</span> ({TIPO_LABEL[origem.tipo]})
           </div>
           <h2 className="text-lg font-bold text-navy">Para onde vão as caixas?</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {destinosPermitidos(origem.tipo).map((tipo) => {
               const Icon = TIPO_ICON[tipo];
               return (
@@ -535,8 +546,18 @@ function MovimentacaoWizard() {
             />
           </div>
           <div className="space-y-1 max-h-[50vh] overflow-y-auto rounded-xl border border-border bg-card">
-            {filteredList.length === 0 && (
-              <p className="p-4 text-sm text-muted-foreground">Nenhum resultado.</p>
+            {loadingEntidades && (
+              <p className="p-4 text-sm text-muted-foreground">Carregando...</p>
+            )}
+            {errorEntidades && (
+              <p className="p-4 text-sm text-danger">Não foi possível carregar a lista.</p>
+            )}
+            {!loadingEntidades && !errorEntidades && filteredList.length === 0 && (
+              <p className="p-4 text-sm text-muted-foreground">
+                {busca.trim()
+                  ? "Nenhum resultado para a busca."
+                  : `Nenhum ${TIPO_LABEL[destinoTipo].toLowerCase()} ativo cadastrado.`}
+              </p>
             )}
             {filteredList.map((ent) => (
               <button

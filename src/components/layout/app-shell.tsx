@@ -303,8 +303,9 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 min-h-0 overflow-auto overscroll-contain p-3 sm:p-6">
-          <div className="mx-auto w-full max-w-[1400px]">
+        <main className="flex-1 min-h-0 overflow-auto overscroll-contain">
+          {/* Espaçamento padrão = Dashboard Operacional (desktop alinhado à sidebar) */}
+          <div className="mx-auto w-full max-w-[1400px] px-3 py-3 sm:px-6 sm:py-6">
             <Outlet />
           </div>
         </main>

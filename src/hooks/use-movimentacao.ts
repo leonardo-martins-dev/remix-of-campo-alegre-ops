@@ -47,9 +47,14 @@ export function useEntidadesMovimentacao() {
         supabase.from("cargas").select("cliente_id").eq("data_carga", todayBRT()),
       ]);
 
+      const firstError = posRes.error ?? cliRes.error ?? fornRes.error ?? cargasRes.error;
+      if (firstError) throw firstError;
+
       const posicoes = posRes.data ?? [];
       const clientesHojeIds = new Set(
-        (cargasRes.data ?? []).map((c: { cliente_id: string }) => c.cliente_id),
+        (cargasRes.data ?? [])
+          .map((c: { cliente_id: string | null }) => c.cliente_id)
+          .filter((id): id is string => !!id),
       );
 
       const clientes: Entidade[] = (cliRes.data ?? [])
