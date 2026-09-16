@@ -239,13 +239,11 @@ function unidadesDasCaixas(entries: CaixaItemEntry[]): number | null {
 }
 
 /**
- * Com fator un/cx, o saldo/status usam caixas×fator depois que o item
- * foi tocado (conferido ou qty > 0). Antes disso, a sugestão pré-preenchida
- * de caixas não consome o saldo sozinha.
+ * Qty desta entrega = o que o usuário digitou em "Nesta entr." (ou o que
+ * veio de editar caixas, que grava caixas×fator em `recebido`).
+ * A sugestão pré-preenchida de caixas NÃO sobrescreve a qty digitada.
  */
-function nestaEntradaEfetiva(it: LinhaItem, entries: CaixaItemEntry[]): number {
-  const fromCaixas = unidadesDasCaixas(entries);
-  if (fromCaixas != null && (it.conferido || it.recebido > 0)) return fromCaixas;
+function nestaEntradaEfetiva(it: LinhaItem, _entries?: CaixaItemEntry[]): number {
   return it.recebido;
 }
 
@@ -557,33 +555,23 @@ function ConferenciaItens({
     [applyCaixasAndSyncQty],
   );
 
-  const autoUpdateCaixas = useCallback(
-    (itemId: string, qty: number) => {
-      setCaixasItem((prev) => {
-        const entries = prev[itemId];
-        if (!entries || entries.length === 0) return prev;
-        const updated = entries.map((e) => {
-          if (e.fator && e.fator > 0) {
-            const calc = Math.ceil(qty / e.fator);
-            // Só espelha real←sugestão se o usuário ainda não customizou as caixas.
-            const real = e.real === e.sugerida ? calc : e.real;
-            return { ...e, sugerida: calc, real };
-          }
-          return e;
-        });
-        const un = unidadesDasCaixas(updated);
-        if (un != null) {
-          setItens((itensPrev) =>
-            itensPrev.map((it) =>
-              it.id === itemId ? { ...it, recebido: un, conferido: true } : it,
-            ),
-          );
+  /** Ajusta sugestão/real de caixas a partir da qty em un — sem sobrescrever `recebido`. */
+  const syncCaixasHintFromQty = useCallback((itemId: string, qty: number) => {
+    setCaixasItem((prev) => {
+      const entries = prev[itemId];
+      if (!entries || entries.length === 0) return prev;
+      const updated = entries.map((e) => {
+        if (e.fator && e.fator > 0) {
+          const calc = Math.max(0, Math.ceil(qty / e.fator));
+          // Só espelha real←sugestão se o usuário ainda não customizou as caixas.
+          const real = e.real === e.sugerida ? calc : e.real;
+          return { ...e, sugerida: calc, real };
         }
-        return { ...prev, [itemId]: updated };
+        return e;
       });
-    },
-    [],
-  );
+      return { ...prev, [itemId]: updated };
+    });
+  }, []);
 
   const update = (idx: number, v: number) => {
     if (readOnly) return;
@@ -591,16 +579,17 @@ function ConferenciaItens({
     const it = itens[idx];
     if (!it) return;
     const entries = caixasItem[it.id] ?? [];
-    if (unidadesDasCaixas(entries) != null) {
-      // Autofocus/blur do stepper com qty 0 (ainda não tocado) não pode
-      // zerar a sugestão de caixas (ficava só a sigla, ex.: "V").
-      if (newVal === 0 && !it.conferido && it.recebido === 0) return;
-      autoUpdateCaixas(it.id, newVal);
+    // Autofocus/blur do stepper com qty 0 (ainda não tocado) não pode
+    // zerar a sugestão de caixas (ficava só a sigla, ex.: "V").
+    if (newVal === 0 && !it.conferido && it.recebido === 0 && unidadesDasCaixas(entries) != null) {
       return;
     }
     setItens((prev) =>
       prev.map((row, i) => (i === idx ? { ...row, recebido: newVal, conferido: true } : row)),
     );
+    if (unidadesDasCaixas(entries) != null) {
+      syncCaixasHintFromQty(it.id, newVal);
+    }
   };
 
   const conferirIgualPedido = (idx: number) => {
@@ -613,13 +602,12 @@ function ConferenciaItens({
     const ja = Number(saldoRow?.recebido_acumulado ?? 0);
     const newVal = Math.max(0, it.pedido - ja);
     const entries = caixasItem[it.id] ?? [];
-    if (unidadesDasCaixas(entries) != null) {
-      autoUpdateCaixas(it.id, newVal);
-      return;
-    }
     setItens((prev) =>
       prev.map((row, i) => (i === idx ? { ...row, recebido: newVal, conferido: true } : row)),
     );
+    if (unidadesDasCaixas(entries) != null) {
+      syncCaixasHintFromQty(it.id, newVal);
+    }
   };
 
   const toggleQualidade = (idx: number) => {
