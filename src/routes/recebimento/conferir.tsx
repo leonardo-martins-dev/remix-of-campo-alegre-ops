@@ -239,12 +239,28 @@ function unidadesDasCaixas(entries: CaixaItemEntry[]): number | null {
 }
 
 /**
- * Qty desta entrega = o que o usuário digitou em "Nesta entr." (ou o que
- * veio de editar caixas, que grava caixas×fator em `recebido`).
- * A sugestão pré-preenchida de caixas NÃO sobrescreve a qty digitada.
+ * Qty desta entrega digitada em "Nesta entr." (editar caixas grava
+ * caixas×fator em `recebido` via applyCaixasAndSyncQty).
  */
 function nestaEntradaEfetiva(it: LinhaItem, _entries?: CaixaItemEntry[]): number {
   return it.recebido;
+}
+
+/**
+ * O que de fato chegou para Status / Vale: caixas × fator de conversão.
+ * Sem fator, cai na qty digitada.
+ */
+function chegouEfetivo(it: LinhaItem, entries: CaixaItemEntry[]): number {
+  return unidadesDasCaixas(entries) ?? it.recebido;
+}
+
+/** Diferença vs pedido: (já receb. + chegou) − pedido. Negativo = faltou (vale). */
+function gapVsPedido(
+  it: LinhaItem,
+  entries: CaixaItemEntry[],
+  jaRecebido: number,
+): number {
+  return jaRecebido + chegouEfetivo(it, entries) - it.pedido;
 }
 
 function buildSavePayload(
@@ -621,8 +637,9 @@ function ConferenciaItens({
 
   const fornecedorId = pedido?.fornecedor_id ?? pedidos.find((p) => p.id === pedidoId)?.fornecedor_id ?? "";
 
-  const openValeDialog = (it: LinhaItem, jaRecebido: number) => {
-    setValeItem({ ...it, recebido: it.recebido + jaRecebido });
+  const openValeDialog = (it: LinhaItem, jaRecebido: number, entries: CaixaItemEntry[]) => {
+    const chegou = chegouEfetivo(it, entries);
+    setValeItem({ ...it, recebido: jaRecebido + chegou });
     setValeObs("");
     setValeFotos([]);
     setValeOpen(true);
@@ -704,8 +721,7 @@ function ConferenciaItens({
         saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
       ).find((s) => s.item_pedido_id === it.itemPedidoId);
       const ja = Number(saldoRow?.recebido_acumulado ?? 0);
-      const nesta = nestaEntradaEfetiva(it, caixasItem[it.id] ?? []);
-      const gap = ja + nesta - it.pedido;
+      const gap = gapVsPedido(it, caixasItem[it.id] ?? [], ja);
       const pct = it.toleranciaPct ?? toleranciaPct;
       const limite = Math.max((pct / 100) * it.pedido, toleranciaMin);
       const acimaTol = gap > 0 && Math.abs(gap) > limite;
@@ -739,9 +755,9 @@ function ConferenciaItens({
           const saldoRow = (
             saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
           ).find((s) => s.item_pedido_id === it.itemPedidoId);
-          const nesta = nestaEntradaEfetiva(it, caixasItem[it.id] ?? []);
+          const chegou = chegouEfetivo(it, caixasItem[it.id] ?? []);
           return buildSavePayload(
-            { ...it, recebido: nesta },
+            { ...it, recebido: chegou },
             {
               toleranciaPct: it.toleranciaPct ?? toleranciaPct,
               toleranciaMin,
@@ -1061,11 +1077,11 @@ function ConferenciaItens({
           const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
           const itemCaixas = caixasItem[it.id] ?? [];
           const nestaEntr = nestaEntradaEfetiva(it, itemCaixas);
-          const totalApos = jaRecebido + nestaEntr;
-          const gap = totalApos - it.pedido;
+          const chegou = chegouEfetivo(it, itemCaixas);
+          const gap = gapVsPedido(it, itemCaixas, jaRecebido);
           const pendente = !it.conferido;
           const saldoZero = saldo <= 0;
-          const saldoRestante = Math.max(0, it.pedido - totalApos);
+          const saldoRestante = Math.max(0, it.pedido - (jaRecebido + chegou));
 
           const statusClass =
             saldoZero || (!pendente && gap === 0)
@@ -1088,7 +1104,7 @@ function ConferenciaItens({
                   {!saldoZero && pendente && <span className="chip chip-muted">Pendente</span>}
                   {!saldoZero && !pendente && gap === 0 && <span className="chip chip-ok">OK</span>}
                   {!saldoZero && !pendente && gap < 0 && (
-                    <span className="chip chip-warn">Saldo {Math.abs(gap)}</span>
+                    <span className="chip chip-warn">Diferença {Math.abs(gap)}</span>
                   )}
                   {!saldoZero && !pendente && gap > 0 && (
                     <span className="chip chip-danger">Sobra {gap}</span>
@@ -1201,7 +1217,7 @@ function ConferenciaItens({
                 {it.conferido && gap < 0 && !itemJaSolicitouVale(it.id) && (
                   <button
                     type="button"
-                    onClick={() => openValeDialog(it, jaRecebido)}
+                    onClick={() => openValeDialog(it, jaRecebido, itemCaixas)}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-sm font-semibold active:scale-[0.98] transition-transform"
                   >
                     <Receipt size={16} /> Vale
@@ -1247,11 +1263,11 @@ function ConferenciaItens({
               const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
               const itemCaixas = caixasItem[it.id] ?? [];
               const nestaEntr = nestaEntradaEfetiva(it, itemCaixas);
-              const totalApos = jaRecebido + nestaEntr;
-              const gap = totalApos - it.pedido;
+              const chegou = chegouEfetivo(it, itemCaixas);
+              const gap = gapVsPedido(it, itemCaixas, jaRecebido);
               const pendente = !it.conferido;
               const saldoZero = saldo <= 0;
-              const saldoRestante = Math.max(0, it.pedido - totalApos);
+              const saldoRestante = Math.max(0, it.pedido - (jaRecebido + chegou));
               return (
                 <tr key={it.id} className="border-t border-border">
                   <td className="px-4 py-3 font-semibold text-navy">
@@ -1296,7 +1312,7 @@ function ConferenciaItens({
                       {!saldoZero && pendente && <span className="chip chip-muted">Pendente</span>}
                       {!saldoZero && !pendente && gap === 0 && <span className="chip chip-ok">OK</span>}
                       {!saldoZero && !pendente && gap < 0 && (
-                        <span className="chip chip-warn">Saldo {Math.abs(gap)}</span>
+                        <span className="chip chip-warn">Diferença {Math.abs(gap)}</span>
                       )}
                       {!saldoZero && !pendente && gap > 0 && (
                         <span className="chip chip-danger">Sobra {gap}</span>
@@ -1354,7 +1370,7 @@ function ConferenciaItens({
                       {it.conferido && gap < 0 && !itemJaSolicitouVale(it.id) && (
                         <button
                           type="button"
-                          onClick={() => openValeDialog(it, jaRecebido)}
+                          onClick={() => openValeDialog(it, jaRecebido, itemCaixas)}
                           className="inline-flex items-center gap-1 min-h-11 px-3 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold hover:bg-amber-100 transition-colors"
                           title="Solicitar vale/desconto ao ADM"
                         >
