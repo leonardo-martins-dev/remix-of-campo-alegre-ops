@@ -248,6 +248,31 @@ function chegouEfetivo(it: LinhaItem, entries: CaixaItemEntry[]): number {
   return cx;
 }
 
+/**
+ * Caixas físicas que entram no galpão nesta entrega.
+ * Prefere a coluna Caixas (real); se vazia, usa Nesta entr. (cx) no tipo do fator.
+ */
+function caixasParaGalpaoItem(
+  it: LinhaItem,
+  entries: CaixaItemEntry[],
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  let fromReal = 0;
+  for (const e of entries) {
+    const q = Number(e.real ?? 0);
+    if (q > 0) {
+      out[e.sigla] = (out[e.sigla] ?? 0) + q;
+      fromReal += q;
+    }
+  }
+  if (fromReal > 0) return out;
+  const cx = nestaEntradaCaixas(it, entries);
+  if (cx <= 0) return out;
+  const sigla = entries.find((e) => e.sigla)?.sigla;
+  if (sigla) out[sigla] = cx;
+  return out;
+}
+
 /** Diferença vs pedido (un): (já receb. + nestaEntr×fator) − pedido. */
 function gapVsPedido(
   it: LinhaItem,
@@ -377,6 +402,7 @@ function ConferenciaItens({
   const { data: meusVales = [] } = useValesConferente(user?.id ?? null);
   const [valeOpen, setValeOpen] = useState(false);
   const [valeItem, setValeItem] = useState<LinhaItem | null>(null);
+  const [valeJaRecebido, setValeJaRecebido] = useState(0);
   const [valeObs, setValeObs] = useState("");
   const [valeFotos, setValeFotos] = useState<string[]>([]);
   const [valeUploading, setValeUploading] = useState(false);
@@ -599,9 +625,10 @@ function ConferenciaItens({
 
   const fornecedorId = pedido?.fornecedor_id ?? pedidos.find((p) => p.id === pedidoId)?.fornecedor_id ?? "";
 
-  const openValeDialog = (it: LinhaItem, jaRecebido: number, entries: CaixaItemEntry[]) => {
-    const chegou = chegouEfetivo(it, entries);
-    setValeItem({ ...it, recebido: jaRecebido + chegou });
+  const openValeDialog = (it: LinhaItem, jaRecebido: number, _entries: CaixaItemEntry[]) => {
+    // Mantém it.recebido = Nesta entr. (cx). Unidades do vale = ja + nesta×fator.
+    setValeItem(it);
+    setValeJaRecebido(jaRecebido);
     setValeObs("");
     setValeFotos([]);
     setValeOpen(true);
@@ -628,14 +655,18 @@ function ConferenciaItens({
       toast.error("Dados incompletos para solicitar vale");
       return;
     }
-    const diferenca = valeItem.pedido - valeItem.recebido;
+    const itLive = itens.find((i) => i.id === valeItem.id) ?? valeItem;
+    const entries = caixasItem[valeItem.id] ?? [];
+    const recebidoUn = valeJaRecebido + chegouEfetivo(itLive, entries);
+    const diferenca = itLive.pedido - recebidoUn;
     if (diferenca <= 0) {
       toast.error("Não há diferença para solicitar vale");
       return;
     }
-    const preco = valeItem.preco ?? fallbackPreco;
+    const preco = itLive.preco ?? fallbackPreco;
     const valorCalc = diferenca * preco;
-    const estimado = !valeItem.preco;
+    const estimado = !itLive.preco;
+    const byTipo = caixasParaGalpaoItem(itLive, entries);
 
     try {
       await createVale.mutateAsync({
@@ -643,9 +674,9 @@ function ConferenciaItens({
         item_conferencia_id: valeItem.id,
         fornecedor_id: fornecedorId,
         conferente_id: user.id,
-        produto_nome: valeItem.produto,
-        quantidade_pedida: valeItem.pedido,
-        quantidade_recebida: valeItem.recebido,
+        produto_nome: itLive.produto,
+        quantidade_pedida: itLive.pedido,
+        quantidade_recebida: recebidoUn,
         diferenca,
         preco_unitario: preco,
         valor_calculado: valorCalc,
@@ -653,7 +684,34 @@ function ConferenciaItens({
         observacao_conferente: valeObs.trim() || null,
         fotos: valeFotos,
       });
-      toast.success("Solicitação de vale enviada ao ADM");
+
+      // Credita no galpão as caixas informadas neste item (Nesta entr.; fallback coluna Caixas).
+      if (conferencia?.id) {
+        const cxNesta = nestaEntradaCaixas(itLive, entries);
+        const sigla =
+          entries.find((e) => e.sigla)?.sigla ??
+          Object.keys(byTipo)[0] ??
+          tipos[0]?.sigla ??
+          null;
+        const credito: Record<string, number> =
+          cxNesta > 0 && sigla
+            ? { [sigla]: cxNesta }
+            : byTipo;
+        for (const [tipo, qty] of Object.entries(credito)) {
+          if (qty <= 0) continue;
+          await movForn.mutateAsync({
+            fornecedor_id: fornecedorId,
+            tipo_caixa: tipo,
+            quantidade: qty,
+            natureza: "recebimento_cheias",
+            registrado_por: user.id,
+            conferencia_id: conferencia.id,
+            observacoes: `Vale · ${itLive.produto}`,
+          });
+        }
+      }
+
+      toast.success("Solicitação de vale enviada · caixas creditadas no galpão");
       setValeOpen(false);
       setValeItem(null);
     } catch (err) {
@@ -733,9 +791,9 @@ function ConferenciaItens({
 
       const totaisCaixasReal: Record<string, number> = {};
       for (const it of itens) {
-        const entries = caixasItem[it.id] ?? [];
-        for (const e of entries) {
-          totaisCaixasReal[e.sigla] = (totaisCaixasReal[e.sigla] ?? 0) + e.real;
+        const byTipo = caixasParaGalpaoItem(it, caixasItem[it.id] ?? []);
+        for (const [sigla, qty] of Object.entries(byTipo)) {
+          totaisCaixasReal[sigla] = (totaisCaixasReal[sigla] ?? 0) + qty;
         }
       }
 
@@ -1520,10 +1578,24 @@ function ConferenciaItens({
             className="hidden"
             onChange={handleValeFotoUpload}
           />
-          {valeItem && (
+          {valeItem && (() => {
+            const itLive = itens.find((i) => i.id === valeItem.id) ?? valeItem;
+            const entries = caixasItem[valeItem.id] ?? [];
+            const recebidoUn = valeJaRecebido + chegouEfetivo(itLive, entries);
+            const diferencaUn = itLive.pedido - recebidoUn;
+            const cxGalpao = (() => {
+              const cxNesta = nestaEntradaCaixas(itLive, entries);
+              if (cxNesta > 0) return cxNesta;
+              return Object.values(caixasParaGalpaoItem(itLive, entries)).reduce(
+                (a, n) => a + n,
+                0,
+              );
+            })();
+            const preco = itLive.preco ?? fallbackPreco;
+            return (
             <div className="space-y-4">
               <div className="bg-secondary/50 rounded-lg p-3 text-sm space-y-1">
-                <div className="font-semibold text-navy">{valeItem.produto}</div>
+                <div className="font-semibold text-navy">{itLive.produto}</div>
                 <div className="text-muted-foreground">
                   Pedido {codigo} · {fornecedorNome}
                 </div>
@@ -1531,29 +1603,34 @@ function ConferenciaItens({
               
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="p-3 rounded-lg border">
-                  <div className="text-2xl font-bold text-navy">{valeItem.pedido}</div>
-                  <div className="text-xs text-muted-foreground">Pedido</div>
+                  <div className="text-2xl font-bold text-navy">{itLive.pedido}</div>
+                  <div className="text-xs text-muted-foreground">Pedido (un)</div>
                 </div>
                 <div className="p-3 rounded-lg border">
-                  <div className="text-2xl font-bold text-navy">{valeItem.recebido}</div>
-                  <div className="text-xs text-muted-foreground">Recebido</div>
+                  <div className="text-2xl font-bold text-navy">{recebidoUn}</div>
+                  <div className="text-xs text-muted-foreground">Recebido (un)</div>
                 </div>
                 <div className="p-3 rounded-lg border border-amber-200 bg-amber-50">
-                  <div className="text-2xl font-bold text-amber-700">{valeItem.pedido - valeItem.recebido}</div>
-                  <div className="text-xs text-amber-600">Diferença</div>
+                  <div className="text-2xl font-bold text-amber-700">{diferencaUn}</div>
+                  <div className="text-xs text-amber-600">Diferença (un)</div>
                 </div>
+              </div>
+
+              <div className="p-3 rounded-lg border border-border bg-secondary/30 text-sm">
+                <span className="text-muted-foreground">Caixas que entram no galpão: </span>
+                <span className="font-bold text-navy">{cxGalpao}</span>
               </div>
 
               <div className="p-3 rounded-lg border border-primary/20 bg-primary-soft">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Valor calculado:</span>
                   <span className="text-lg font-bold text-primary-dark">
-                    R$ {((valeItem.pedido - valeItem.recebido) * (valeItem.preco ?? fallbackPreco)).toFixed(2)}
-                    {!valeItem.preco && <span className="text-xs font-normal ml-1">(estimado)</span>}
+                    R$ {(diferencaUn * preco).toFixed(2)}
+                    {!itLive.preco && <span className="text-xs font-normal ml-1">(estimado)</span>}
                   </span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {valeItem.pedido - valeItem.recebido} {valeItem.unid} × R$ {(valeItem.preco ?? fallbackPreco).toFixed(2)}
+                  {diferencaUn} {itLive.unid} × R$ {preco.toFixed(2)}
                 </div>
               </div>
 
@@ -1593,7 +1670,8 @@ function ConferenciaItens({
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => setValeOpen(false)}>
               Cancelar
