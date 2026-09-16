@@ -211,67 +211,69 @@ function Page() {
       />
 
       {/* Filtros */}
-      <div className="card-base p-4 mb-5 flex flex-wrap items-center gap-3">
-        <div className="flex gap-1">
+      <div className="card-base p-3 sm:p-4 mb-5 space-y-3 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+        <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0">
           {(["today", "week", "month"] as const).map((p) => (
-            <Button key={p} size="sm" variant={period === p ? "default" : "outline"} onClick={() => setPeriod(p)}>
+            <Button key={p} size="sm" className="h-9 sm:h-8 text-xs sm:text-sm shrink-0" variant={period === p ? "default" : "outline"} onClick={() => setPeriod(p)}>
               {p === "today" ? "Hoje" : p === "week" ? "7 dias" : "30 dias"}
             </Button>
           ))}
         </div>
-        <select
-          className="h-8 rounded-md border px-2 text-sm"
-          value={fornecedorId ?? ""}
-          onChange={(e) => setFornecedorId(e.target.value || null)}
-        >
-          <option value="">Todos fornecedores</option>
-          {fornecedores.map((f) => (
-            <option key={f.id} value={f.id}>{f.nome}</option>
-          ))}
-        </select>
-        <select
-          className="h-8 rounded-md border px-2 text-sm"
-          value={clienteId ?? ""}
-          onChange={(e) => setClienteId(e.target.value || null)}
-        >
-          <option value="">Todos supermercados</option>
-          {clientes.map((c) => (
-            <option key={c.id} value={c.id}>{c.nome}</option>
-          ))}
-        </select>
-        <select
-          className="h-8 rounded-md border px-2 text-sm"
-          value={rotaId ?? ""}
-          onChange={(e) => setRotaId(e.target.value || null)}
-        >
-          <option value="">Todas rotas</option>
-          {rotas.map((r) => (
-            <option key={r.id} value={r.id}>{r.nome}</option>
-          ))}
-        </select>
-        <select
-          className="h-8 rounded-md border px-2 text-sm"
-          value={motoristaId ?? ""}
-          onChange={(e) => setMotoristaId(e.target.value || null)}
-        >
-          <option value="">Todos motoristas</option>
-          {motoristas.map((m) => (
-            <option key={m.id} value={m.id}>{m.nome}</option>
-          ))}
-        </select>
-        <select
-          className="h-8 rounded-md border px-2 text-sm"
-          value={tipoCaixa ?? ""}
-          onChange={(e) => setTipoCaixa(e.target.value || null)}
-        >
-          <option value="">Todos tipos caixa</option>
-          {tiposCaixa.map((t) => (
-            <option key={t.id} value={t.sigla}>{t.nome} ({t.sigla})</option>
-          ))}
-        </select>
-        {(fornecedorId || clienteId || rotaId || motoristaId || tipoCaixa) && (
-          <Button size="sm" variant="ghost" onClick={clearFilters}>Limpar filtros</Button>
-        )}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3">
+          <select
+            className="h-10 sm:h-8 rounded-md border px-2 text-xs sm:text-sm bg-background w-full sm:w-auto"
+            value={fornecedorId ?? ""}
+            onChange={(e) => setFornecedorId(e.target.value || null)}
+          >
+            <option value="">Fornecedor</option>
+            {fornecedores.map((f) => (
+              <option key={f.id} value={f.id}>{f.nome}</option>
+            ))}
+          </select>
+          <select
+            className="h-10 sm:h-8 rounded-md border px-2 text-xs sm:text-sm bg-background w-full sm:w-auto"
+            value={clienteId ?? ""}
+            onChange={(e) => setClienteId(e.target.value || null)}
+          >
+            <option value="">Supermercado</option>
+            {clientes.map((c) => (
+              <option key={c.id} value={c.id}>{c.nome}</option>
+            ))}
+          </select>
+          <select
+            className="h-10 sm:h-8 rounded-md border px-2 text-xs sm:text-sm bg-background w-full sm:w-auto"
+            value={rotaId ?? ""}
+            onChange={(e) => setRotaId(e.target.value || null)}
+          >
+            <option value="">Rota</option>
+            {rotas.map((r) => (
+              <option key={r.id} value={r.id}>{r.nome}</option>
+            ))}
+          </select>
+          <select
+            className="h-10 sm:h-8 rounded-md border px-2 text-xs sm:text-sm bg-background w-full sm:w-auto"
+            value={motoristaId ?? ""}
+            onChange={(e) => setMotoristaId(e.target.value || null)}
+          >
+            <option value="">Motorista</option>
+            {motoristas.map((m) => (
+              <option key={m.id} value={m.id}>{m.nome}</option>
+            ))}
+          </select>
+          <select
+            className="h-10 sm:h-8 rounded-md border px-2 text-xs sm:text-sm bg-background w-full sm:w-auto"
+            value={tipoCaixa ?? ""}
+            onChange={(e) => setTipoCaixa(e.target.value || null)}
+          >
+            <option value="">Tipo caixa</option>
+            {tiposCaixa.map((t) => (
+              <option key={t.id} value={t.sigla}>{t.nome} ({t.sigla})</option>
+            ))}
+          </select>
+          {(fornecedorId || clienteId || rotaId || motoristaId || tipoCaixa) && (
+            <Button size="sm" variant="ghost" className="h-10 sm:h-8 col-span-2 sm:col-span-1" onClick={clearFilters}>Limpar</Button>
+          )}
+        </div>
       </div>
 
       {isLoading && (

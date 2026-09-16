@@ -105,14 +105,14 @@ function Page() {
         />
       </div>
 
-      <div className="card-base p-6 mb-5">
-        <h3 className="text-sm font-bold text-navy mb-6">Linha do ciclo operacional</h3>
-        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+      <div className="card-base p-4 sm:p-6 mb-5">
+        <h3 className="text-sm font-bold text-navy mb-4 sm:mb-6">Linha do ciclo operacional</h3>
+        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto pb-2 -mx-2 px-2">
           {ciclo.map((e, i) => (
-            <div key={e.etapa} className="flex items-center gap-2 shrink-0">
-              <div className="flex flex-col items-center gap-2 w-40">
+            <div key={e.etapa} className="flex items-center gap-1 sm:gap-2 shrink-0">
+              <div className="flex flex-col items-center gap-1 sm:gap-2 w-20 sm:w-40">
                 <div
-                  className="h-10 w-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                  className="h-8 w-8 sm:h-10 sm:w-10 rounded-full flex items-center justify-center text-white text-xs sm:text-sm font-bold"
                   style={{
                     background:
                       i === 0 ? "var(--info)" : i === ciclo.length - 1 ? "var(--brand-green)" : "var(--primary)",
@@ -120,15 +120,15 @@ function Page() {
                 >
                   {i + 1}
                 </div>
-                <div className="text-xs font-semibold text-navy text-center">{e.etapa}</div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                <div className="text-[10px] sm:text-xs font-semibold text-navy text-center leading-tight">{e.etapa}</div>
+                <div className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground">
                   {e.tempo === 0 ? "T0" : `+${formatMin(e.tempo)}`}
                 </div>
               </div>
               {i < ciclo.length - 1 && (
                 <div className="flex flex-col items-center text-muted-foreground">
-                  <ChevronRight size={20} />
-                  <span className="text-xs">{formatMin(ciclo[i + 1].tempo - e.tempo)}</span>
+                  <ChevronRight size={16} className="sm:w-5 sm:h-5" />
+                  <span className="text-[10px] sm:text-xs">{formatMin(ciclo[i + 1].tempo - e.tempo)}</span>
                 </div>
               )}
             </div>

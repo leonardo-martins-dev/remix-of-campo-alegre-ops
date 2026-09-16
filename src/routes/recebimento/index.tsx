@@ -290,7 +290,7 @@ function Page() {
         title="Conferência de Mercadoria"
         subtitle="Pedidos a conferir do dia · recebimento sempre aceito"
         actions={
-          <>
+          <div className="header-actions-mobile">
             <input
               ref={fileRef}
               type="file"
@@ -302,7 +302,7 @@ function Page() {
               <>
                 <Link
                   to="/recebimento/vales"
-                  className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-amber-300/50 bg-amber-50 text-sm font-semibold text-amber-800 hover:bg-amber-100 relative"
+                  className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-amber-300/50 bg-amber-50 text-xs sm:text-sm font-semibold text-amber-800 hover:bg-amber-100 relative"
                 >
                   <Receipt size={14} /> Vales
                   {valesPendentes > 0 && (
@@ -313,9 +313,9 @@ function Page() {
                 </Link>
                 <Link
                   to="/recebimento/liberacoes"
-                  className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-warning/40 bg-warning/10 text-sm font-semibold text-navy hover:bg-warning/20"
+                  className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-warning/40 bg-warning/10 text-xs sm:text-sm font-semibold text-navy hover:bg-warning/20"
                 >
-                  <ShieldAlert size={14} /> Liberações
+                  <ShieldAlert size={14} /> <span className="hidden sm:inline">Liberações</span><span className="sm:hidden">Lib.</span>
                 </Link>
               </>
             )}
@@ -341,41 +341,33 @@ function Page() {
                   toast.error(e instanceof Error ? e.message : "Erro ao sincronizar Wise");
                 }
               }}
-              className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
             >
-              <RefreshCw size={14} /> Sincronizar Wise
+              <RefreshCw size={14} /> <span className="hidden sm:inline">Sincronizar </span>Wise
             </button>
             <button
               type="button"
               disabled={previewMut.isPending}
               onClick={() => fileRef.current?.click()}
-              className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
             >
-              <FileSpreadsheet size={14} /> Importar planilha (modelo)
-            </button>
-            <button
-              type="button"
-              disabled={previewMut.isPending}
-              onClick={() => fileRef.current?.click()}
-              className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
-            >
-              <FileSpreadsheet size={14} /> Importar exportação do Wise
+              <FileSpreadsheet size={14} /> <span className="hidden sm:inline">Importar planilha</span><span className="sm:hidden">Planilha</span>
             </button>
             <button
               type="button"
               onClick={() => downloadWiseModelo()}
-              className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+              className="hidden sm:inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
             >
               Baixar modelo
             </button>
             <button
               type="button"
               onClick={() => setManualOpen(true)}
-              className="inline-flex items-center gap-2 h-9 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary-dark"
+              className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg bg-primary text-primary-foreground text-xs sm:text-sm font-semibold hover:bg-primary-dark"
             >
-              <Plus size={14} /> Lançar pedido manual
+              <Plus size={14} /> <span className="hidden sm:inline">Lançar pedido </span>manual
             </button>
-          </>
+          </div>
         }
       />
 
@@ -576,16 +568,16 @@ function Page() {
           if (!open) resetManualForm();
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Lançar pedido manual</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label>Fornecedor</Label>
                 <Select value={fornecedorId || undefined} onValueChange={setFornecedorId}>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-10 sm:h-9">
                     <SelectValue placeholder="Selecione…" />
                   </SelectTrigger>
                   <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
@@ -599,17 +591,17 @@ function Page() {
               </div>
               <div className="space-y-2">
                 <Label>Código do pedido</Label>
-                <Input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="PC-2041" />
+                <Input className="h-10 sm:h-9" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="PC-2041" />
               </div>
             </div>
 
             <div className="space-y-3">
               <Label>Itens</Label>
               {manualItens.map((item, idx) => (
-                <div key={idx} className="p-3 border border-border rounded-lg space-y-2">
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1 space-y-1">
-                      <Label className="text-xs">Produto</Label>
+                <div key={idx} className="p-3 border border-border rounded-lg space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Produto</Label>
+                    <div className="flex gap-2">
                       <Select
                         value={item.produto_id || undefined}
                         onValueChange={(v) =>
@@ -618,7 +610,7 @@ function Page() {
                           )
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="h-10 sm:h-9 flex-1">
                           <SelectValue placeholder="Produto…" />
                         </SelectTrigger>
                         <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
@@ -629,10 +621,24 @@ function Page() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {manualItens.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="shrink-0 h-10 w-10 sm:h-9 sm:w-9"
+                          onClick={() => setManualItens((prev) => prev.filter((_, i) => i !== idx))}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      )}
                     </div>
-                    <div className="w-24 space-y-1">
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
                       <Label className="text-xs">Qtd</Label>
                       <Input
+                        className="h-10 sm:h-9"
                         type="number"
                         min={1}
                         value={item.quantidade}
@@ -644,9 +650,10 @@ function Page() {
                         }}
                       />
                     </div>
-                    <div className="w-28 space-y-1">
+                    <div className="space-y-1">
                       <Label className="text-xs">Preço un.</Label>
                       <Input
+                        className="h-10 sm:h-9"
                         type="number"
                         min={0}
                         step="0.01"
@@ -658,16 +665,6 @@ function Page() {
                         }
                       />
                     </div>
-                    {manualItens.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setManualItens((prev) => prev.filter((_, i) => i !== idx))}
-                      >
-                        <Trash2 size={14} />
-                      </Button>
-                    )}
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Cliente (CNPJ / nome)</Label>
@@ -679,7 +676,7 @@ function Page() {
                         )
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="h-10 sm:h-9">
                         <SelectValue placeholder="Cliente…" />
                       </SelectTrigger>
                       <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>

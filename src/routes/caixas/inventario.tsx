@@ -392,11 +392,11 @@ function ConfigurarMinimoEstoque() {
   return (
     <div className="card-base p-4">
       <h3 className="font-semibold text-sm mb-3">Configurar estoque mínimo por fornecedor</h3>
-      <div className="flex flex-wrap gap-3 items-end">
-        <div className="flex-1 min-w-[180px]">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 items-end">
+        <div className="col-span-2 sm:flex-1 sm:min-w-[180px]">
           <Label className="text-xs">Fornecedor</Label>
           <select
-            className="h-10 w-full rounded-md border px-2 mt-1"
+            className="h-10 w-full rounded-md border px-2 mt-1 bg-background"
             value={fornId}
             onChange={(e) => setFornId(e.target.value)}
           >
@@ -406,10 +406,10 @@ function ConfigurarMinimoEstoque() {
             ))}
           </select>
         </div>
-        <div className="w-32">
-          <Label className="text-xs">Tipo de caixa</Label>
+        <div>
+          <Label className="text-xs">Tipo</Label>
           <select
-            className="h-10 w-full rounded-md border px-2 mt-1"
+            className="h-10 w-full sm:w-24 rounded-md border px-2 mt-1 bg-background"
             value={tipoSel}
             onChange={(e) => setTipoSel(e.target.value)}
           >
@@ -419,17 +419,17 @@ function ConfigurarMinimoEstoque() {
             ))}
           </select>
         </div>
-        <div className="w-28">
+        <div>
           <Label className="text-xs">Mínimo</Label>
           <Input
             type="number"
             min={0}
             value={qtd}
             onChange={(e) => setQtd(parseInt(e.target.value) || 0)}
-            className="mt-1"
+            className="mt-1 h-10 w-full sm:w-24"
           />
         </div>
-        <Button onClick={handleSave} disabled={saveMinimo.isPending} className="h-10">
+        <Button onClick={handleSave} disabled={saveMinimo.isPending} className="h-10 col-span-2 sm:col-span-1">
           Salvar
         </Button>
       </div>

@@ -140,9 +140,9 @@ function Page() {
         }
       />
 
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 mb-4">
         <Select value={activeRotaId ?? ""} onValueChange={setSelectedRotaId}>
-          <SelectTrigger className="w-[280px]">
+          <SelectTrigger className="w-full sm:w-[280px] h-10 sm:h-9">
             <SelectValue placeholder="Selecionar rota" />
           </SelectTrigger>
           <SelectContent>

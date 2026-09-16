@@ -273,9 +273,9 @@ function Page() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 mb-4">
         <Select value={period} onValueChange={(v) => setPeriod(v as PeriodKey)}>
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-full sm:w-[140px] h-10 sm:h-9">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -286,13 +286,13 @@ function Page() {
           </SelectContent>
         </Select>
         {period === "custom" && (
-          <>
-            <Input type="date" className="w-40" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
-            <Input type="date" className="w-40" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
-          </>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Input type="date" className="flex-1 sm:flex-none sm:w-36 h-10 sm:h-9" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+            <Input type="date" className="flex-1 sm:flex-none sm:w-36 h-10 sm:h-9" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+          </div>
         )}
         <Select value={fornecedorId} onValueChange={setFornecedorId}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-full sm:w-[200px] h-10 sm:h-9">
             <SelectValue placeholder="Fornecedor" />
           </SelectTrigger>
           <SelectContent>
@@ -308,23 +308,25 @@ function Page() {
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={(v) => { setTab(v as StatusVale); setSelected(new Set()); }}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="pendente">{tabLabel("pendente", kpis?.pendentes)}</TabsTrigger>
-          <TabsTrigger value="aplicado">{tabLabel("aplicado", kpis?.aplicados)}</TabsTrigger>
-          <TabsTrigger value="lancado">{tabLabel("lancado", kpis?.lancados)}</TabsTrigger>
-          <TabsTrigger value="recusado">{tabLabel("recusado", kpis?.recusados)}</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 mb-4">
+          <TabsList className="w-max sm:w-auto">
+            <TabsTrigger value="pendente" className="text-xs sm:text-sm">{tabLabel("pendente", kpis?.pendentes)}</TabsTrigger>
+            <TabsTrigger value="aplicado" className="text-xs sm:text-sm">{tabLabel("aplicado", kpis?.aplicados)}</TabsTrigger>
+            <TabsTrigger value="lancado" className="text-xs sm:text-sm">{tabLabel("lancado", kpis?.lancados)}</TabsTrigger>
+            <TabsTrigger value="recusado" className="text-xs sm:text-sm">{tabLabel("recusado", kpis?.recusados)}</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Batch actions bar for pendentes */}
         {tab === "pendente" && selected.size > 0 && (
-          <div className="flex items-center gap-3 mb-3 p-3 rounded-lg bg-primary-soft">
-            <span className="text-sm font-semibold text-navy">{selected.size} selecionado(s)</span>
-            <Button size="sm" onClick={submitLote} disabled={aplicarLote.isPending}>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3 p-3 rounded-lg bg-primary-soft">
+            <span className="text-xs sm:text-sm font-semibold text-navy">{selected.size} selecionado(s)</span>
+            <Button size="sm" className="min-h-9 text-xs sm:text-sm" onClick={submitLote} disabled={aplicarLote.isPending}>
               <ListChecks size={14} className="mr-1" />
               {aplicarLote.isPending ? "Aplicando…" : "Aplicar em lote"}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setSelected(new Set())}>
-              Limpar seleção
+            <Button size="sm" variant="outline" className="min-h-9 text-xs sm:text-sm" onClick={() => setSelected(new Set())}>
+              Limpar
             </Button>
           </div>
         )}
@@ -516,23 +518,23 @@ function ValeCard({
   const valor = Number(vale.valor_final ?? vale.valor_calculado);
 
   return (
-    <div className="card-base p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-        <div className="flex items-start gap-2">
+    <div className="card-base p-3 sm:p-4">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-2 sm:gap-3 mb-3">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
           {tab === "pendente" && (
             <Checkbox
-              className="mt-1"
+              className="mt-1 shrink-0"
               checked={isSelected}
               onCheckedChange={onToggleSelect}
             />
           )}
-          <div>
-            <div className="font-bold text-navy">{vale.produto_nome ?? "Produto"}</div>
-            <div className="text-sm text-muted-foreground">
+          <div className="min-w-0 flex-1">
+            <div className="font-bold text-navy text-sm sm:text-base truncate">{vale.produto_nome ?? "Produto"}</div>
+            <div className="text-xs sm:text-sm text-muted-foreground">
               Pedido {vale.pedidos_recebimento?.codigo ?? "—"}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Conferente: {vale.conferente?.nome ?? "—"} · {formatDateBRT(vale.created_at)}
+              Conf: {vale.conferente?.nome ?? "—"} · {formatDateBRT(vale.created_at)}
             </div>
             {vale.item_conferencia_id && (
               <Link
@@ -545,29 +547,29 @@ function ValeCard({
             )}
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-amber-600">
+        <div className="text-left sm:text-right shrink-0">
+          <div className="text-xl sm:text-2xl font-bold text-amber-600">
             R$ {valor.toFixed(2)}
-            {vale.estimado && <span className="text-xs font-normal ml-1">(estimado)</span>}
+            {vale.estimado && <span className="text-[10px] sm:text-xs font-normal ml-1">(est.)</span>}
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-[10px] sm:text-xs text-muted-foreground">
             {tab === "pendente" ? "Valor calculado" : tab === "aplicado" ? "Valor aplicado" : tab === "lancado" ? "Valor lançado" : "Valor solicitado"}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 text-center text-sm mb-3">
-        <div className="p-2 rounded bg-secondary/50">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center text-xs sm:text-sm mb-3">
+        <div className="p-1.5 sm:p-2 rounded bg-secondary/50">
           <div className="font-semibold">{vale.quantidade_pedida}</div>
-          <div className="text-xs text-muted-foreground">Pedido</div>
+          <div className="text-[10px] sm:text-xs text-muted-foreground">Pedido</div>
         </div>
-        <div className="p-2 rounded bg-secondary/50">
+        <div className="p-1.5 sm:p-2 rounded bg-secondary/50">
           <div className="font-semibold">{vale.quantidade_recebida}</div>
-          <div className="text-xs text-muted-foreground">Recebido</div>
+          <div className="text-[10px] sm:text-xs text-muted-foreground">Recebido</div>
         </div>
-        <div className="p-2 rounded bg-amber-50 border border-amber-200">
+        <div className="p-1.5 sm:p-2 rounded bg-amber-50 border border-amber-200">
           <div className="font-semibold text-amber-700">{vale.diferenca}</div>
-          <div className="text-xs text-amber-600">Diferença</div>
+          <div className="text-[10px] sm:text-xs text-amber-600">Diferença</div>
         </div>
       </div>
 
@@ -611,18 +613,18 @@ function ValeCard({
       {/* Actions by tab */}
       {tab === "pendente" && (
         <div className="flex gap-2">
-          <Button size="sm" className="flex-1" onClick={onAplicar} disabled={busy}>
-            <CheckCircle2 size={14} className="mr-1" /> Aplicar
+          <Button size="sm" className="flex-1 min-h-10 sm:min-h-9 text-xs sm:text-sm" onClick={onAplicar} disabled={busy}>
+            <CheckCircle2 size={14} className="mr-1 shrink-0" /> Aplicar
           </Button>
-          <Button size="sm" variant="outline" className="flex-1" onClick={onRecusar} disabled={busy}>
-            <XCircle size={14} className="mr-1" /> Recusar
+          <Button size="sm" variant="outline" className="flex-1 min-h-10 sm:min-h-9 text-xs sm:text-sm" onClick={onRecusar} disabled={busy}>
+            <XCircle size={14} className="mr-1 shrink-0" /> Recusar
           </Button>
         </div>
       )}
       {tab === "aplicado" && (
         <div className="flex gap-2">
-          <Button size="sm" className="flex-1" onClick={onLancado} disabled={busy}>
-            <BookCheck size={14} className="mr-1" /> Marcar como lançado
+          <Button size="sm" className="flex-1 min-h-10 sm:min-h-9 text-xs sm:text-sm" onClick={onLancado} disabled={busy}>
+            <BookCheck size={14} className="mr-1 shrink-0" /> <span className="hidden sm:inline">Marcar como </span>lançado
           </Button>
         </div>
       )}

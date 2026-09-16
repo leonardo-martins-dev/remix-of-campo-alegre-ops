@@ -183,58 +183,60 @@ function Page() {
         }
       />
 
-      <div className="flex flex-wrap gap-3 mb-4">
-        <Select value={fornecedorId} onValueChange={setFornecedorId}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Fornecedor" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos fornecedores</SelectItem>
-            {fornecedores.map((f) => (
-              <SelectItem key={f.id} value={f.id}>
-                {f.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="today">Hoje</SelectItem>
-            <SelectItem value="week">7 dias</SelectItem>
-            <SelectItem value="month">30 dias</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={divergencia} onValueChange={(v) => setDivergencia(v as typeof divergencia)}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="falta">Faltas</SelectItem>
-            <SelectItem value="sobra">Sobras</SelectItem>
-            <SelectItem value="qualidade">Qualidade</SelectItem>
-            <SelectItem value="all">Todas</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={tolFiltro} onValueChange={(v) => setTolFiltro(v as typeof tolFiltro)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Toda tolerância</SelectItem>
-            <SelectItem value="acima">Acima da régua</SelectItem>
-            <SelectItem value="dentro">Dentro da régua</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="flex gap-1">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-3">
+          <Select value={fornecedorId} onValueChange={setFornecedorId}>
+            <SelectTrigger className="w-full sm:w-[180px] h-10 sm:h-9">
+              <SelectValue placeholder="Fornecedor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos fornecedores</SelectItem>
+              {fornecedores.map((f) => (
+                <SelectItem key={f.id} value={f.id}>
+                  {f.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
+            <SelectTrigger className="w-full sm:w-[120px] h-10 sm:h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Hoje</SelectItem>
+              <SelectItem value="week">7 dias</SelectItem>
+              <SelectItem value="month">30 dias</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={divergencia} onValueChange={(v) => setDivergencia(v as typeof divergencia)}>
+            <SelectTrigger className="w-full sm:w-[120px] h-10 sm:h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="falta">Faltas</SelectItem>
+              <SelectItem value="sobra">Sobras</SelectItem>
+              <SelectItem value="qualidade">Qualidade</SelectItem>
+              <SelectItem value="all">Todas</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={tolFiltro} onValueChange={(v) => setTolFiltro(v as typeof tolFiltro)}>
+            <SelectTrigger className="w-full sm:w-[140px] h-10 sm:h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toda tolerância</SelectItem>
+              <SelectItem value="acima">Acima da régua</SelectItem>
+              <SelectItem value="dentro">Dentro da régua</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex gap-1 overflow-x-auto">
           {(["itens", "resumo"] as const).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setModo(m)}
-              className={`px-3 h-9 rounded-md text-xs font-semibold ${
+              className={`px-3 h-10 sm:h-9 rounded-md text-xs font-semibold whitespace-nowrap ${
                 modo === m ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"
               }`}
             >
