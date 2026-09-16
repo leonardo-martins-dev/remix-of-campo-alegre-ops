@@ -578,14 +578,7 @@ function ConferenciaItens({
   const handleStepperKeyDown = (idx: number) => (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      setItens((prev) => prev.map((x, i) => (i === idx ? { ...x, conferido: true } : x)));
-      const nextIdx = itens.findIndex((item, i) => {
-        if (i <= idx || item.aVincular || item.conferido) return false;
-        const sr = (saldosItem as { item_pedido_id: string; saldo: number }[])
-          .find((s) => s.item_pedido_id === item.itemPedidoId);
-        return Number(sr?.saldo ?? item.pedido) > 0;
-      });
-      if (nextIdx >= 0) setTimeout(() => stepperRefs.current[nextIdx]?.focus(), 0);
+      void conferirIgualPedido(idx);
     }
   };
 
@@ -594,40 +587,117 @@ function ConferenciaItens({
     setCaixasItem((prev) => ({ ...prev, [itemId]: entries }));
   }, []);
 
+  const itemJaSolicitouVale = (itemId: string) => {
+    return meusVales.some((v) => v.item_conferencia_id === itemId && v.status === "pendente");
+  };
+
+  const itemQtyLocked = (it: LinhaItem) =>
+    readOnly || it.conferido || itemJaSolicitouVale(it.id);
+
   const updateCaixasItem = useCallback(
     (itemId: string, entries: CaixaItemEntry[]) => {
+      const it = itens.find((x) => x.id === itemId);
+      if (it && (it.conferido || meusVales.some((v) => v.item_conferencia_id === itemId && v.status === "pendente"))) {
+        return;
+      }
       applyCaixasAndSyncQty(itemId, entries);
     },
-    [applyCaixasAndSyncQty],
+    [applyCaixasAndSyncQty, itens, meusVales],
   );
 
-  /** Nesta entr.: só mexe em recebido (cx do produto) — não altera coluna Caixas. */
+  /** Nesta entr.: só mexe em recebido (cx) — não marca conferido nem altera Caixas. */
   const update = (idx: number, v: number) => {
     if (readOnly) return;
-    const newVal = Math.max(0, Math.round(v));
     const it = itens[idx];
-    if (!it) return;
+    if (!it || it.conferido || itemJaSolicitouVale(it.id)) return;
+    const newVal = Math.max(0, Math.round(v));
     setItens((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, recebido: newVal, conferido: true } : row)),
+      prev.map((row, i) => (i === idx ? { ...row, recebido: newVal } : row)),
     );
   };
 
-  const conferirIgualPedido = (idx: number) => {
+  const creditadosGalpaoRef = useRef<Set<string>>(new Set());
+
+  const creditarGalpaoDoItem = async (
+    it: LinhaItem,
+    entries: CaixaItemEntry[],
+    obs: string,
+  ) => {
+    if (!user?.id || !conferencia?.id || !fornecedorId) return;
+    if (creditadosGalpaoRef.current.has(it.id)) return;
+
+    const byTipo = caixasParaGalpaoItem(it, entries);
+    const cxNesta = nestaEntradaCaixas(it, entries);
+    const sigla =
+      entries.find((e) => e.sigla)?.sigla ??
+      Object.keys(byTipo)[0] ??
+      tipos[0]?.sigla ??
+      null;
+    const credito: Record<string, number> =
+      cxNesta > 0 && sigla ? { [sigla]: cxNesta } : byTipo;
+
+    let total = 0;
+    for (const [tipo, qty] of Object.entries(credito)) {
+      if (qty <= 0) continue;
+      await entradaGalpao.mutateAsync({
+        tipo_caixa: tipo,
+        quantidade: qty,
+        registrado_por: user.id,
+        fornecedor_id: fornecedorId,
+        conferencia_id: conferencia.id,
+        observacoes: obs,
+      });
+      total += qty;
+    }
+    if (total > 0) creditadosGalpaoRef.current.add(it.id);
+    return total;
+  };
+
+  /** Conferir: confirma qty (Nesta ou sugestão), credita galpão e trava o item. */
+  const conferirIgualPedido = async (idx: number) => {
     if (readOnly) return;
     const it = itens[idx];
-    if (!it) return;
+    if (!it || it.conferido) return;
+
     const saldoRow = (
       saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
     ).find((s) => s.item_pedido_id === it.itemPedidoId);
     const ja = Number(saldoRow?.recebido_acumulado ?? 0);
-    const entries = caixasItem[it.id] ?? [];
+    let entries = [...(caixasItem[it.id] ?? [])];
     const fator = fatorDoItem(entries);
     const unRestante = Math.max(0, it.pedido - ja);
-    const qtdCx =
+    const cxNecessarias =
       fator && fator > 0 ? Math.max(0, Math.ceil(unRestante / fator)) : unRestante;
-    setItens((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, recebido: qtdCx, conferido: true } : row)),
-    );
+    const cxAtual = nestaEntradaCaixas(it, entries);
+    const qtdCx = cxAtual > 0 ? cxAtual : cxNecessarias;
+
+    if (entries.length > 0) {
+      const realSum = entries.reduce((a, e) => a + Number(e.real ?? 0), 0);
+      if (realSum <= 0 && qtdCx > 0) {
+        entries = entries.map((e, i) =>
+          i === 0 ? { ...e, real: qtdCx } : e,
+        );
+        setCaixasItem((prev) => ({ ...prev, [it.id]: entries }));
+      }
+    }
+
+    const updated: LinhaItem = { ...it, recebido: qtdCx, conferido: true };
+    setItens((prev) => prev.map((row, i) => (i === idx ? updated : row)));
+
+    try {
+      const total = await creditarGalpaoDoItem(
+        updated,
+        entries,
+        `Conferir · ${it.produto}`,
+      );
+      toast.success(
+        total && total > 0
+          ? `Conferido · ${total} cx no galpão`
+          : "Item conferido",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao creditar galpão");
+    }
   };
 
   const toggleQualidade = (idx: number) => {
@@ -682,7 +752,6 @@ function ConferenciaItens({
     const preco = itLive.preco ?? fallbackPreco;
     const valorCalc = diferenca * preco;
     const estimado = !itLive.preco;
-    const byTipo = caixasParaGalpaoItem(itLive, entries);
 
     try {
       await createVale.mutateAsync({
@@ -701,41 +770,27 @@ function ConferenciaItens({
         fotos: valeFotos,
       });
 
-      // Credita no galpão as caixas informadas neste item (Nesta entr.; fallback coluna Caixas).
-      if (conferencia?.id) {
-        const cxNesta = nestaEntradaCaixas(itLive, entries);
-        const sigla =
-          entries.find((e) => e.sigla)?.sigla ??
-          Object.keys(byTipo)[0] ??
-          tipos[0]?.sigla ??
-          null;
-        const credito: Record<string, number> =
-          cxNesta > 0 && sigla
-            ? { [sigla]: cxNesta }
-            : byTipo;
-        for (const [tipo, qty] of Object.entries(credito)) {
-          if (qty <= 0) continue;
-          await entradaGalpao.mutateAsync({
-            tipo_caixa: tipo,
-            quantidade: qty,
-            registrado_por: user.id,
-            fornecedor_id: fornecedorId,
-            conferencia_id: conferencia.id,
-            observacoes: `Vale · ${itLive.produto}`,
-          });
-        }
+      const jaCreditou = creditadosGalpaoRef.current.has(valeItem.id);
+      if (!jaCreditou) {
+        await creditarGalpaoDoItem(itLive, entries, `Vale · ${itLive.produto}`);
       }
 
-      toast.success("Solicitação de vale enviada · caixas creditadas no galpão");
+      setItens((prev) =>
+        prev.map((row) =>
+          row.id === valeItem.id ? { ...row, conferido: true } : row,
+        ),
+      );
+
+      toast.success(
+        jaCreditou
+          ? "Solicitação de vale enviada ao ADM"
+          : "Solicitação de vale enviada · caixas creditadas no galpão",
+      );
       setValeOpen(false);
       setValeItem(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao solicitar vale");
     }
-  };
-
-  const itemJaSolicitouVale = (itemId: string) => {
-    return meusVales.some((v) => v.item_conferencia_id === itemId && v.status === "pendente");
   };
 
   const stats = useMemo(() => {
@@ -1097,6 +1152,7 @@ function ConferenciaItens({
           const gap = gapVsPedido(it, itemCaixas, jaRecebido);
           const pendente = !it.conferido;
           const saldoZero = saldo <= 0;
+          const qtyLocked = itemQtyLocked(it);
 
           const statusClass =
             saldoZero || (!pendente && gap === 0)
@@ -1155,7 +1211,7 @@ function ConferenciaItens({
                 </div>
               </div>
 
-              {!readOnly && !it.aVincular && !saldoZero && (
+              {!qtyLocked && !it.aVincular && !saldoZero && (
                 <div className="mb-3">
                   <div className="text-xs text-muted-foreground mb-1.5">Nesta entrega (cx)</div>
                   <NumberStepper
@@ -1170,12 +1226,15 @@ function ConferenciaItens({
                 </div>
               )}
 
-              {(readOnly || it.aVincular || saldoZero) && (
+              {(qtyLocked || it.aVincular || saldoZero) && (
                 <div className="mb-3 text-sm">
                   <span className="text-muted-foreground">Nesta entrega: </span>
                   <span className="font-semibold">
                     {it.aVincular ? "—" : nestaEntr} cx
                   </span>
+                  {it.conferido && (
+                    <span className="chip chip-ok ml-2 text-xs">Travado</span>
+                  )}
                 </div>
               )}
 
@@ -1187,7 +1246,7 @@ function ConferenciaItens({
                     onChange={(entries) => updateCaixasItem(it.id, entries)}
                     tipos={tipos}
                     sugestao={sugestaoItem}
-                    readOnly={readOnly || it.aVincular}
+                    readOnly={qtyLocked || it.aVincular}
                   />
                 </div>
               )}
@@ -1196,7 +1255,7 @@ function ConferenciaItens({
                 {!readOnly && pendente && !it.aVincular && !saldoZero && (
                   <button
                     type="button"
-                    onClick={() => conferirIgualPedido(idx)}
+                    onClick={() => void conferirIgualPedido(idx)}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
                   >
                     <Check size={16} /> Conferir
@@ -1229,7 +1288,7 @@ function ConferenciaItens({
                     </button>
                   </>
                 )}
-                {it.conferido && gap < 0 && !itemJaSolicitouVale(it.id) && (
+                {gap < 0 && !itemJaSolicitouVale(it.id) && !readOnly && nestaEntr > 0 && (
                   <button
                     type="button"
                     onClick={() => openValeDialog(it, jaRecebido, itemCaixas)}
@@ -1281,6 +1340,7 @@ function ConferenciaItens({
               const gap = gapVsPedido(it, itemCaixas, jaRecebido);
               const pendente = !it.conferido;
               const saldoZero = saldo <= 0;
+              const qtyLocked = itemQtyLocked(it);
               return (
                 <tr key={it.id} className="border-t border-border">
                   <td className="px-4 py-3 font-semibold text-navy">
@@ -1297,14 +1357,17 @@ function ConferenciaItens({
                       onChange={(entries) => updateCaixasItem(it.id, entries)}
                       tipos={tipos}
                       sugestao={sugestaoItem}
-                      readOnly={readOnly || it.aVincular}
+                      readOnly={qtyLocked || it.aVincular}
                     />
                   </td>
                   <td className="px-4 py-3 text-right text-muted-foreground">{jaRecebido}</td>
                   <td className="px-4 py-3">
-                    {readOnly || it.aVincular || saldoZero ? (
+                    {qtyLocked || it.aVincular || saldoZero ? (
                       <span className="font-semibold tabular-nums">
                         {it.aVincular ? "—" : nestaEntr}
+                        {it.conferido && (
+                          <span className="chip chip-ok ml-1 text-[10px]">Travado</span>
+                        )}
                       </span>
                     ) : (
                       <NumberStepper
@@ -1346,9 +1409,9 @@ function ConferenciaItens({
                       {!readOnly && pendente && !it.aVincular && !saldoZero && (
                         <button
                           type="button"
-                          onClick={() => conferirIgualPedido(idx)}
+                          onClick={() => void conferirIgualPedido(idx)}
                           className="inline-flex items-center gap-1 min-h-11 px-3 rounded-md bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
-                          title="Marcar conferido com a quantidade pedida"
+                          title="Conferir e creditar caixas no galpão"
                         >
                           <Check size={12} /> Conferir
                         </button>
@@ -1380,7 +1443,7 @@ function ConferenciaItens({
                           </button>
                         </>
                       )}
-                      {it.conferido && gap < 0 && !itemJaSolicitouVale(it.id) && (
+                      {gap < 0 && !itemJaSolicitouVale(it.id) && !readOnly && nestaEntr > 0 && (
                         <button
                           type="button"
                           onClick={() => openValeDialog(it, jaRecebido, itemCaixas)}
