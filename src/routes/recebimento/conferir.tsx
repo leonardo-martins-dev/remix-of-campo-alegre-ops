@@ -326,6 +326,7 @@ function ConferenciaItens({
   const { data: caixasItemExistentes } = useCaixasItemConferencia(conferencia?.id);
   const [caixasItem, setCaixasItem] = useState<Record<string, CaixaItemEntry[]>>({});
   const caixasInitRef = useRef<string | null>(null);
+  const itensHydratedRef = useRef<string | null>(null);
 
   const [confirmFinal, setConfirmFinal] = useState(false);
   const vaziasInitRef = useRef(false);
@@ -391,6 +392,16 @@ function ConferenciaItens({
   }, [pedidoId, user, pedidoStatus, conferencia?.id, conferenciaAberta, isLoading]);
 
   useEffect(() => {
+    if (!conferencia?.id) return;
+    if (caixasInitRef.current && caixasInitRef.current !== conferencia.id) {
+      caixasInitRef.current = null;
+      itensHydratedRef.current = null;
+      vaziasInitRef.current = false;
+      setCaixasItem({});
+    }
+  }, [conferencia?.id]);
+
+  useEffect(() => {
     if (!conferencia?.itens_conferencia) return;
     if (
       conferencia.status === "finalizada" &&
@@ -398,14 +409,29 @@ function ConferenciaItens({
     ) {
       return;
     }
+    // Só hidrata uma vez por conferência — refetch do React Query não pode
+    // apagar qty digitada e ainda não salva (resetava "Nesta entr." / status).
+    if (itensHydratedRef.current === conferencia.id) return;
+    itensHydratedRef.current = conferencia.id;
     setItens(conferencia.itens_conferencia.map(mapToLinha));
   }, [conferencia, pedidoStatus]);
 
   useEffect(() => {
     if (!conferencia?.itens_conferencia || !tipos.length) return;
-    const initKey = `${conferencia.id}:${sugestoesCaixas ? "sug" : "nosug"}:${caixasItemExistentes ? "db" : "nodb"}`;
-    if (caixasInitRef.current === initKey) return;
-    caixasInitRef.current = initKey;
+    // Uma hidratação por conferência, depois que sugestão e caixas do DB
+    // estabilizaram. Antes: initKey mudava nosug→sug / nodb→db e sobrescrevia
+    // a qty de caixas já ajustada pela "Nesta entr." (ex.: 1 → 50).
+    if (caixasInitRef.current === conferencia.id) return;
+    if (caixasItemExistentes === undefined) return;
+    if (
+      fornecedorIdPedido &&
+      itensParaSugestao.length > 0 &&
+      sugestoesCaixas === undefined
+    ) {
+      return;
+    }
+
+    caixasInitRef.current = conferencia.id;
 
     const newCaixas: Record<string, CaixaItemEntry[]> = {};
     for (const ic of conferencia.itens_conferencia) {
@@ -438,7 +464,14 @@ function ConferenciaItens({
       }
     }
     setCaixasItem(newCaixas);
-  }, [conferencia, tipos, sugestoesCaixas, caixasItemExistentes]);
+  }, [
+    conferencia,
+    tipos,
+    sugestoesCaixas,
+    caixasItemExistentes,
+    fornecedorIdPedido,
+    itensParaSugestao.length,
+  ]);
 
   useEffect(() => {
     if (vaziasInitRef.current) return;
@@ -493,7 +526,9 @@ function ConferenciaItens({
       const updated = entries.map((e) => {
         if (e.fator && e.fator > 0) {
           const calc = Math.ceil(qty / e.fator);
-          return { ...e, sugerida: calc, real: calc };
+          // Só espelha real←sugestão se o usuário ainda não customizou as caixas.
+          const real = e.real === e.sugerida ? calc : e.real;
+          return { ...e, sugerida: calc, real };
         }
         return e;
       });
