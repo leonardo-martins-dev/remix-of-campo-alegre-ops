@@ -1017,11 +1017,9 @@ function ConferenciaItens({
           const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
           const itemCaixas = caixasItem[it.id] ?? [];
           const nestaEntr = nestaEntradaCaixas(it, itemCaixas);
-          const chegou = chegouEfetivo(it, itemCaixas);
           const gap = gapVsPedido(it, itemCaixas, jaRecebido);
           const pendente = !it.conferido;
           const saldoZero = saldo <= 0;
-          const saldoRestante = Math.max(0, it.pedido - (jaRecebido + chegou));
 
           const statusClass =
             saldoZero || (!pendente && gap === 0)
@@ -1073,9 +1071,9 @@ function ConferenciaItens({
                   <div className="text-xs text-muted-foreground">Saldo</div>
                   <div
                     className="font-bold"
-                    style={{ color: saldoRestante > 0 ? "var(--warning)" : "var(--success)" }}
+                    style={{ color: saldo > 0 ? "var(--warning)" : "var(--success)" }}
                   >
-                    {saldoRestante}
+                    {saldo}
                   </div>
                 </div>
               </div>
@@ -1203,11 +1201,9 @@ function ConferenciaItens({
               const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
               const itemCaixas = caixasItem[it.id] ?? [];
               const nestaEntr = nestaEntradaCaixas(it, itemCaixas);
-              const chegou = chegouEfetivo(it, itemCaixas);
               const gap = gapVsPedido(it, itemCaixas, jaRecebido);
               const pendente = !it.conferido;
               const saldoZero = saldo <= 0;
-              const saldoRestante = Math.max(0, it.pedido - (jaRecebido + chegou));
               return (
                 <tr key={it.id} className="border-t border-border">
                   <td className="px-4 py-3 font-semibold text-navy">
@@ -1245,7 +1241,7 @@ function ConferenciaItens({
                       />
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">{saldoRestante}</td>
+                  <td className="px-4 py-3 text-right font-semibold">{saldo}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       {saldoZero && <span className="chip chip-ok">Completo</span>}
