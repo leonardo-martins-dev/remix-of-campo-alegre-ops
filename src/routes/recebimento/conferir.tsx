@@ -45,7 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { usePedidosDia, usePedido, useConfigValor, useSaldoItensPedido } from "@/hooks/use-pedidos";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
-import { useRegistrarMovimentoFornecedor } from "@/hooks/use-ledger";
+import { useRegistrarMovimentoFornecedor, useRegistrarEntradaGalpao } from "@/hooks/use-ledger";
 import {
   useConferencia,
   useStartConferencia,
@@ -361,6 +361,7 @@ function ConferenciaItens({
     },
   });
   const movForn = useRegistrarMovimentoFornecedor();
+  const entradaGalpao = useRegistrarEntradaGalpao();
   const [vazias, setVazias] = useState<Record<string, number>>({});
 
   const fornecedorIdPedido = pedido?.fornecedor_id ?? null;
@@ -699,12 +700,11 @@ function ConferenciaItens({
             : byTipo;
         for (const [tipo, qty] of Object.entries(credito)) {
           if (qty <= 0) continue;
-          await movForn.mutateAsync({
-            fornecedor_id: fornecedorId,
+          await entradaGalpao.mutateAsync({
             tipo_caixa: tipo,
             quantidade: qty,
-            natureza: "recebimento_cheias",
             registrado_por: user.id,
+            fornecedor_id: fornecedorId,
             conferencia_id: conferencia.id,
             observacoes: `Vale · ${itLive.produto}`,
           });
@@ -844,13 +844,13 @@ function ConferenciaItens({
           const realQty = totaisCaixasReal[t.sigla] ?? 0;
           const vaziasQty = Number(vazias[t.sigla] ?? 0);
           if (realQty > 0) {
-            await movForn.mutateAsync({
-              fornecedor_id: pedido.fornecedor_id,
+            await entradaGalpao.mutateAsync({
               tipo_caixa: t.sigla,
               quantidade: realQty,
-              natureza: "recebimento_cheias",
               registrado_por: user.id,
+              fornecedor_id: pedido.fornecedor_id,
               conferencia_id: conferencia.id,
+              observacoes: "Entrada conferência",
             });
           }
           if (vaziasQty > 0) {

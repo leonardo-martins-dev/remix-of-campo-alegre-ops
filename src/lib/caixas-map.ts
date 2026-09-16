@@ -92,7 +92,8 @@ export function taxaRetornoHonesta(enviadas: number, retornadas: number): {
   };
 }
 
-/** Capital na rua = clientes + fornecedores. Galpão nunca entra. */
+/** Estoque de caixas com valor: clientes + fornecedores + galpão.
+ * Saldo negativo (ex.: recebimento sem vazias prévias) é ignorado — não inverte o KPI. */
 export function capitalNaRua(
   saldos: SaldoPosicao[],
   custos: Record<string, number>
@@ -100,8 +101,15 @@ export function capitalNaRua(
   let qty = 0;
   let valor = 0;
   for (const s of saldos) {
-    if (s.posicao_tipo !== "cliente" && s.posicao_tipo !== "fornecedor") continue;
+    if (
+      s.posicao_tipo !== "cliente" &&
+      s.posicao_tipo !== "fornecedor" &&
+      s.posicao_tipo !== "galpao"
+    ) {
+      continue;
+    }
     const n = Number(s.saldo ?? 0);
+    if (n <= 0) continue;
     qty += n;
     valor += n * (custos[s.tipo_caixa] ?? 0);
   }

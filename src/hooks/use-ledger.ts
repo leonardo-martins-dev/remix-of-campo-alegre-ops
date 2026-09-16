@@ -109,6 +109,55 @@ export function useRegistrarMovimentoFornecedor() {
   });
 }
 
+/** Entrada de cheias no galpão (conferência/vale) — não debita fornecedor. */
+export function useRegistrarEntradaGalpao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      tipo_caixa: string;
+      quantidade: number;
+      registrado_por: string;
+      fornecedor_id?: string | null;
+      observacoes?: string;
+      conferencia_id?: string;
+    }) => {
+      let { data: galpao } = await supabase.from("posicoes_caixa").select("id").eq("tipo", "galpao").maybeSingle();
+      if (!galpao) {
+        const { data: createdGalpao, error: galpaoErr } = await supabase
+          .from("posicoes_caixa")
+          .insert({ tipo: "galpao" })
+          .select("id")
+          .single();
+        if (galpaoErr) throw galpaoErr;
+        galpao = createdGalpao;
+      }
+      if (!galpao) throw new Error("Posição do galpão não encontrada");
+
+      const { error } = await supabase.from("movimentacoes_caixa").insert({
+        fornecedor_id: payload.fornecedor_id ?? null,
+        tipo: "ajuste",
+        tipo_caixa: payload.tipo_caixa,
+        quantidade: payload.quantidade,
+        origem_posicao_id: null,
+        destino_posicao_id: galpao.id,
+        natureza: "ajuste",
+        documento_tipo: payload.conferencia_id ? "entrega" : "avulso",
+        documento_id: payload.conferencia_id ?? null,
+        registrado_por: payload.registrado_por,
+        observacoes: payload.observacoes ?? "Entrada conferência",
+        data_movimento: todayBRT(),
+        confirmacao_status: "nao_aplicavel",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["saldos-caixa"] });
+      qc.invalidateQueries({ queryKey: ["saldo-caixas"] });
+      qc.invalidateQueries({ queryKey: ["movimentacoes"] });
+    },
+  });
+}
+
 export function useSaldosAbertura() {
   const qc = useQueryClient();
   return useMutation({
