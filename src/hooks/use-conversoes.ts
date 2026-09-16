@@ -153,6 +153,7 @@ export function useSaveConversaoProduto() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["conversoes-produto"] });
       qc.invalidateQueries({ queryKey: ["conversao-historico"] });
+      qc.invalidateQueries({ queryKey: ["sugestao-caixas"] });
     },
   });
 }
@@ -198,6 +199,7 @@ export function useSaveConversaoFornecedor() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["conversoes-fornecedor"] });
       qc.invalidateQueries({ queryKey: ["conversao-historico"] });
+      qc.invalidateQueries({ queryKey: ["sugestao-caixas"] });
     },
   });
 }
@@ -215,6 +217,7 @@ export function useToggleConversaoProduto() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["conversoes-produto"] });
       qc.invalidateQueries({ queryKey: ["conversao-historico"] });
+      qc.invalidateQueries({ queryKey: ["sugestao-caixas"] });
     },
   });
 }
@@ -232,6 +235,7 @@ export function useToggleConversaoFornecedor() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["conversoes-fornecedor"] });
       qc.invalidateQueries({ queryKey: ["conversao-historico"] });
+      qc.invalidateQueries({ queryKey: ["sugestao-caixas"] });
     },
   });
 }

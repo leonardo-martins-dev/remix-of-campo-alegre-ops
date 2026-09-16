@@ -875,6 +875,25 @@ function ConferenciaItens({
         </div>
       )}
 
+      {!readOnly && sugestoesCaixas && (() => {
+        const semFator = [...sugestoesCaixas.values()].filter((s) => s.sem_conversao).length;
+        if (!semFator) return null;
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-950">
+            <strong>{semFator} produto(s) sem fator un/cx</strong>
+            {" — "}caixas não são sugeridas automaticamente. Cadastre o padrão em{" "}
+            <Link to="/gestao/produtos" className="underline font-medium">
+              Produtos
+            </Link>{" "}
+            ou em{" "}
+            <Link to="/gestao/conversao" className="underline font-medium">
+              Unidades por caixa
+            </Link>
+            .
+          </div>
+        );
+      })()}
+
       {!readOnly && (
         <div className="flex flex-wrap gap-2 mb-4">
           {pendentes.map((p) => (

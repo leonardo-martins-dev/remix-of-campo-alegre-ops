@@ -24,6 +24,8 @@ import {
 import { Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/page-header";
 import { useProdutos, useFamilias, useCadastroMutations } from "@/hooks/use-cadastros";
+import { useConversoesProduto, useSaveConversaoProduto } from "@/hooks/use-conversoes";
+import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { normalizeKey } from "@/lib/normalize";
 
 type ProdutoRow = {
@@ -75,7 +77,7 @@ export function ProdutosPage() {
 
   return (
     <div>
-      <PageHeader title="Produtos" subtitle="Catálogo de produtos, famílias e códigos Wise" />
+      <PageHeader title="Produtos" subtitle="Catálogo Wise — fatores un/cx no próprio produto (mesma fonte de Unidades por caixa)" />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="produtos">Produtos</TabsTrigger>
@@ -95,6 +97,7 @@ export function ProdutosPage() {
 function ProdutosTab() {
   const { data = [], isLoading } = useProdutos();
   const { data: familias = [] } = useFamilias();
+  const { data: conversoes = [] } = useConversoesProduto();
   const { insert, update, remove } = useCadastroMutations("produtos", ["cadastros", "produtos"]);
 
   const [busca, setBusca] = useState("");
@@ -106,6 +109,16 @@ function ProdutosTab() {
   const [pendingDelete, setPendingDelete] = useState<ProdutoRow | null>(null);
 
   const rows = data as ProdutoRow[];
+
+  const fatoresPorProduto = useMemo(() => {
+    const map = new Map<string, { sigla: string; fator: number }[]>();
+    for (const c of conversoes) {
+      const list = map.get(c.produto_id) ?? [];
+      list.push({ sigla: c.tipo_caixa_sigla, fator: c.fator });
+      map.set(c.produto_id, list);
+    }
+    return map;
+  }, [conversoes]);
 
   const filtered = useMemo(() => {
     const q = normalizeKey(busca);
@@ -256,6 +269,18 @@ function ProdutosTab() {
                   {row.unidade && row.unidade !== "un" ? (
                     <span className="text-muted-foreground"> · {row.unidade}</span>
                   ) : null}
+                  {(() => {
+                    const fx = fatoresPorProduto.get(row.id);
+                    if (fx?.length) {
+                      return (
+                        <span className="text-muted-foreground">
+                          {" "}
+                          · {fx.map((f) => `${f.fator}/${f.sigla}`).join(" · ")}
+                        </span>
+                      );
+                    }
+                    return <span className="text-amber-700/80"> · sem fator un/cx</span>;
+                  })()}
                   {row.ativo === false && (
                     <span className="text-muted-foreground"> · inativo</span>
                   )}
@@ -355,17 +380,17 @@ function ProdutosTab() {
                 ))}
               </select>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Fatores un/cx (por tipo de caixa e fornecedor) ficam em{" "}
-              <Link
-                to="/gestao/conversao"
-                className="text-primary underline-offset-2 hover:underline"
-                onClick={() => setSheetOpen(false)}
-              >
-                Unidades por caixa
-              </Link>
-              .
-            </p>
+            {editId ? (
+              <ProdutoFatoresEditor produtoId={editId} />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Depois de salvar o produto, cadastre os fatores un/cx aqui ou em{" "}
+                <Link to="/gestao/conversao" className="text-primary underline-offset-2 hover:underline">
+                  Unidades por caixa
+                </Link>
+                .
+              </p>
+            )}
           </div>
           <SheetFooter>
             <Button variant="outline" onClick={() => setSheetOpen(false)}>
@@ -404,6 +429,129 @@ function ProdutosTab() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+function ProdutoFatoresEditor({ produtoId }: { produtoId: string }) {
+  const { data: conversoes = [] } = useConversoesProduto();
+  const { data: tipos = [] } = useTiposCaixa();
+  const save = useSaveConversaoProduto();
+  const [tipoId, setTipoId] = useState("");
+  const [fator, setFator] = useState("");
+
+  const fatores = useMemo(
+    () => conversoes.filter((c) => c.produto_id === produtoId),
+    [conversoes, produtoId]
+  );
+
+  const usados = new Set(fatores.map((f) => f.tipo_caixa_id));
+  const tiposDisponiveis = tipos.filter((t) => !usados.has(t.id));
+
+  const add = () => {
+    const n = Number(fator);
+    if (!tipoId || !n || n <= 0) {
+      toast.error("Informe tipo de caixa e fator > 0");
+      return;
+    }
+    save.mutate(
+      { produto_id: produtoId, tipo_caixa_id: tipoId, fator: n },
+      {
+        onSuccess: () => {
+          toast.success("Fator salvo — usado no Conferir e na Expedição");
+          setTipoId("");
+          setFator("");
+        },
+        onError: (e) => toast.error(e.message),
+      }
+    );
+  };
+
+  const updateFator = (id: string, value: string) => {
+    const n = Number(value);
+    if (!n || n <= 0) return;
+    save.mutate(
+      { id, produto_id: produtoId, tipo_caixa_id: "", fator: n },
+      {
+        onSuccess: () => toast.success("Fator atualizado"),
+        onError: (e) => toast.error(e.message),
+      }
+    );
+  };
+
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <Label>Unidades por caixa (padrão do produto)</Label>
+        <Link
+          to="/gestao/conversao"
+          className="text-xs text-primary underline-offset-2 hover:underline"
+        >
+          Por fornecedor →
+        </Link>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Mesma fonte de <span className="font-medium">Cadastros → Unidades por caixa</span>. Sem fator, o
+        Conferir não sugere caixas automaticamente.
+      </p>
+      {fatores.length === 0 ? (
+        <p className="text-sm text-amber-800 bg-amber-50 rounded px-2 py-1.5">
+          Sem fator cadastrado — por isso pedidos deste produto pedem &quot;Adicionar caixas&quot; na mão.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {fatores.map((f) => (
+            <li key={f.id} className="flex items-center gap-2 text-sm">
+              <span className="w-24 shrink-0 font-medium">
+                {f.tipo_caixa_nome} ({f.tipo_caixa_sigla})
+              </span>
+              <Input
+                type="number"
+                min={1}
+                className="h-8 w-24"
+                defaultValue={f.fator}
+                onBlur={(e) => {
+                  if (Number(e.target.value) !== f.fator) updateFator(f.id, e.target.value);
+                }}
+              />
+              <span className="text-muted-foreground text-xs">un/cx</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {tiposDisponiveis.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2 pt-1">
+          <div className="space-y-1">
+            <Label className="text-xs">Tipo</Label>
+            <select
+              className="h-8 rounded-md border border-border px-2 text-sm bg-background"
+              value={tipoId}
+              onChange={(e) => setTipoId(e.target.value)}
+            >
+              <option value="">Selecionar</option>
+              {tiposDisponiveis.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome} ({t.sigla})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Fator</Label>
+            <Input
+              type="number"
+              min={1}
+              className="h-8 w-24"
+              value={fator}
+              onChange={(e) => setFator(e.target.value)}
+              placeholder="ex. 20"
+            />
+          </div>
+          <Button type="button" size="sm" className="h-8" disabled={save.isPending} onClick={add}>
+            Adicionar
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -77,7 +77,7 @@ export function CaixasItemEditor({
   );
 
   if (entries.length === 0 && sugestao?.sem_conversao && readOnly) {
-    return <span className="text-xs text-muted-foreground italic">sem conversão</span>;
+    return <span className="text-xs text-muted-foreground italic">sem fator</span>;
   }
 
   if (entries.length === 0 && readOnly) {
@@ -86,29 +86,34 @@ export function CaixasItemEditor({
 
   if (entries.length === 0) {
     return (
-      <Popover open={addOpen} onOpenChange={setAddOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-          >
-            <Plus size={12} /> Adicionar caixas
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-48 p-2">
-          <div className="text-xs font-semibold mb-2">Tipo de caixa</div>
-          {tipos.map((t) => (
+      <div className="flex flex-col gap-0.5 items-start">
+        {sugestao?.sem_conversao ? (
+          <span className="text-[10px] text-amber-700 leading-tight">Sem fator un/cx</span>
+        ) : null}
+        <Popover open={addOpen} onOpenChange={setAddOpen}>
+          <PopoverTrigger asChild>
             <button
-              key={t.id}
               type="button"
-              onClick={() => addTipo(t.id)}
-              className="w-full text-left px-2 py-1 text-sm hover:bg-secondary rounded"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
-              {t.nome} ({t.sigla})
+              <Plus size={12} /> Adicionar caixas
             </button>
-          ))}
-        </PopoverContent>
-      </Popover>
+          </PopoverTrigger>
+          <PopoverContent className="w-48 p-2">
+            <div className="text-xs font-semibold mb-2">Tipo de caixa</div>
+            {tipos.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => addTipo(t.id)}
+                className="w-full text-left px-2 py-1 text-sm hover:bg-secondary rounded"
+              >
+                {t.nome} ({t.sigla})
+              </button>
+            ))}
+          </PopoverContent>
+        </Popover>
+      </div>
     );
   }
 

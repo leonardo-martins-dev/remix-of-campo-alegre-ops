@@ -74,13 +74,13 @@ function CadastrosHub() {
     },
     {
       title: "Produtos",
-      description: "Catálogo, famílias e códigos Wise",
+      description: "Catálogo Wise + fatores un/cx padrão (vinculado a Unidades por caixa)",
       icon: Package,
       href: "/gestao/produtos",
     },
     {
       title: "Unidades por caixa",
-      description: "Fatores un/cx por produto, tipo de caixa e fornecedor",
+      description: "Fatores un/cx por produto, tipo de caixa e fornecedor — Conferir e Expedição",
       icon: ArrowLeftRight,
       href: "/gestao/conversao",
     },
