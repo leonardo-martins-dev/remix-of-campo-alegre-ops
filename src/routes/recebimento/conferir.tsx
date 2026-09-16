@@ -224,19 +224,6 @@ function mapToLinha(ic: {
   };
 }
 
-/** Unidades desta entrega a partir das caixas informadas × fator un/cx. */
-function unidadesDasCaixas(entries: CaixaItemEntry[]): number | null {
-  let total = 0;
-  let comFator = false;
-  for (const e of entries) {
-    if (e.fator != null && e.fator > 0) {
-      comFator = true;
-      total += Number(e.real) * Number(e.fator);
-    }
-  }
-  return comFator ? total : null;
-}
-
 /** Fator un/cx do item (vindo do cadastro/sugestão nas caixas). */
 function fatorDoItem(entries: CaixaItemEntry[]): number | null {
   const e = entries.find((x) => x.fator != null && x.fator > 0);
