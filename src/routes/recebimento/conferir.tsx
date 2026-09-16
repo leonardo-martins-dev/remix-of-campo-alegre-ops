@@ -273,13 +273,26 @@ function caixasParaGalpaoItem(
   return out;
 }
 
-/** Diferença vs pedido (un): (já receb. + nestaEntr×fator) − pedido. */
+/** Diferença vs pedido (un): (já + nestaEntr×fator) − pedido.
+ * Sobra só de arredondamento de caixa (ceil) não conta: se Nesta entr.
+ * = caixas necessárias do saldo restante, Status = OK (ex.: 500 un ÷ 80 = 7 cx).
+ */
 function gapVsPedido(
   it: LinhaItem,
   entries: CaixaItemEntry[],
   jaRecebido: number,
 ): number {
-  return jaRecebido + chegouEfetivo(it, entries) - it.pedido;
+  const fator = fatorDoItem(entries);
+  const cx = nestaEntradaCaixas(it, entries);
+  const gap = jaRecebido + chegouEfetivo(it, entries) - it.pedido;
+  if (gap > 0 && fator != null && fator > 0 && cx > 0) {
+    const restante = Math.max(0, it.pedido - jaRecebido);
+    const cxNecessarias = Math.ceil(restante / fator);
+    if (cx === cxNecessarias) return 0;
+    const sug = entries.reduce((a, e) => a + Number(e.sugerida ?? 0), 0);
+    if (sug > 0 && cx === sug) return 0;
+  }
+  return gap;
 }
 
 function buildSavePayload(
@@ -290,11 +303,13 @@ function buildSavePayload(
     preco?: number | null;
     fallback?: number;
     jaRecebido?: number;
+    /** Gap já calculado (com regra de arredondamento de caixa). */
+    gap?: number;
   },
 ) {
   const ja = Number(opts?.jaRecebido ?? 0);
   const totalApos = ja + it.recebido;
-  const gap = totalApos - it.pedido;
+  const gap = opts?.gap ?? totalApos - it.pedido;
   let divergencia: string | null = null;
   if (it.conferido) {
     if (it.qualidade?.ativo) divergencia = "qualidade";
@@ -775,7 +790,10 @@ function ConferenciaItens({
           const saldoRow = (
             saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
           ).find((s) => s.item_pedido_id === it.itemPedidoId);
-          const chegou = chegouEfetivo(it, caixasItem[it.id] ?? []);
+          const entries = caixasItem[it.id] ?? [];
+          const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
+          const chegou = chegouEfetivo(it, entries);
+          const gap = gapVsPedido(it, entries, jaRecebido);
           return buildSavePayload(
             { ...it, recebido: chegou },
             {
@@ -783,7 +801,8 @@ function ConferenciaItens({
               toleranciaMin,
               preco: it.preco,
               fallback: fallbackPreco,
-              jaRecebido: Number(saldoRow?.recebido_acumulado ?? 0),
+              jaRecebido,
+              gap,
             },
           );
         }),
