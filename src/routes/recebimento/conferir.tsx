@@ -237,38 +237,37 @@ function unidadesDasCaixas(entries: CaixaItemEntry[]): number | null {
   return comFator ? total : null;
 }
 
-/** Total de caixas desta entrega (campo "Nesta entr."). */
-function nestaEntradaCaixas(it: LinhaItem, entries: CaixaItemEntry[]): number {
-  if (entries.length > 0) {
-    return entries.reduce((a, e) => a + Number(e.real ?? 0), 0);
-  }
+/** Fator un/cx do item (vindo do cadastro/sugestão nas caixas). */
+function fatorDoItem(entries: CaixaItemEntry[]): number | null {
+  const e = entries.find((x) => x.fator != null && x.fator > 0);
+  return e?.fator ?? null;
+}
+
+/**
+ * Nesta entr. = caixas do produto (campo próprio, independente da coluna Caixas).
+ */
+function nestaEntradaCaixas(it: LinhaItem, _entries?: CaixaItemEntry[]): number {
   return Number(it.recebido ?? 0);
 }
 
 /**
- * O que de fato chegou em unidades (Status / Vale): caixas × fator.
- * Sem fator, usa a qty digitada.
+ * Chegou em unidades para Status/Vale: Nesta entr. (cx) × fator un/cx.
+ * O fator é o mesmo da coluna Caixas, mas a qty é só a de Nesta entr.
  */
 function chegouEfetivo(it: LinhaItem, entries: CaixaItemEntry[]): number {
-  return unidadesDasCaixas(entries) ?? it.recebido;
+  const fator = fatorDoItem(entries);
+  const cx = Number(it.recebido ?? 0);
+  if (fator != null && fator > 0) return cx * fator;
+  return cx;
 }
 
-/** Diferença vs pedido (un): (já receb. + caixas×fator) − pedido. Negativo = faltou (vale). */
+/** Diferença vs pedido (un): (já receb. + nestaEntr×fator) − pedido. */
 function gapVsPedido(
   it: LinhaItem,
   entries: CaixaItemEntry[],
   jaRecebido: number,
 ): number {
   return jaRecebido + chegouEfetivo(it, entries) - it.pedido;
-}
-
-/** Aplica qty de caixas em `real`, sem alterar `sugerida`. */
-function comRealNasCaixas(entries: CaixaItemEntry[], qtdCaixas: number): CaixaItemEntry[] {
-  if (entries.length === 0) return entries;
-  if (entries.length === 1) {
-    return [{ ...entries[0], real: qtdCaixas }];
-  }
-  return entries.map((e, i) => (i === 0 ? { ...e, real: qtdCaixas } : { ...e, real: 0 }));
 }
 
 function buildSavePayload(
@@ -561,12 +560,9 @@ function ConferenciaItens({
     }
   };
 
+  /** Coluna Caixas: só mexe em caixas — não altera Nesta entr. */
   const applyCaixasAndSyncQty = useCallback((itemId: string, entries: CaixaItemEntry[]) => {
     setCaixasItem((prev) => ({ ...prev, [itemId]: entries }));
-    const qtdCx = entries.reduce((a, e) => a + Number(e.real ?? 0), 0);
-    setItens((prev) =>
-      prev.map((it) => (it.id === itemId ? { ...it, recebido: qtdCx, conferido: true } : it)),
-    );
   }, []);
 
   const updateCaixasItem = useCallback(
@@ -576,26 +572,15 @@ function ConferenciaItens({
     [applyCaixasAndSyncQty],
   );
 
-  /** "Nesta entr." = caixas. Atualiza só `real`; `sugerida` permanece. */
+  /** Nesta entr.: só mexe em recebido (cx do produto) — não altera coluna Caixas. */
   const update = (idx: number, v: number) => {
     if (readOnly) return;
     const newVal = Math.max(0, Math.round(v));
     const it = itens[idx];
     if (!it) return;
-    const entries = caixasItem[it.id] ?? [];
-    // Autofocus/blur com 0 ainda não tocado não pode zerar caixas sugeridas.
-    if (newVal === 0 && !it.conferido && nestaEntradaCaixas(it, entries) === 0) {
-      return;
-    }
     setItens((prev) =>
       prev.map((row, i) => (i === idx ? { ...row, recebido: newVal, conferido: true } : row)),
     );
-    if (entries.length > 0) {
-      setCaixasItem((prev) => ({
-        ...prev,
-        [it.id]: comRealNasCaixas(prev[it.id] ?? entries, newVal),
-      }));
-    }
   };
 
   const conferirIgualPedido = (idx: number) => {
@@ -607,19 +592,13 @@ function ConferenciaItens({
     ).find((s) => s.item_pedido_id === it.itemPedidoId);
     const ja = Number(saldoRow?.recebido_acumulado ?? 0);
     const entries = caixasItem[it.id] ?? [];
-    const fator = entries.find((e) => e.fator && e.fator > 0)?.fator ?? null;
+    const fator = fatorDoItem(entries);
     const unRestante = Math.max(0, it.pedido - ja);
     const qtdCx =
       fator && fator > 0 ? Math.max(0, Math.ceil(unRestante / fator)) : unRestante;
     setItens((prev) =>
       prev.map((row, i) => (i === idx ? { ...row, recebido: qtdCx, conferido: true } : row)),
     );
-    if (entries.length > 0) {
-      setCaixasItem((prev) => ({
-        ...prev,
-        [it.id]: comRealNasCaixas(prev[it.id] ?? entries, qtdCx),
-      }));
-    }
   };
 
   const toggleQualidade = (idx: number) => {
