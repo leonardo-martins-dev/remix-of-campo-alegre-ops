@@ -225,6 +225,30 @@ function mapToLinha(ic: {
   };
 }
 
+/** Unidades desta entrega a partir das caixas informadas × fator un/cx. */
+function unidadesDasCaixas(entries: CaixaItemEntry[]): number | null {
+  let total = 0;
+  let comFator = false;
+  for (const e of entries) {
+    if (e.fator != null && e.fator > 0) {
+      comFator = true;
+      total += Number(e.real) * Number(e.fator);
+    }
+  }
+  return comFator ? total : null;
+}
+
+/**
+ * Com fator un/cx, o saldo/status usam caixas×fator depois que o item
+ * foi tocado (conferido ou qty > 0). Antes disso, a sugestão pré-preenchida
+ * de caixas não consome o saldo sozinha.
+ */
+function nestaEntradaEfetiva(it: LinhaItem, entries: CaixaItemEntry[]): number {
+  const fromCaixas = unidadesDasCaixas(entries);
+  if (fromCaixas != null && (it.conferido || it.recebido > 0)) return fromCaixas;
+  return it.recebido;
+}
+
 function buildSavePayload(
   it: LinhaItem,
   opts?: {
@@ -515,35 +539,64 @@ function ConferenciaItens({
     }
   };
 
-  const updateCaixasItem = useCallback((itemId: string, entries: CaixaItemEntry[]) => {
+  const applyCaixasAndSyncQty = useCallback((itemId: string, entries: CaixaItemEntry[]) => {
     setCaixasItem((prev) => ({ ...prev, [itemId]: entries }));
+    const un = unidadesDasCaixas(entries);
+    if (un == null) return;
+    setItens((prev) =>
+      prev.map((it) => (it.id === itemId ? { ...it, recebido: un, conferido: true } : it)),
+    );
   }, []);
 
-  const autoUpdateCaixas = useCallback((itemId: string, qty: number) => {
-    setCaixasItem((prev) => {
-      const entries = prev[itemId];
-      if (!entries || entries.length === 0) return prev;
-      const updated = entries.map((e) => {
-        if (e.fator && e.fator > 0) {
-          const calc = Math.ceil(qty / e.fator);
-          // Só espelha real←sugestão se o usuário ainda não customizou as caixas.
-          const real = e.real === e.sugerida ? calc : e.real;
-          return { ...e, sugerida: calc, real };
+  const updateCaixasItem = useCallback(
+    (itemId: string, entries: CaixaItemEntry[]) => {
+      applyCaixasAndSyncQty(itemId, entries);
+    },
+    [applyCaixasAndSyncQty],
+  );
+
+  const autoUpdateCaixas = useCallback(
+    (itemId: string, qty: number) => {
+      setCaixasItem((prev) => {
+        const entries = prev[itemId];
+        if (!entries || entries.length === 0) return prev;
+        const updated = entries.map((e) => {
+          if (e.fator && e.fator > 0) {
+            const calc = Math.ceil(qty / e.fator);
+            // Só espelha real←sugestão se o usuário ainda não customizou as caixas.
+            const real = e.real === e.sugerida ? calc : e.real;
+            return { ...e, sugerida: calc, real };
+          }
+          return e;
+        });
+        const un = unidadesDasCaixas(updated);
+        if (un != null) {
+          setItens((itensPrev) =>
+            itensPrev.map((it) =>
+              it.id === itemId ? { ...it, recebido: un, conferido: true } : it,
+            ),
+          );
         }
-        return e;
+        return { ...prev, [itemId]: updated };
       });
-      return { ...prev, [itemId]: updated };
-    });
-  }, []);
+    },
+    [],
+  );
 
   const update = (idx: number, v: number) => {
     if (readOnly) return;
     const newVal = Math.max(0, v);
     const it = itens[idx];
+    if (!it) return;
+    const entries = caixasItem[it.id] ?? [];
+    if (unidadesDasCaixas(entries) != null) {
+      // Com fator: caixas × fator é a fonte do saldo — ajusta caixas e sincroniza qty.
+      autoUpdateCaixas(it.id, newVal);
+      return;
+    }
     setItens((prev) =>
-      prev.map((it, i) => (i === idx ? { ...it, recebido: newVal, conferido: true } : it)),
+      prev.map((row, i) => (i === idx ? { ...row, recebido: newVal, conferido: true } : row)),
     );
-    if (it) autoUpdateCaixas(it.id, newVal);
   };
 
   const conferirIgualPedido = (idx: number) => {
@@ -555,10 +608,14 @@ function ConferenciaItens({
     ).find((s) => s.item_pedido_id === it.itemPedidoId);
     const ja = Number(saldoRow?.recebido_acumulado ?? 0);
     const newVal = Math.max(0, it.pedido - ja);
+    const entries = caixasItem[it.id] ?? [];
+    if (unidadesDasCaixas(entries) != null) {
+      autoUpdateCaixas(it.id, newVal);
+      return;
+    }
     setItens((prev) =>
-      prev.map((it, i) => (i === idx ? { ...it, recebido: newVal, conferido: true } : it)),
+      prev.map((row, i) => (i === idx ? { ...row, recebido: newVal, conferido: true } : row)),
     );
-    autoUpdateCaixas(it.id, newVal);
   };
 
   const toggleQualidade = (idx: number) => {
@@ -655,7 +712,8 @@ function ConferenciaItens({
         saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
       ).find((s) => s.item_pedido_id === it.itemPedidoId);
       const ja = Number(saldoRow?.recebido_acumulado ?? 0);
-      const gap = ja + it.recebido - it.pedido;
+      const nesta = nestaEntradaEfetiva(it, caixasItem[it.id] ?? []);
+      const gap = ja + nesta - it.pedido;
       const pct = it.toleranciaPct ?? toleranciaPct;
       const limite = Math.max((pct / 100) * it.pedido, toleranciaMin);
       const acimaTol = gap > 0 && Math.abs(gap) > limite;
@@ -672,7 +730,7 @@ function ConferenciaItens({
       faltantes,
       progresso: total ? Math.round((conferidos / total) * 100) : 0,
     };
-  }, [itens, saldosItem, toleranciaPct, toleranciaMin]);
+  }, [itens, caixasItem, saldosItem, toleranciaPct, toleranciaMin]);
 
   const salvar = async (status: "parcial" | "finalizada") => {
     if (readOnly) return;
@@ -689,13 +747,17 @@ function ConferenciaItens({
           const saldoRow = (
             saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
           ).find((s) => s.item_pedido_id === it.itemPedidoId);
-          return buildSavePayload(it, {
-            toleranciaPct: it.toleranciaPct ?? toleranciaPct,
-            toleranciaMin,
-            preco: it.preco,
-            fallback: fallbackPreco,
-            jaRecebido: Number(saldoRow?.recebido_acumulado ?? 0),
-          });
+          const nesta = nestaEntradaEfetiva(it, caixasItem[it.id] ?? []);
+          return buildSavePayload(
+            { ...it, recebido: nesta },
+            {
+              toleranciaPct: it.toleranciaPct ?? toleranciaPct,
+              toleranciaMin,
+              preco: it.preco,
+              fallback: fallbackPreco,
+              jaRecebido: Number(saldoRow?.recebido_acumulado ?? 0),
+            },
+          );
         }),
       });
 
@@ -1004,19 +1066,23 @@ function ConferenciaItens({
           ).find((s) => s.item_pedido_id === it.itemPedidoId);
           const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
           const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
-          const pct = it.toleranciaPct ?? toleranciaPct;
-          const limite = Math.max((pct / 100) * it.pedido, toleranciaMin);
-          const totalApos = jaRecebido + it.recebido;
+          const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
+          const itemCaixas = caixasItem[it.id] ?? [];
+          const nestaEntr = nestaEntradaEfetiva(it, itemCaixas);
+          const totalApos = jaRecebido + nestaEntr;
           const gap = totalApos - it.pedido;
           const pendente = !it.conferido;
           const saldoZero = saldo <= 0;
-          const dentroTol = Math.abs(Math.max(0, gap)) <= limite;
-          const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
-          const itemCaixas = caixasItem[it.id] ?? [];
-          
-          const statusClass = saldoZero || (!pendente && gap === 0) ? "item-status-ok" : 
-            it.qualidade || (!pendente && gap > 0 && !dentroTol) ? "item-status-danger" :
-            (!pendente && gap < 0) || pendente ? "item-status-warn" : "";
+          const saldoRestante = Math.max(0, it.pedido - totalApos);
+
+          const statusClass =
+            saldoZero || (!pendente && gap === 0)
+              ? "item-status-ok"
+              : it.qualidade || (!pendente && gap > 0)
+                ? "item-status-danger"
+                : (!pendente && gap < 0) || pendente
+                  ? "item-status-warn"
+                  : "";
 
           return (
             <div key={it.id} className={`mobile-item-card ${statusClass}`}>
@@ -1029,13 +1095,23 @@ function ConferenciaItens({
                   {saldoZero && <span className="chip chip-ok">Completo</span>}
                   {!saldoZero && pendente && <span className="chip chip-muted">Pendente</span>}
                   {!saldoZero && !pendente && gap === 0 && <span className="chip chip-ok">OK</span>}
-                  {!saldoZero && !pendente && gap < 0 && <span className="chip chip-warn">Saldo {Math.abs(gap)}</span>}
-                  {!saldoZero && !pendente && gap > 0 && dentroTol && <span className="chip chip-info">+{gap}</span>}
-                  {!saldoZero && !pendente && gap > 0 && !dentroTol && <span className="chip chip-danger">+{gap}</span>}
-                  {it.qualidade && <span className="chip" style={{ background: "rgba(240,169,43,0.15)", color: "var(--warning)" }}>Qual.</span>}
+                  {!saldoZero && !pendente && gap < 0 && (
+                    <span className="chip chip-warn">Saldo {Math.abs(gap)}</span>
+                  )}
+                  {!saldoZero && !pendente && gap > 0 && (
+                    <span className="chip chip-danger">Sobra {gap}</span>
+                  )}
+                  {it.qualidade && (
+                    <span
+                      className="chip"
+                      style={{ background: "rgba(240,169,43,0.15)", color: "var(--warning)" }}
+                    >
+                      Qual.
+                    </span>
+                  )}
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-3 gap-2 text-center mb-3">
                 <div className="p-2 rounded-lg bg-secondary/50">
                   <div className="text-xs text-muted-foreground">Pedido</div>
@@ -1047,7 +1123,12 @@ function ConferenciaItens({
                 </div>
                 <div className="p-2 rounded-lg bg-secondary/50">
                   <div className="text-xs text-muted-foreground">Saldo</div>
-                  <div className="font-bold" style={{ color: saldo > 0 ? "var(--warning)" : "var(--success)" }}>{Math.max(0, it.pedido - totalApos)}</div>
+                  <div
+                    className="font-bold"
+                    style={{ color: saldoRestante > 0 ? "var(--warning)" : "var(--success)" }}
+                  >
+                    {saldoRestante}
+                  </div>
                 </div>
               </div>
 
@@ -1055,10 +1136,12 @@ function ConferenciaItens({
                 <div className="mb-3">
                   <div className="text-xs text-muted-foreground mb-1.5">Nesta entrega ({it.unid})</div>
                   <NumberStepper
-                    value={it.recebido}
+                    value={nestaEntr}
                     onChange={(v) => update(idx, v)}
                     inputMode="numeric"
-                    inputRef={(el) => { stepperRefs.current[idx] = el; }}
+                    inputRef={(el) => {
+                      stepperRefs.current[idx] = el;
+                    }}
                     onKeyDown={handleStepperKeyDown(idx)}
                   />
                 </div>
@@ -1067,7 +1150,9 @@ function ConferenciaItens({
               {(readOnly || it.aVincular || saldoZero) && (
                 <div className="mb-3 text-sm">
                   <span className="text-muted-foreground">Nesta entrega: </span>
-                  <span className="font-semibold">{it.aVincular ? "—" : it.recebido} {it.unid}</span>
+                  <span className="font-semibold">
+                    {it.aVincular ? "—" : nestaEntr} {it.unid}
+                  </span>
                 </div>
               )}
 
@@ -1152,7 +1237,6 @@ function ConferenciaItens({
                 <th className="text-right px-4 py-3 whitespace-nowrap">Já receb.</th>
                 <th className="text-center px-4 py-3 whitespace-nowrap">Nesta entr.</th>
                 <th className="text-right px-4 py-3 whitespace-nowrap">Saldo</th>
-                <th className="text-right px-4 py-3 whitespace-nowrap">Tol.</th>
                 <th className="text-left px-4 py-3 whitespace-nowrap">Status</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -1168,15 +1252,14 @@ function ConferenciaItens({
               ).find((s) => s.item_pedido_id === it.itemPedidoId);
               const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
               const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
-              const pct = it.toleranciaPct ?? toleranciaPct;
-              const limite = Math.max((pct / 100) * it.pedido, toleranciaMin);
-              const totalApos = jaRecebido + it.recebido;
+              const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
+              const itemCaixas = caixasItem[it.id] ?? [];
+              const nestaEntr = nestaEntradaEfetiva(it, itemCaixas);
+              const totalApos = jaRecebido + nestaEntr;
               const gap = totalApos - it.pedido;
               const pendente = !it.conferido;
               const saldoZero = saldo <= 0;
-              const dentroTol = Math.abs(Math.max(0, gap)) <= limite;
-              const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
-              const itemCaixas = caixasItem[it.id] ?? [];
+              const saldoRestante = Math.max(0, it.pedido - totalApos);
               return (
                 <tr key={it.id} className="border-t border-border">
                   <td className="px-4 py-3 font-semibold text-navy">
@@ -1200,24 +1283,21 @@ function ConferenciaItens({
                   <td className="px-4 py-3">
                     {readOnly || it.aVincular || saldoZero ? (
                       <span className="font-semibold tabular-nums">
-                        {it.aVincular ? "—" : it.recebido}
+                        {it.aVincular ? "—" : nestaEntr}
                       </span>
                     ) : (
                       <NumberStepper
-                        value={it.recebido}
+                        value={nestaEntr}
                         onChange={(v) => update(idx, v)}
                         inputMode="numeric"
-                        inputRef={(el) => { stepperRefs.current[idx] = el; }}
+                        inputRef={(el) => {
+                          stepperRefs.current[idx] = el;
+                        }}
                         onKeyDown={handleStepperKeyDown(idx)}
                       />
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">
-                    {Math.max(0, it.pedido - totalApos)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-xs text-muted-foreground">
-                    ±{limite.toFixed(0)} un
-                  </td>
+                  <td className="px-4 py-3 text-right font-semibold">{saldoRestante}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       {saldoZero && <span className="chip chip-ok">Completo</span>}
@@ -1226,11 +1306,8 @@ function ConferenciaItens({
                       {!saldoZero && !pendente && gap < 0 && (
                         <span className="chip chip-warn">Saldo {Math.abs(gap)}</span>
                       )}
-                      {!saldoZero && !pendente && gap > 0 && dentroTol && (
-                        <span className="chip chip-info">Sobra {gap} · dentro da tolerância</span>
-                      )}
-                      {!saldoZero && !pendente && gap > 0 && !dentroTol && (
-                        <span className="chip chip-danger">Sobra {gap} · acima da tolerância</span>
+                      {!saldoZero && !pendente && gap > 0 && (
+                        <span className="chip chip-danger">Sobra {gap}</span>
                       )}
                       {it.qualidade && (
                         <span
