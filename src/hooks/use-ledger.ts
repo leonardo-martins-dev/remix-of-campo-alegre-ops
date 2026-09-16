@@ -54,7 +54,16 @@ export function useRegistrarMovimentoFornecedor() {
       observacoes?: string;
       conferencia_id?: string;
     }) => {
-      const { data: galpao } = await supabase.from("posicoes_caixa").select("id").eq("tipo", "galpao").maybeSingle();
+      let { data: galpao } = await supabase.from("posicoes_caixa").select("id").eq("tipo", "galpao").maybeSingle();
+      if (!galpao) {
+        const { data: createdGalpao, error: galpaoErr } = await supabase
+          .from("posicoes_caixa")
+          .insert({ tipo: "galpao" })
+          .select("id")
+          .single();
+        if (galpaoErr) throw galpaoErr;
+        galpao = createdGalpao;
+      }
       let { data: forn } = await supabase
         .from("posicoes_caixa")
         .select("id")

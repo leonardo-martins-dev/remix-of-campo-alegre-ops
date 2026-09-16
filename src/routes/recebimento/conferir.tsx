@@ -61,7 +61,6 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useCreateVale, useValesConferente, uploadValeFoto } from "@/hooks/use-vales";
 import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
-import { useSaveConversaoFornecedor } from "@/hooks/use-conversoes";
 import { CaixasItemEditor, type CaixaItemEntry } from "@/components/caixas-item-editor";
 import { useCaixasItemConferencia } from "@/hooks/use-caixas-item";
 
@@ -238,29 +237,38 @@ function unidadesDasCaixas(entries: CaixaItemEntry[]): number | null {
   return comFator ? total : null;
 }
 
-/**
- * Qty desta entrega digitada em "Nesta entr." (editar caixas grava
- * caixas×fator em `recebido` via applyCaixasAndSyncQty).
- */
-function nestaEntradaEfetiva(it: LinhaItem, _entries?: CaixaItemEntry[]): number {
-  return it.recebido;
+/** Total de caixas desta entrega (campo "Nesta entr."). */
+function nestaEntradaCaixas(it: LinhaItem, entries: CaixaItemEntry[]): number {
+  if (entries.length > 0) {
+    return entries.reduce((a, e) => a + Number(e.real ?? 0), 0);
+  }
+  return Number(it.recebido ?? 0);
 }
 
 /**
- * O que de fato chegou para Status / Vale: caixas × fator de conversão.
- * Sem fator, cai na qty digitada.
+ * O que de fato chegou em unidades (Status / Vale): caixas × fator.
+ * Sem fator, usa a qty digitada.
  */
 function chegouEfetivo(it: LinhaItem, entries: CaixaItemEntry[]): number {
   return unidadesDasCaixas(entries) ?? it.recebido;
 }
 
-/** Diferença vs pedido: (já receb. + chegou) − pedido. Negativo = faltou (vale). */
+/** Diferença vs pedido (un): (já receb. + caixas×fator) − pedido. Negativo = faltou (vale). */
 function gapVsPedido(
   it: LinhaItem,
   entries: CaixaItemEntry[],
   jaRecebido: number,
 ): number {
   return jaRecebido + chegouEfetivo(it, entries) - it.pedido;
+}
+
+/** Aplica qty de caixas em `real`, sem alterar `sugerida`. */
+function comRealNasCaixas(entries: CaixaItemEntry[], qtdCaixas: number): CaixaItemEntry[] {
+  if (entries.length === 0) return entries;
+  if (entries.length === 1) {
+    return [{ ...entries[0], real: qtdCaixas }];
+  }
+  return entries.map((e, i) => (i === 0 ? { ...e, real: qtdCaixas } : { ...e, real: 0 }));
 }
 
 function buildSavePayload(
@@ -342,8 +350,6 @@ function ConferenciaItens({
     },
   });
   const movForn = useRegistrarMovimentoFornecedor();
-  const saveConversao = useSaveConversaoFornecedor();
-  const [cheias, setCheias] = useState<Record<string, number>>({});
   const [vazias, setVazias] = useState<Record<string, number>>({});
 
   const fornecedorIdPedido = pedido?.fornecedor_id ?? null;
@@ -557,10 +563,9 @@ function ConferenciaItens({
 
   const applyCaixasAndSyncQty = useCallback((itemId: string, entries: CaixaItemEntry[]) => {
     setCaixasItem((prev) => ({ ...prev, [itemId]: entries }));
-    const un = unidadesDasCaixas(entries);
-    if (un == null) return;
+    const qtdCx = entries.reduce((a, e) => a + Number(e.real ?? 0), 0);
     setItens((prev) =>
-      prev.map((it) => (it.id === itemId ? { ...it, recebido: un, conferido: true } : it)),
+      prev.map((it) => (it.id === itemId ? { ...it, recebido: qtdCx, conferido: true } : it)),
     );
   }, []);
 
@@ -571,40 +576,25 @@ function ConferenciaItens({
     [applyCaixasAndSyncQty],
   );
 
-  /** Ajusta sugestão/real de caixas a partir da qty em un — sem sobrescrever `recebido`. */
-  const syncCaixasHintFromQty = useCallback((itemId: string, qty: number) => {
-    setCaixasItem((prev) => {
-      const entries = prev[itemId];
-      if (!entries || entries.length === 0) return prev;
-      const updated = entries.map((e) => {
-        if (e.fator && e.fator > 0) {
-          const calc = Math.max(0, Math.ceil(qty / e.fator));
-          // Só espelha real←sugestão se o usuário ainda não customizou as caixas.
-          const real = e.real === e.sugerida ? calc : e.real;
-          return { ...e, sugerida: calc, real };
-        }
-        return e;
-      });
-      return { ...prev, [itemId]: updated };
-    });
-  }, []);
-
+  /** "Nesta entr." = caixas. Atualiza só `real`; `sugerida` permanece. */
   const update = (idx: number, v: number) => {
     if (readOnly) return;
-    const newVal = Math.max(0, v);
+    const newVal = Math.max(0, Math.round(v));
     const it = itens[idx];
     if (!it) return;
     const entries = caixasItem[it.id] ?? [];
-    // Autofocus/blur do stepper com qty 0 (ainda não tocado) não pode
-    // zerar a sugestão de caixas (ficava só a sigla, ex.: "V").
-    if (newVal === 0 && !it.conferido && it.recebido === 0 && unidadesDasCaixas(entries) != null) {
+    // Autofocus/blur com 0 ainda não tocado não pode zerar caixas sugeridas.
+    if (newVal === 0 && !it.conferido && nestaEntradaCaixas(it, entries) === 0) {
       return;
     }
     setItens((prev) =>
       prev.map((row, i) => (i === idx ? { ...row, recebido: newVal, conferido: true } : row)),
     );
-    if (unidadesDasCaixas(entries) != null) {
-      syncCaixasHintFromQty(it.id, newVal);
+    if (entries.length > 0) {
+      setCaixasItem((prev) => ({
+        ...prev,
+        [it.id]: comRealNasCaixas(prev[it.id] ?? entries, newVal),
+      }));
     }
   };
 
@@ -616,13 +606,19 @@ function ConferenciaItens({
       saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
     ).find((s) => s.item_pedido_id === it.itemPedidoId);
     const ja = Number(saldoRow?.recebido_acumulado ?? 0);
-    const newVal = Math.max(0, it.pedido - ja);
     const entries = caixasItem[it.id] ?? [];
+    const fator = entries.find((e) => e.fator && e.fator > 0)?.fator ?? null;
+    const unRestante = Math.max(0, it.pedido - ja);
+    const qtdCx =
+      fator && fator > 0 ? Math.max(0, Math.ceil(unRestante / fator)) : unRestante;
     setItens((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, recebido: newVal, conferido: true } : row)),
+      prev.map((row, i) => (i === idx ? { ...row, recebido: qtdCx, conferido: true } : row)),
     );
-    if (unidadesDasCaixas(entries) != null) {
-      syncCaixasHintFromQty(it.id, newVal);
+    if (entries.length > 0) {
+      setCaixasItem((prev) => ({
+        ...prev,
+        [it.id]: comRealNasCaixas(prev[it.id] ?? entries, qtdCx),
+      }));
     }
   };
 
@@ -794,28 +790,6 @@ function ConferenciaItens({
             }));
           if (rows.length > 0) {
             await supabase.from("caixas_item_conferencia").insert(rows);
-          }
-        }
-      }
-
-      if (fornecedorIdPedido) {
-        for (const it of itens) {
-          if (!it.produtoId || !it.conferido) continue;
-          const sug = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
-          if (!sug?.sem_conversao) continue;
-          const entries = caixasItem[it.id] ?? [];
-          for (const e of entries) {
-            if (e.real > 0 && it.recebido > 0) {
-              const fatorCalc = +(it.recebido / e.real).toFixed(2);
-              if (fatorCalc > 0) {
-                await saveConversao.mutateAsync({
-                  fornecedor_id: fornecedorIdPedido,
-                  produto_id: it.produtoId,
-                  tipo_caixa_id: e.tipo_caixa_id,
-                  fator: fatorCalc,
-                });
-              }
-            }
           }
         }
       }
@@ -1076,7 +1050,7 @@ function ConferenciaItens({
           const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
           const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
           const itemCaixas = caixasItem[it.id] ?? [];
-          const nestaEntr = nestaEntradaEfetiva(it, itemCaixas);
+          const nestaEntr = nestaEntradaCaixas(it, itemCaixas);
           const chegou = chegouEfetivo(it, itemCaixas);
           const gap = gapVsPedido(it, itemCaixas, jaRecebido);
           const pendente = !it.conferido;
@@ -1142,7 +1116,7 @@ function ConferenciaItens({
 
               {!readOnly && !it.aVincular && !saldoZero && (
                 <div className="mb-3">
-                  <div className="text-xs text-muted-foreground mb-1.5">Nesta entrega ({it.unid})</div>
+                  <div className="text-xs text-muted-foreground mb-1.5">Nesta entrega (cx)</div>
                   <NumberStepper
                     value={nestaEntr}
                     onChange={(v) => update(idx, v)}
@@ -1159,7 +1133,7 @@ function ConferenciaItens({
                 <div className="mb-3 text-sm">
                   <span className="text-muted-foreground">Nesta entrega: </span>
                   <span className="font-semibold">
-                    {it.aVincular ? "—" : nestaEntr} {it.unid}
+                    {it.aVincular ? "—" : nestaEntr} cx
                   </span>
                 </div>
               )}
@@ -1243,7 +1217,7 @@ function ConferenciaItens({
                 <th className="text-right px-4 py-3 whitespace-nowrap">Pedido</th>
                 <th className="text-left px-4 py-3 whitespace-nowrap">Caixas</th>
                 <th className="text-right px-4 py-3 whitespace-nowrap">Já receb.</th>
-                <th className="text-center px-4 py-3 whitespace-nowrap">Nesta entr.</th>
+                <th className="text-center px-4 py-3 whitespace-nowrap">Nesta entr. (cx)</th>
                 <th className="text-right px-4 py-3 whitespace-nowrap">Saldo</th>
                 <th className="text-left px-4 py-3 whitespace-nowrap">Status</th>
                 <th className="px-4 py-3" />
@@ -1262,7 +1236,7 @@ function ConferenciaItens({
               const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
               const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
               const itemCaixas = caixasItem[it.id] ?? [];
-              const nestaEntr = nestaEntradaEfetiva(it, itemCaixas);
+              const nestaEntr = nestaEntradaCaixas(it, itemCaixas);
               const chegou = chegouEfetivo(it, itemCaixas);
               const gap = gapVsPedido(it, itemCaixas, jaRecebido);
               const pendente = !it.conferido;
