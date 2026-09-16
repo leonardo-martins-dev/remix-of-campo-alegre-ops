@@ -45,7 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { usePedidosDia, usePedido, useConfigValor, useSaldoItensPedido } from "@/hooks/use-pedidos";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
-import { useRegistrarMovimentoFornecedor, useRegistrarEntradaGalpao } from "@/hooks/use-ledger";
+import { useRegistrarEntradaGalpao } from "@/hooks/use-ledger";
 import {
   useConferencia,
   useStartConferencia,
@@ -375,9 +375,7 @@ function ConferenciaItens({
       return data ?? [];
     },
   });
-  const movForn = useRegistrarMovimentoFornecedor();
   const entradaGalpao = useRegistrarEntradaGalpao();
-  const [vazias, setVazias] = useState<Record<string, number>>({});
 
   const fornecedorIdPedido = pedido?.fornecedor_id ?? null;
   const itensParaSugestao = useMemo(() => {
@@ -400,7 +398,6 @@ function ConferenciaItens({
   const itensHydratedRef = useRef<string | null>(null);
 
   const [confirmFinal, setConfirmFinal] = useState(false);
-  const vaziasInitRef = useRef(false);
   const stepperRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const focusedRef = useRef(false);
 
@@ -468,7 +465,6 @@ function ConferenciaItens({
     if (caixasInitRef.current && caixasInitRef.current !== conferencia.id) {
       caixasInitRef.current = null;
       itensHydratedRef.current = null;
-      vaziasInitRef.current = false;
       setCaixasItem({});
     }
   }, [conferencia?.id]);
@@ -544,20 +540,6 @@ function ConferenciaItens({
     fornecedorIdPedido,
     itensParaSugestao.length,
   ]);
-
-  useEffect(() => {
-    if (vaziasInitRef.current) return;
-    if (Object.keys(caixasItem).length === 0) return;
-    const totais: Record<string, number> = {};
-    for (const entries of Object.values(caixasItem)) {
-      for (const e of entries) {
-        totais[e.sigla] = (totais[e.sigla] ?? 0) + e.real;
-      }
-    }
-    if (Object.keys(totais).length === 0) return;
-    vaziasInitRef.current = true;
-    setVazias(totais);
-  }, [caixasItem]);
 
   useEffect(() => {
     if (focusedRef.current || readOnly || itens.length === 0) return;
@@ -899,14 +881,15 @@ function ConferenciaItens({
             conferencia_id: conferencia.id,
             tipo_caixa_sigla: t.sigla,
             qtd_cheias: totaisCaixasReal[t.sigla] ?? 0,
-            qtd_vazias: Number(vazias[t.sigla] ?? 0),
+            qtd_vazias: 0,
           }))
-          .filter((r) => r.qtd_cheias > 0 || r.qtd_vazias > 0);
+          .filter((r) => r.qtd_cheias > 0);
         if (caixaRows.length) {
           await supabase.from("conferencia_caixas").insert(caixaRows);
         }
       }
 
+      // Recebimento só credita galpão. Packing → fornecedor é na movimentação (motorista).
       if (status === "finalizada" && user && pedido?.fornecedor_id) {
         await supabase
           .from("movimentacoes_caixa")
@@ -916,7 +899,6 @@ function ConferenciaItens({
 
         for (const t of tipos) {
           const realQty = totaisCaixasReal[t.sigla] ?? 0;
-          const vaziasQty = Number(vazias[t.sigla] ?? 0);
           if (realQty > 0) {
             await entradaGalpao.mutateAsync({
               tipo_caixa: t.sigla,
@@ -927,27 +909,14 @@ function ConferenciaItens({
               observacoes: "Entrada conferência",
             });
           }
-          if (vaziasQty > 0) {
-            await movForn.mutateAsync({
-              fornecedor_id: pedido.fornecedor_id,
-              tipo_caixa: t.sigla,
-              quantidade: vaziasQty,
-              natureza: "entrega_vazias",
-              registrado_por: user.id,
-              conferencia_id: conferencia.id,
-            });
-          }
         }
       }
       const cargas = result?.cargasGeradas ?? [];
-      const totalCheias = Object.values(totaisCaixasReal).reduce((a, b) => a + b, 0);
-      const totalVazias = tipos.reduce((a, t) => a + Number(vazias[t.sigla] ?? 0), 0);
       const movTxt = tipos
         .map((t) => {
           const c = totaisCaixasReal[t.sigla] ?? 0;
-          const v = Number(vazias[t.sigla] ?? 0);
-          if (!c && !v) return null;
-          return `${t.sigla}: ${c > 0 ? `+${c} cheias` : ""}${c > 0 && v > 0 ? " · " : ""}${v > 0 ? `-${v} vazias` : ""}`;
+          if (!c) return null;
+          return `${t.sigla}: +${c} cheias → galpão`;
         })
         .filter(Boolean)
         .join(" · ");
@@ -1468,7 +1437,10 @@ function ConferenciaItens({
 
       {tipos.length > 0 && (
         <div className="mt-5 rounded-xl border p-4 space-y-3">
-          <h3 className="text-sm font-semibold">Resumo de caixas desta entrega</h3>
+          <h3 className="text-sm font-semibold">Resumo de caixas desta entrega → galpão</h3>
+          <p className="text-xs text-muted-foreground">
+            Packing → fornecedor só na tela de Movimentação (motorista) ou inventário.
+          </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {tipos.map((t) => {
               const cheiasCalc = itens.reduce((acc, it) => {
@@ -1476,34 +1448,15 @@ function ConferenciaItens({
                 const e = entries.find((x) => x.sigla === t.sigla);
                 return acc + (e?.real ?? 0);
               }, 0);
-              const vaziasQty = Number(vazias[t.sigla] ?? 0);
               return (
                 <div key={t.id} className="p-2 rounded-lg bg-secondary/50 text-center">
                   <div className="text-xs font-semibold text-muted-foreground mb-1">{t.sigla}</div>
                   <div className="text-lg font-bold text-navy">{cheiasCalc}</div>
-                  <div className="text-[10px] text-muted-foreground">cheias (produtos)</div>
+                  <div className="text-[10px] text-muted-foreground">cheias → galpão</div>
                 </div>
               );
             })}
           </div>
-          {!readOnly && (
-            <div className="pt-3 border-t border-border">
-              <div className="text-xs font-semibold text-muted-foreground mb-2">
-                Caixas vazias devolvidas ao fornecedor
-              </div>
-              <div className="flex flex-wrap gap-4">
-                {tipos.map((t) => (
-                  <label key={t.id} className="flex items-center gap-2 text-sm">
-                    <span className="w-8 text-center font-semibold">{t.sigla}</span>
-                    <NumberStepper
-                      value={vazias[t.sigla] ?? 0}
-                      onChange={(n) => setVazias((s) => ({ ...s, [t.sigla]: n }))}
-                    />
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
