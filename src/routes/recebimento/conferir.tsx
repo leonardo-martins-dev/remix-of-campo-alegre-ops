@@ -1500,37 +1500,48 @@ function ConferenciaItens({
       )}
 
       {!readOnly && (
-        <div className="mt-5 space-y-3 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
-          <div className="flex gap-2 sm:contents">
-            <button
-              type="button"
-              onClick={() => setAvulsoOpen(true)}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
-            >
-              <Plus size={14} /> <span className="hidden sm:inline">Item </span>avulso
-            </button>
-            <button
-              type="button"
-              onClick={() => salvar("parcial")}
-              disabled={saveMut.isPending}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
-            >
-              <Save size={14} /> <span className="hidden sm:inline">Salvar </span>parcial
-            </button>
-          </div>
-          <div className="hidden sm:block sm:flex-1" />
-          <div className="text-xs text-muted-foreground text-center sm:text-left">
-            Assinatura: <span className="font-semibold text-navy">{conferenteNome}</span>
-          </div>
-          <button
-            type="button"
-            onClick={finalizar}
-            disabled={saveMut.isPending}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 min-h-12 sm:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+        <>
+          {/* Espaço para a barra fixa no mobile (botão Finalizar não fica atrás do chrome/home) */}
+          <div className="h-40 sm:hidden" aria-hidden />
+          <div
+            className={[
+              "space-y-3 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3 sm:mt-5",
+              "fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md p-3",
+              "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+              "sm:static sm:inset-auto sm:z-auto sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:p-0 sm:pb-0",
+            ].join(" ")}
           >
-            <CheckCircle2 size={16} /> Finalizar entrega
-          </button>
-        </div>
+            <div className="flex gap-2 sm:contents">
+              <button
+                type="button"
+                onClick={() => setAvulsoOpen(true)}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
+              >
+                <Plus size={14} /> <span className="hidden sm:inline">Item </span>avulso
+              </button>
+              <button
+                type="button"
+                onClick={() => salvar("parcial")}
+                disabled={saveMut.isPending}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
+              >
+                <Save size={14} /> <span className="hidden sm:inline">Salvar </span>parcial
+              </button>
+            </div>
+            <div className="hidden sm:block sm:flex-1" />
+            <div className="text-xs text-muted-foreground text-center sm:text-left">
+              Assinatura: <span className="font-semibold text-navy">{conferenteNome}</span>
+            </div>
+            <button
+              type="button"
+              onClick={finalizar}
+              disabled={saveMut.isPending}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 min-h-12 sm:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+            >
+              <CheckCircle2 size={16} /> Finalizar entrega
+            </button>
+          </div>
+        </>
       )}
 
       <Dialog open={avulsoOpen && !readOnly} onOpenChange={setAvulsoOpen}>
