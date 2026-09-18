@@ -30,10 +30,10 @@ export function NumberStepper({
   inputRef,
   autoFocus,
 }: Props) {
-  const h = size === "sm" ? "h-8 w-8 sm:h-6 sm:w-6" : "h-10 w-10 sm:h-7 sm:w-7";
+  const h = size === "sm" ? "h-9 w-9 lg:h-6 lg:w-6" : "h-11 w-11 lg:h-7 lg:w-7";
   const ic = size === "sm" ? 14 : 16;
   const icSm = size === "sm" ? 11 : 12;
-  const w = width ?? (size === "sm" ? "w-12 sm:w-10" : "w-14 sm:w-12");
+  const w = width ?? (size === "sm" ? "w-14 lg:w-10" : "w-16 lg:w-12");
   const clamp = (n: number) => (Number.isFinite(n) ? Math.max(min, n) : min);
 
   const [focused, setFocused] = useState(false);
@@ -66,10 +66,10 @@ export function NumberStepper({
           onChange(next);
           setDraft(String(next));
         }}
-        className={`${h} rounded-lg sm:rounded-md border border-border hover:bg-secondary active:bg-secondary/80 flex items-center justify-center text-navy transition-colors`}
+        className={`${h} rounded-lg lg:rounded-md border border-border hover:bg-secondary active:bg-secondary/80 flex items-center justify-center text-navy transition-colors`}
       >
-        <Minus size={ic} className="sm:hidden" />
-        <Minus size={icSm} className="hidden sm:block" />
+        <Minus size={ic} className="lg:hidden" />
+        <Minus size={icSm} className="hidden lg:block" />
       </button>
       <input
         ref={inputRef}
@@ -98,7 +98,7 @@ export function NumberStepper({
           commitDraft(draft);
         }}
         onKeyDown={onKeyDown}
-        className={`${w} text-center font-bold text-navy bg-transparent border border-transparent rounded focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30 px-1 ${size === "sm" ? "text-sm h-8 sm:text-xs sm:h-6" : "text-base h-10 sm:text-sm sm:h-7"}`}
+        className={`${w} text-center font-bold text-navy bg-transparent border border-transparent rounded focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30 px-1 ${size === "sm" ? "text-sm h-9 lg:text-xs lg:h-6" : "text-base h-11 lg:text-sm lg:h-7"}`}
       />
       <button
         type="button"
@@ -108,10 +108,10 @@ export function NumberStepper({
           onChange(next);
           setDraft(String(next));
         }}
-        className={`${h} rounded-lg sm:rounded-md border border-border hover:bg-secondary active:bg-secondary/80 flex items-center justify-center text-navy transition-colors`}
+        className={`${h} rounded-lg lg:rounded-md border border-border hover:bg-secondary active:bg-secondary/80 flex items-center justify-center text-navy transition-colors`}
       >
-        <Plus size={ic} className="sm:hidden" />
-        <Plus size={icSm} className="hidden sm:block" />
+        <Plus size={ic} className="lg:hidden" />
+        <Plus size={icSm} className="hidden lg:block" />
       </button>
     </div>
   );

@@ -656,9 +656,9 @@ function Page() {
                     </div>
                     
                     {/* Mobile: Card view */}
-                    <div className="sm:hidden p-3 space-y-3">
+                    <div className="lg:hidden p-3 md:p-4 space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
                       {fam.itens.map((it) => (
-                        <div key={it.id} className="p-3 rounded-lg border border-border">
+                        <div key={it.id} className="mobile-item-card">
                           <div className="flex items-start justify-between gap-2 mb-3">
                             <div className="font-semibold text-navy text-sm">{it.produto}</div>
                             <div>
@@ -705,7 +705,7 @@ function Page() {
                     </div>
 
                     {/* Desktop: Table view */}
-                    <div className="hidden sm:block overflow-x-auto">
+                    <div className="hidden lg:block overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead className="text-xs text-muted-foreground uppercase tracking-wider">
                           <tr>

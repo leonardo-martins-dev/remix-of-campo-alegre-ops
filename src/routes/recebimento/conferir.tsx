@@ -1041,13 +1041,13 @@ function ConferenciaItens({
       })()}
 
       {!readOnly && (
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4 overflow-x-auto pb-1">
           {pendentes.map((p) => (
             <button
               key={p.id}
               type="button"
               onClick={() => onTrocar(p.id)}
-              className={`px-3 h-8 rounded-md text-xs font-semibold transition-colors ${
+              className={`px-3 min-h-10 md:min-h-11 rounded-md text-xs md:text-sm font-semibold transition-colors whitespace-nowrap ${
                 p.id === pedidoId
                   ? "bg-primary text-primary-foreground"
                   : "bg-card border border-border text-navy hover:bg-secondary"
@@ -1095,7 +1095,7 @@ function ConferenciaItens({
         </span>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
         <MiniStat label="Itens" value={stats.total.toString()} />
         <MiniStat label="Conferidos" value={`${stats.conferidos}/${stats.total}`} tone="ok" />
         <MiniStat label="Divergências" value={stats.divergencias.toString()} tone="danger" />
@@ -1103,8 +1103,8 @@ function ConferenciaItens({
         <MiniStat label="Progresso" value={`${stats.progresso}%`} tone="info" />
       </div>
 
-      {/* Mobile: Card view */}
-      <div className="sm:hidden space-y-3">
+      {/* Mobile + tablet: card view (tabela só em desktop ≥1024) */}
+      <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
         {itens.map((it, idx) => {
           const saldoRow = (
             saldosItem as {
@@ -1275,8 +1275,8 @@ function ConferenciaItens({
         })}
       </div>
 
-      {/* Desktop: Table view */}
-      <div className="hidden sm:block card-base">
+      {/* Desktop: Table view (≥1024) */}
+      <div className="hidden lg:block card-base">
         <TableWrapper stickyFirstColumn>
           <table className="w-full text-sm">
             <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -1501,42 +1501,42 @@ function ConferenciaItens({
 
       {!readOnly && (
         <>
-          {/* Espaço para a barra fixa no mobile (botão Finalizar não fica atrás do chrome/home) */}
-          <div className="h-40 sm:hidden" aria-hidden />
+          {/* Espaço para a barra fixa no mobile/tablet */}
+          <div className="h-40 lg:hidden" aria-hidden />
           <div
             className={[
-              "space-y-3 sm:space-y-0 sm:flex sm:flex-wrap sm:items-center sm:gap-3 sm:mt-5",
-              "fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md p-3",
+              "space-y-3 lg:space-y-0 lg:flex lg:flex-wrap lg:items-center lg:gap-3 lg:mt-5",
+              "fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md p-3 md:p-4",
               "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
-              "sm:static sm:inset-auto sm:z-auto sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:p-0 sm:pb-0",
+              "lg:static lg:inset-auto lg:z-auto lg:border-0 lg:bg-transparent lg:backdrop-blur-none lg:p-0 lg:pb-0",
             ].join(" ")}
           >
-            <div className="flex gap-2 sm:contents">
+            <div className="flex gap-2 lg:contents">
               <button
                 type="button"
                 onClick={() => setAvulsoOpen(true)}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
+                className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
               >
-                <Plus size={14} /> <span className="hidden sm:inline">Item </span>avulso
+                <Plus size={14} /> <span className="hidden md:inline">Item </span>avulso
               </button>
               <button
                 type="button"
                 onClick={() => salvar("parcial")}
                 disabled={saveMut.isPending}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
+                className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
               >
-                <Save size={14} /> <span className="hidden sm:inline">Salvar </span>parcial
+                <Save size={14} /> <span className="hidden md:inline">Salvar </span>parcial
               </button>
             </div>
-            <div className="hidden sm:block sm:flex-1" />
-            <div className="text-xs text-muted-foreground text-center sm:text-left">
+            <div className="hidden lg:block lg:flex-1" />
+            <div className="text-xs text-muted-foreground text-center lg:text-left">
               Assinatura: <span className="font-semibold text-navy">{conferenteNome}</span>
             </div>
             <button
               type="button"
               onClick={finalizar}
               disabled={saveMut.isPending}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 min-h-12 sm:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+              className="w-full lg:w-auto inline-flex items-center justify-center gap-2 min-h-12 lg:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
             >
               <CheckCircle2 size={16} /> Finalizar entrega
             </button>

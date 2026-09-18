@@ -358,7 +358,7 @@ function Page() {
                 </span>
               </div>
 
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                 {grupo.vales.map((vale) => (
                   <ValeCard
                     key={vale.id}

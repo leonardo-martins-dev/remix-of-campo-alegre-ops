@@ -541,14 +541,14 @@ function Page() {
           <p className="text-sm text-muted-foreground text-center py-8">Nenhum saldo registrado.</p>
         ) : (
           <>
-            {/* Mobile: Card view */}
-            <div className="sm:hidden p-3 space-y-3">
+            {/* Mobile + tablet: cards */}
+            <div className="lg:hidden p-3 md:p-4 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
               {clientesFiltrados.map((c) => {
                 const visible = tipos.filter((t) => filtro === "ALL" || filtro === t.sigla);
                 const saldo = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo, 0);
                 const valor = visible.reduce((a, t) => a + qtyOf(c, t.sigla).saldo * (custoById[t.sigla] ?? 0), 0);
                 return (
-                  <div key={c.cliente_id} className="p-3 rounded-lg border border-border">
+                  <div key={c.cliente_id} className="mobile-item-card">
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div className="font-semibold text-navy">{c.cliente}</div>
                     </div>
@@ -576,7 +576,7 @@ function Page() {
                           setExtratoId(c.cliente_id);
                           setExtratoNome(c.cliente);
                         }}
-                        className="min-h-10 px-4 rounded-lg bg-primary-soft text-primary-dark text-xs font-semibold active:bg-primary active:text-primary-foreground"
+                        className="min-h-11 px-4 rounded-lg bg-primary-soft text-primary-dark text-sm font-semibold active:bg-primary active:text-primary-foreground"
                       >
                         Extrato
                       </button>
@@ -586,8 +586,8 @@ function Page() {
               })}
             </div>
             
-            {/* Desktop: Table view */}
-            <div className="hidden sm:block">
+            {/* Desktop: Table view (≥1024) */}
+            <div className="hidden lg:block">
               <TableWrapper stickyFirstColumn>
                 <table className="w-full text-sm">
                   <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">

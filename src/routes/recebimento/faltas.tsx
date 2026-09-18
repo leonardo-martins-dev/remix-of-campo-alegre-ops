@@ -276,116 +276,222 @@ function Page() {
       </div>
 
       {modo === "resumo" ? (
-        <div className="card-base">
-          <TableWrapper stickyFirstColumn>
-            <table className="w-full text-sm">
-              <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
-                <tr>
-                  <th className="text-left px-4 py-3 whitespace-nowrap">Fornecedor</th>
-                  <th className="text-right px-4 py-3 whitespace-nowrap">Itens</th>
-                  <th className="text-right px-4 py-3 whitespace-nowrap">Qtd diverg.</th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap">Encerramento</th>
-                  <th className="text-right px-4 py-3 whitespace-nowrap">Impacto R$</th>
-                </tr>
-              </thead>
-              <tbody>
-                {resumoFiltrado.map((r) => (
-                  <tr key={r.fornecedor} className="border-t border-border">
-                    <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{r.fornecedor}</td>
-                    <td className="px-4 py-3 text-right">{r.itens}</td>
-                    <td className="px-4 py-3 text-right">{r.qty.toFixed(1)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {r.encerrados.map((e) => (
-                          <span key={e} className="chip chip-muted text-xs">{e}</span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold whitespace-nowrap">R$ {r.impacto.toFixed(2)}</td>
+        <>
+          <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+            {resumoFiltrado.map((r) => (
+              <div key={r.fornecedor} className="mobile-item-card">
+                <div className="font-bold text-navy text-base mb-3">{r.fornecedor}</div>
+                <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                  <div className="p-2 rounded-lg bg-secondary/50">
+                    <div className="text-xs text-muted-foreground">Itens</div>
+                    <div className="font-bold text-navy">{r.itens}</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-secondary/50">
+                    <div className="text-xs text-muted-foreground">Qtd diverg.</div>
+                    <div className="font-bold text-navy">{r.qty.toFixed(1)}</div>
+                  </div>
+                </div>
+                {r.encerrados.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {r.encerrados.map((e) => (
+                      <span key={e} className="chip chip-muted text-xs">{e}</span>
+                    ))}
+                  </div>
+                )}
+                <div className="pt-2 border-t border-border flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Impacto</span>
+                  <span className="font-bold text-navy">R$ {r.impacto.toFixed(2)}</span>
+                </div>
+              </div>
+            ))}
+            {!isLoading && resumoFiltrado.length === 0 && (
+              <p className="col-span-full text-center text-muted-foreground py-8">Nenhuma falta no período</p>
+            )}
+          </div>
+          <div className="hidden lg:block card-base">
+            <TableWrapper stickyFirstColumn>
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-3 whitespace-nowrap">Fornecedor</th>
+                    <th className="text-right px-4 py-3 whitespace-nowrap">Itens</th>
+                    <th className="text-right px-4 py-3 whitespace-nowrap">Qtd diverg.</th>
+                    <th className="text-left px-4 py-3 whitespace-nowrap">Encerramento</th>
+                    <th className="text-right px-4 py-3 whitespace-nowrap">Impacto R$</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrapper>
-        </div>
-      ) : (
-        <div className="card-base">
-          <TableWrapper stickyFirstColumn>
-            <table className="w-full text-sm">
-              <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
-                <tr>
-                  <th className="text-left px-4 py-3 whitespace-nowrap">Pedido</th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap">Fornecedor</th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap">Produto</th>
-                  <th className="text-right px-4 py-3 whitespace-nowrap">Pedido</th>
-                  <th className="text-right px-4 py-3 whitespace-nowrap">Recebido</th>
-                  <th className="text-right px-4 py-3 whitespace-nowrap">Diverg.</th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap">Encerramento</th>
-                  <th className="text-right px-4 py-3 whitespace-nowrap">Impacto</th>
-                  {isAdmin && <th className="px-4 py-3" />}
-                </tr>
-              </thead>
-              <tbody>
-                {faltasComImpacto.map((i) => (
-                  <tr key={i.id} className="border-t border-border">
-                    <td className="px-4 py-3 whitespace-nowrap">{i.codigo}</td>
-                    <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{i.fornecedor}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{i.produto}</td>
-                    <td className="px-4 py-3 text-right">{i.pedido}</td>
-                    <td className="px-4 py-3 text-right">{i.recebido}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="chip chip-danger text-xs whitespace-nowrap">{i.tipo} · {i.falta}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {i.encerrado_em && (
-                        <span className="chip chip-muted text-xs">
-                          {formatDateBRT(i.encerrado_em)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold whitespace-nowrap">R$ {i.impacto.toFixed(2)}</td>
-                    {isAdmin && (
-                      <td className="px-4 py-3 text-right">
-                        {i.tipo === "falta" && i.pedido_id && i.fornecedor_id && !valeItemIds.has(i.item_conferencia_id) ? (
-                          <button
-                            type="button"
-                            disabled={createVale.isPending}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900 hover:underline disabled:opacity-50 min-h-[44px] min-w-[44px] px-2"
-                            onClick={async () => {
-                              if (!user?.id || !i.pedido_id || !i.fornecedor_id) return;
-                              try {
-                                await createVale.mutateAsync({
-                                  pedido_id: i.pedido_id,
-                                  item_conferencia_id: i.item_conferencia_id,
-                                  fornecedor_id: i.fornecedor_id,
-                                  conferente_id: user.id,
-                                  produto_nome: i.produto,
-                                  quantidade_pedida: i.pedido,
-                                  quantidade_recebida: i.recebido,
-                                  diferenca: i.falta,
-                                  preco_unitario: i.preco !== valorUnitario ? i.preco : null,
-                                  valor_calculado: i.impacto,
-                                  estimado: i.estimado,
-                                });
-                                toast.success("Vale solicitado com sucesso");
-                              } catch (err) {
-                                toast.error(err instanceof Error ? err.message : "Erro ao solicitar vale");
-                              }
-                            }}
-                          >
-                            <Receipt size={12} /> Vale
-                          </button>
-                        ) : valeItemIds.has(i.item_conferencia_id) ? (
-                          <span className="text-xs text-muted-foreground">Vale criado</span>
-                        ) : null}
+                </thead>
+                <tbody>
+                  {resumoFiltrado.map((r) => (
+                    <tr key={r.fornecedor} className="border-t border-border">
+                      <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{r.fornecedor}</td>
+                      <td className="px-4 py-3 text-right">{r.itens}</td>
+                      <td className="px-4 py-3 text-right">{r.qty.toFixed(1)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {r.encerrados.map((e) => (
+                            <span key={e} className="chip chip-muted text-xs">{e}</span>
+                          ))}
+                        </div>
                       </td>
-                    )}
+                      <td className="px-4 py-3 text-right font-bold whitespace-nowrap">R$ {r.impacto.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrapper>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+            {faltasComImpacto.map((i) => (
+              <div key={i.id} className="mobile-item-card item-status-danger">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <div className="font-bold text-navy text-sm">{i.produto}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{i.codigo} · {i.fornecedor}</div>
+                  </div>
+                  <span className="chip chip-danger text-xs shrink-0">{i.tipo} · {i.falta}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-sm mb-3">
+                  <div className="p-2 rounded-lg bg-secondary/50">
+                    <div className="text-xs text-muted-foreground">Pedido</div>
+                    <div className="font-bold text-navy">{i.pedido}</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-secondary/50">
+                    <div className="text-xs text-muted-foreground">Recebido</div>
+                    <div className="font-bold text-navy">{i.recebido}</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-amber-50 border border-amber-200">
+                    <div className="text-xs text-amber-600">Impacto</div>
+                    <div className="font-bold text-navy text-sm">R$ {i.impacto.toFixed(2)}</div>
+                  </div>
+                </div>
+                {i.encerrado_em && (
+                  <div className="mb-2">
+                    <span className="chip chip-muted text-xs">Encerrado {formatDateBRT(i.encerrado_em)}</span>
+                  </div>
+                )}
+                {isAdmin && (
+                  <div className="mobile-actions">
+                    {i.tipo === "falta" && i.pedido_id && i.fornecedor_id && !valeItemIds.has(i.item_conferencia_id) ? (
+                      <button
+                        type="button"
+                        disabled={createVale.isPending}
+                        className="inline-flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-sm font-semibold disabled:opacity-50"
+                        onClick={async () => {
+                          if (!user?.id || !i.pedido_id || !i.fornecedor_id) return;
+                          try {
+                            await createVale.mutateAsync({
+                              pedido_id: i.pedido_id,
+                              item_conferencia_id: i.item_conferencia_id,
+                              fornecedor_id: i.fornecedor_id,
+                              conferente_id: user.id,
+                              produto_nome: i.produto,
+                              quantidade_pedida: i.pedido,
+                              quantidade_recebida: i.recebido,
+                              diferenca: i.falta,
+                              preco_unitario: i.preco !== valorUnitario ? i.preco : null,
+                              valor_calculado: i.impacto,
+                              estimado: i.estimado,
+                            });
+                            toast.success("Vale solicitado com sucesso");
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Erro ao solicitar vale");
+                          }
+                        }}
+                      >
+                        <Receipt size={14} /> Solicitar vale
+                      </button>
+                    ) : valeItemIds.has(i.item_conferencia_id) ? (
+                      <span className="text-xs text-muted-foreground">Vale criado</span>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            ))}
+            {!isLoading && faltasComImpacto.length === 0 && (
+              <p className="col-span-full text-center text-muted-foreground py-8">Nenhuma falta no período</p>
+            )}
+          </div>
+          <div className="hidden lg:block card-base">
+            <TableWrapper stickyFirstColumn>
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-3 whitespace-nowrap">Pedido</th>
+                    <th className="text-left px-4 py-3 whitespace-nowrap">Fornecedor</th>
+                    <th className="text-left px-4 py-3 whitespace-nowrap">Produto</th>
+                    <th className="text-right px-4 py-3 whitespace-nowrap">Pedido</th>
+                    <th className="text-right px-4 py-3 whitespace-nowrap">Recebido</th>
+                    <th className="text-right px-4 py-3 whitespace-nowrap">Diverg.</th>
+                    <th className="text-left px-4 py-3 whitespace-nowrap">Encerramento</th>
+                    <th className="text-right px-4 py-3 whitespace-nowrap">Impacto</th>
+                    {isAdmin && <th className="px-4 py-3" />}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableWrapper>
-        </div>
+                </thead>
+                <tbody>
+                  {faltasComImpacto.map((i) => (
+                    <tr key={i.id} className="border-t border-border">
+                      <td className="px-4 py-3 whitespace-nowrap">{i.codigo}</td>
+                      <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{i.fornecedor}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{i.produto}</td>
+                      <td className="px-4 py-3 text-right">{i.pedido}</td>
+                      <td className="px-4 py-3 text-right">{i.recebido}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="chip chip-danger text-xs whitespace-nowrap">{i.tipo} · {i.falta}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {i.encerrado_em && (
+                          <span className="chip chip-muted text-xs">
+                            {formatDateBRT(i.encerrado_em)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold whitespace-nowrap">R$ {i.impacto.toFixed(2)}</td>
+                      {isAdmin && (
+                        <td className="px-4 py-3 text-right">
+                          {i.tipo === "falta" && i.pedido_id && i.fornecedor_id && !valeItemIds.has(i.item_conferencia_id) ? (
+                            <button
+                              type="button"
+                              disabled={createVale.isPending}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900 hover:underline disabled:opacity-50 min-h-[44px] min-w-[44px] px-2"
+                              onClick={async () => {
+                                if (!user?.id || !i.pedido_id || !i.fornecedor_id) return;
+                                try {
+                                  await createVale.mutateAsync({
+                                    pedido_id: i.pedido_id,
+                                    item_conferencia_id: i.item_conferencia_id,
+                                    fornecedor_id: i.fornecedor_id,
+                                    conferente_id: user.id,
+                                    produto_nome: i.produto,
+                                    quantidade_pedida: i.pedido,
+                                    quantidade_recebida: i.recebido,
+                                    diferenca: i.falta,
+                                    preco_unitario: i.preco !== valorUnitario ? i.preco : null,
+                                    valor_calculado: i.impacto,
+                                    estimado: i.estimado,
+                                  });
+                                  toast.success("Vale solicitado com sucesso");
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : "Erro ao solicitar vale");
+                                }
+                              }}
+                            >
+                              <Receipt size={12} /> Vale
+                            </button>
+                          ) : valeItemIds.has(i.item_conferencia_id) ? (
+                            <span className="text-xs text-muted-foreground">Vale criado</span>
+                          ) : null}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrapper>
+          </div>
+        </>
       )}
 
       {modo === "itens" && !isLoading && faltasComImpacto.length > 0 && (

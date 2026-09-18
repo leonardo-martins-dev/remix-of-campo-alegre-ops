@@ -447,6 +447,92 @@ function Page() {
         {tab === "importacoes" ? (
           <ImportacoesPanel canAdmin={canAdmin} />
         ) : (
+        <>
+        {/* Mobile + tablet: cards */}
+        <div className="lg:hidden p-3 md:p-4 grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+          {isLoading && (
+            <p className="col-span-full text-center text-muted-foreground py-8">Carregando pedidos…</p>
+          )}
+          {!isLoading && filtered.length === 0 && (
+            <p className="col-span-full text-center text-muted-foreground py-8">Nenhum pedido encontrado</p>
+          )}
+          {filtered.map((p) => (
+            <div key={p.id} className="mobile-item-card flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-bold text-navy text-base">{p.codigo}</div>
+                  <div className="text-sm text-ink mt-0.5 truncate">
+                    {p.fornecedores?.nome ??
+                      (p.status === "aguardando_vinculo" ? "fornecedor não reconhecido" : "—")}
+                  </div>
+                </div>
+                {statusChip(p.status)}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Itens</div>
+                  <div className="font-semibold text-navy">{p.itens_pedido?.length ?? 0}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Chegada</div>
+                  <div className="font-semibold text-navy">{formatTime(p.hora_chegada)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Prevista</div>
+                  <div className="font-semibold text-navy">{formatDateBRT(p.data_prevista)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Origem</div>
+                  <span className={`chip ${p.origem === "wisetec" ? "chip-info" : "chip-muted"}`}>
+                    {origemLabel(p.origem)}
+                  </span>
+                </div>
+              </div>
+              {getClienteChips(p).length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {getClienteChips(p).map((d) => (
+                    <span key={d} className="chip chip-muted">
+                      {d}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="mobile-actions">
+                <div className="flex-1 min-w-[7rem] [&_a]:inline-flex [&_a]:items-center [&_a]:justify-center [&_a]:min-h-11 [&_a]:px-3 [&_a]:rounded-lg [&_a]:bg-primary [&_a]:text-primary-foreground [&_a]:text-sm [&_a]:font-semibold [&_a]:no-underline">
+                  {pedidoActionLink(p)}
+                </div>
+                {canAdmin && p.status === "parcial" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEncerrarId(p.id);
+                      setEncerrarMotivo("");
+                    }}
+                    className="inline-flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg border border-destructive/30 text-destructive text-sm font-semibold"
+                  >
+                    <Ban size={14} /> Encerrar
+                  </button>
+                )}
+                {canAdmin && (p.status === "conferido" || p.status === "pendente" || p.status === "parcial") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditPedido(p);
+                      setEditCodigo(p.codigo);
+                      setEditPrevista(p.data_prevista ?? "");
+                    }}
+                    className="inline-flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg border border-border text-navy text-sm font-semibold"
+                  >
+                    <Pencil size={14} /> Editar
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden lg:block">
         <TableWrapper stickyFirstColumn>
           <table className="w-full text-sm">
             <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -538,6 +624,8 @@ function Page() {
             </tbody>
           </table>
         </TableWrapper>
+        </div>
+        </>
         )}
       </div>
 
