@@ -291,18 +291,11 @@ function Page() {
         subtitle="Pedidos a conferir do dia · recebimento sempre aceito"
         actions={
           <div className="header-actions-mobile">
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={handleExcel}
-            />
             {canAdmin && (
               <>
                 <Link
                   to="/recebimento/vales"
-                  className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-amber-300/50 bg-amber-50 text-xs sm:text-sm font-semibold text-amber-800 hover:bg-amber-100 relative"
+                  className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-amber-300/50 bg-amber-50 text-sm font-semibold text-amber-800 hover:bg-amber-100 relative"
                 >
                   <Receipt size={14} /> Vales
                   {valesPendentes > 0 && (
@@ -313,9 +306,9 @@ function Page() {
                 </Link>
                 <Link
                   to="/recebimento/liberacoes"
-                  className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-warning/40 bg-warning/10 text-xs sm:text-sm font-semibold text-navy hover:bg-warning/20"
+                  className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-warning/40 bg-warning/10 text-sm font-semibold text-navy hover:bg-warning/20"
                 >
-                  <ShieldAlert size={14} /> <span className="hidden sm:inline">Liberações</span><span className="sm:hidden">Lib.</span>
+                  <ShieldAlert size={14} /> <span className="hidden md:inline">Liberações</span><span className="md:hidden">Lib.</span>
                 </Link>
               </>
             )}
@@ -341,34 +334,41 @@ function Page() {
                   toast.error(e instanceof Error ? e.message : "Erro ao sincronizar Wise");
                 }
               }}
-              className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
             >
-              <RefreshCw size={14} /> <span className="hidden sm:inline">Sincronizar </span>Wise
+              <RefreshCw size={14} /> <span className="hidden lg:inline">Sincronizar </span>Wise
             </button>
             <button
               type="button"
               disabled={previewMut.isPending}
               onClick={() => fileRef.current?.click()}
-              className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
             >
-              <FileSpreadsheet size={14} /> <span className="hidden sm:inline">Importar planilha</span><span className="sm:hidden">Planilha</span>
+              <FileSpreadsheet size={14} /> <span className="lg:hidden">Planilha</span><span className="hidden lg:inline">Importar planilha</span>
             </button>
             <button
               type="button"
               onClick={() => downloadWiseModelo()}
-              className="hidden sm:inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
             >
-              Baixar modelo
+              <span className="lg:hidden">Modelo</span><span className="hidden lg:inline">Baixar modelo</span>
             </button>
             <button
               type="button"
               onClick={() => setManualOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg bg-primary text-primary-foreground text-xs sm:text-sm font-semibold hover:bg-primary-dark"
+              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary-dark col-span-2 md:col-span-1 lg:col-span-1"
             >
-              <Plus size={14} /> <span className="hidden sm:inline">Lançar pedido </span>manual
+              <Plus size={14} /> <span className="lg:hidden">Lançar</span><span className="hidden lg:inline">Lançar pedido manual</span>
             </button>
           </div>
         }
+      />
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        className="hidden"
+        onChange={handleExcel}
       />
 
       <StatStrip
@@ -415,13 +415,13 @@ function Page() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-3">
-        <Input type="date" className="w-full sm:w-40 h-10 sm:h-9" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value || todayBRT())} />
-        <Input className="w-full sm:w-64 h-10 sm:h-9" placeholder="Buscar pedido, fornecedor..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+      <div className="flex flex-col md:flex-row gap-2 md:gap-3 mb-3">
+        <Input type="date" className="w-full md:w-44 h-11 lg:h-9" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value || todayBRT())} />
+        <Input className="w-full md:flex-1 lg:max-w-sm h-11 lg:h-9" placeholder="Buscar pedido, fornecedor..." value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
 
       <div className="card-base">
-        <div className="flex items-center gap-1 p-2 border-b border-border overflow-x-auto -webkit-overflow-scrolling-touch">
+        <div className="flex items-center gap-1.5 p-2 md:p-2.5 border-b border-border overflow-x-auto overscroll-x-contain touch-pan-x">
           {(
             [
               ["todos", "Todos"],
@@ -438,7 +438,7 @@ function Page() {
             <button
               key={k}
               onClick={() => setTab(k)}
-              className={`px-2.5 sm:px-3 h-8 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${tab === k ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+              className={`px-3 min-h-10 lg:min-h-8 lg:h-8 rounded-md text-xs md:text-sm font-semibold whitespace-nowrap transition-colors ${tab === k ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
             >
               {l}
             </button>

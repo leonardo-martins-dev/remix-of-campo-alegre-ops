@@ -416,19 +416,24 @@
     }
   }
 
-  /* Responsive header actions */
+  /* Responsive header actions — stack/wrap until desktop */
   .header-actions-mobile {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
+    width: 100%;
+  }
+  .header-actions-mobile > button,
+  .header-actions-mobile > a {
+    min-width: 0;
+    justify-content: center;
   }
   @media (max-width: 639px) {
     .header-actions-mobile > button,
     .header-actions-mobile > a {
-      flex: 1 1 calc(50% - 0.25rem);
-      min-width: 0;
       font-size: 0.75rem;
       padding: 0.5rem;
+      min-height: 2.75rem;
     }
     .header-actions-mobile > button svg,
     .header-actions-mobile > a svg {
@@ -437,11 +442,24 @@
     }
   }
   @media (min-width: 640px) and (max-width: 1023px) {
+    .header-actions-mobile {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.625rem;
+    }
     .header-actions-mobile > button,
     .header-actions-mobile > a {
-      min-height: 44px;
-      padding-left: 0.875rem;
-      padding-right: 0.875rem;
+      min-height: 2.75rem;
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .header-actions-mobile {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      width: auto;
+      gap: 0.5rem;
     }
   }
 }
