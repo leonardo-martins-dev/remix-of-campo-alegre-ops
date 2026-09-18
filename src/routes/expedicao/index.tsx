@@ -440,8 +440,8 @@ function Page() {
     }
   };
 
-  const importHeaderActions = (
-    <div className="header-actions-mobile">
+  const importFileInputs = (
+    <>
       <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleExcel} />
       <input ref={wiseFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleWiseExcel} />
       <input
@@ -451,36 +451,43 @@ function Page() {
         className="hidden"
         onChange={handleVendaFile}
       />
+    </>
+  );
+
+  const btnAction =
+    "inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50";
+
+  const importHeaderActions = (
+    <div className="header-actions-mobile">
       <button
         type="button"
         onClick={() => downloadExpedicaoTemplate()}
-        className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
+        className={btnAction}
         title={`Colunas: ${EXPEDICAO_EXCEL_COLUNAS.join(", ")}`}
       >
-        <Download size={14} /> <span className="hidden sm:inline">Baixar </span>modelo
+        <Download size={14} /> <span className="lg:hidden">Modelo</span><span className="hidden lg:inline">Baixar modelo</span>
       </button>
       <button
         type="button"
         onClick={() => vendaFileRef.current?.click()}
         disabled={importRelatorioVenda.isPending}
-        className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
+        className={btnAction}
         title="Relatório de pedidos de venda (Nr. Ped. + itens por loja)"
       >
-        <ShoppingCart size={14} />{" "}
-        <span className="hidden sm:inline">Pedido de </span>venda
+        <ShoppingCart size={14} /> <span className="lg:hidden">Venda</span><span className="hidden lg:inline">Pedido de venda</span>
       </button>
       <button
         type="button"
         onClick={() => fileRef.current?.click()}
-        className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
+        className={btnAction}
       >
-        <FileSpreadsheet size={14} /> <span className="hidden sm:inline">Importar </span>Excel
+        <FileSpreadsheet size={14} /> <span className="lg:hidden">Excel</span><span className="hidden lg:inline">Importar Excel</span>
       </button>
       <button
         type="button"
         onClick={openWiseImport}
         disabled={wiseFetch.isPending}
-        className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
+        className={btnAction}
       >
         <RefreshCw size={14} /> Wise
       </button>
@@ -488,16 +495,13 @@ function Page() {
         type="button"
         onClick={() => wiseFileRef.current?.click()}
         disabled={importRomaneio.isPending}
-        className="hidden sm:inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
+        className={btnAction}
         title="Exportação Wise: Código, Descrição, Unidade, Qtde → carga selecionada"
       >
-        <FileSpreadsheet size={14} /> Importar exportação Wise
+        <FileSpreadsheet size={14} /> <span className="lg:hidden">Exp. Wise</span><span className="hidden lg:inline">Importar exportação Wise</span>
       </button>
-      <Link
-        to="/expedicao/tv"
-        className="inline-flex items-center justify-center gap-1.5 h-10 sm:h-9 px-2 sm:px-3 rounded-lg border border-border bg-card text-xs sm:text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
-      >
-        <Tv size={14} /> <span className="hidden sm:inline">Modo </span>TV
+      <Link to="/expedicao/tv" className={btnAction}>
+        <Tv size={14} /> <span className="lg:hidden">TV</span><span className="hidden lg:inline">Modo TV</span>
       </Link>
     </div>
   );
@@ -509,6 +513,7 @@ function Page() {
   if (!cargas.length) {
     return (
       <div>
+        {importFileInputs}
         <PageHeader
           title="Painel de Carga"
           subtitle="Abastecimento e conferência por loja"
@@ -520,8 +525,8 @@ function Page() {
           gerando={gerarCargas.isPending}
           onGerar={handleGerarCargas}
         />
-        <p className="text-sm text-muted-foreground text-center py-4 flex items-center justify-center gap-1">
-          <HelpCircle size={14} />
+        <p className="text-sm text-muted-foreground text-center py-6 md:py-8 px-4 flex items-center justify-center gap-1.5 max-w-xl mx-auto">
+          <HelpCircle size={14} className="shrink-0" />
           Nenhuma carga programada para hoje. Importe pedido de venda, Excel, use a fila da conferência ou aguarde
           pedidos conferidos.
         </p>
@@ -559,6 +564,7 @@ function Page() {
 
   return (
     <div>
+      {importFileInputs}
       <PageHeader
         title="Painel de Carga"
         subtitle="Abastecimento e conferência por loja"
@@ -575,9 +581,9 @@ function Page() {
         />
       )}
 
-      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 mb-4">
+      <div className="flex flex-col md:flex-row flex-wrap items-stretch md:items-center gap-2 md:gap-3 mb-4">
         <Select value={activeId ?? ""} onValueChange={setSelectedId}>
-          <SelectTrigger className="w-full sm:w-[280px] h-10 sm:h-9">
+          <SelectTrigger className="w-full md:w-[280px] h-11 lg:h-9">
             <SelectValue placeholder="Selecionar carregamento" />
           </SelectTrigger>
           <SelectContent>
@@ -592,6 +598,7 @@ function Page() {
           <Button
             size="sm"
             variant="outline"
+            className="min-h-11 lg:min-h-9"
             disabled={iniciar.isPending}
             onClick={() =>
               iniciar.mutate(activeId, {
@@ -976,21 +983,21 @@ function FilaExpedicaoCard({
   if (!fila.length) return null;
 
   return (
-    <div className={`card-base overflow-x-auto ${compact ? "mb-4" : "mb-6"}`}>
-      <div className="px-5 py-3 border-b border-border flex items-center gap-2">
-        <Package size={16} className="text-primary-dark" />
-        <h3 className="text-sm font-bold text-navy">Fila da conferência</h3>
+    <div className={`card-base overflow-hidden ${compact ? "mb-4" : "mb-6"}`}>
+      <div className="px-4 md:px-5 py-3 border-b border-border flex items-center gap-2">
+        <Package size={16} className="text-primary-dark shrink-0" />
+        <h3 className="text-sm md:text-base font-bold text-navy">Fila da conferência</h3>
         <span className="chip chip-warn ml-auto">{fila.length} pedido(s)</span>
       </div>
       <div className="divide-y divide-border">
         {fila.map((p) => (
           <div
             key={p.pedido_id}
-            className="px-5 py-3 flex flex-wrap items-center gap-3 justify-between"
+            className="px-4 md:px-5 py-3 md:py-3.5 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between"
           >
-            <div>
-              <div className="font-semibold text-navy text-sm">{p.codigo}</div>
-              <div className="text-xs text-muted-foreground">
+            <div className="min-w-0">
+              <div className="font-semibold text-navy text-sm md:text-base">{p.codigo}</div>
+              <div className="text-xs md:text-sm text-muted-foreground">
                 {p.fornecedor}
                 {p.finalizada_em ? ` · conferido ${formatTime(p.finalizada_em)}` : ""}
               </div>
@@ -998,6 +1005,7 @@ function FilaExpedicaoCard({
             <Button
               size="sm"
               variant="outline"
+              className="min-h-11 lg:min-h-9 w-full sm:w-auto shrink-0"
               disabled={gerando}
               onClick={() => onGerar(p.pedido_id, p.codigo)}
             >
@@ -1007,7 +1015,7 @@ function FilaExpedicaoCard({
         ))}
       </div>
       {!compact && (
-        <p className="px-5 py-2 text-xs text-muted-foreground border-t border-border">
+        <p className="px-4 md:px-5 py-2.5 text-xs text-muted-foreground border-t border-border">
           Pedidos conferidos sem carga no painel. Se a geração automática falhou, use o botão acima ou configure
           mapeamento em Gestão.
         </p>
