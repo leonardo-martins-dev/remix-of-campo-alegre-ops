@@ -11,6 +11,7 @@ import {
   Search,
   Smartphone,
   Store,
+  Truck,
   Warehouse,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -76,6 +77,7 @@ const TIPO_ICON: Record<PosicaoTipo, typeof Store> = {
   cliente: Store,
   fornecedor: Building2,
   galpao: Warehouse,
+  motorista: Truck,
 };
 
 function posicaoLabel(
@@ -84,6 +86,7 @@ function posicaoLabel(
   fornecedores: { id: string; nome: string }[]
 ) {
   if (p.tipo === "galpao") return "Packing";
+  if (p.tipo === "motorista") return "Motorista (em trânsito)";
   if (p.tipo === "cliente") return `Loja · ${clientes.find((c) => c.id === p.ref_id)?.nome ?? p.ref_id}`;
   return `Fornecedor · ${fornecedores.find((f) => f.id === p.ref_id)?.nome ?? p.ref_id}`;
 }

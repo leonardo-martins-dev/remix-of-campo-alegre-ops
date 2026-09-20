@@ -21,6 +21,7 @@ import { Route as QuebraIndexRouteImport } from './routes/quebra/index'
 import { Route as ExpedicaoIndexRouteImport } from './routes/expedicao/index'
 import { Route as RelatoriosCustosRouteImport } from './routes/relatorios/custos'
 import { Route as RecebimentoValesRouteImport } from './routes/recebimento/vales'
+import { Route as RecebimentoSaidaRocaRouteImport } from './routes/recebimento/saida-roca'
 import { Route as RecebimentoLiberacoesRouteImport } from './routes/recebimento/liberacoes'
 import { Route as RecebimentoFaltasRouteImport } from './routes/recebimento/faltas'
 import { Route as RecebimentoConferirRouteImport } from './routes/recebimento/conferir'
@@ -103,6 +104,11 @@ const RelatoriosCustosRoute = RelatoriosCustosRouteImport.update({
 const RecebimentoValesRoute = RecebimentoValesRouteImport.update({
   id: '/recebimento/vales',
   path: '/recebimento/vales',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecebimentoSaidaRocaRoute = RecebimentoSaidaRocaRouteImport.update({
+  id: '/recebimento/saida-roca',
+  path: '/recebimento/saida-roca',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RecebimentoLiberacoesRoute = RecebimentoLiberacoesRouteImport.update({
@@ -252,6 +258,7 @@ export interface FileRoutesByFullPath {
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/recebimento/liberacoes': typeof RecebimentoLiberacoesRoute
+  '/recebimento/saida-roca': typeof RecebimentoSaidaRocaRoute
   '/recebimento/vales': typeof RecebimentoValesRoute
   '/relatorios/custos': typeof RelatoriosCustosRoute
   '/expedicao/': typeof ExpedicaoIndexRoute
@@ -289,6 +296,7 @@ export interface FileRoutesByTo {
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/recebimento/liberacoes': typeof RecebimentoLiberacoesRoute
+  '/recebimento/saida-roca': typeof RecebimentoSaidaRocaRoute
   '/recebimento/vales': typeof RecebimentoValesRoute
   '/relatorios/custos': typeof RelatoriosCustosRoute
   '/expedicao': typeof ExpedicaoIndexRoute
@@ -327,6 +335,7 @@ export interface FileRoutesById {
   '/recebimento/conferir': typeof RecebimentoConferirRoute
   '/recebimento/faltas': typeof RecebimentoFaltasRoute
   '/recebimento/liberacoes': typeof RecebimentoLiberacoesRoute
+  '/recebimento/saida-roca': typeof RecebimentoSaidaRocaRoute
   '/recebimento/vales': typeof RecebimentoValesRoute
   '/relatorios/custos': typeof RelatoriosCustosRoute
   '/expedicao/': typeof ExpedicaoIndexRoute
@@ -366,6 +375,7 @@ export interface FileRouteTypes {
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/recebimento/liberacoes'
+    | '/recebimento/saida-roca'
     | '/recebimento/vales'
     | '/relatorios/custos'
     | '/expedicao/'
@@ -403,6 +413,7 @@ export interface FileRouteTypes {
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/recebimento/liberacoes'
+    | '/recebimento/saida-roca'
     | '/recebimento/vales'
     | '/relatorios/custos'
     | '/expedicao'
@@ -440,6 +451,7 @@ export interface FileRouteTypes {
     | '/recebimento/conferir'
     | '/recebimento/faltas'
     | '/recebimento/liberacoes'
+    | '/recebimento/saida-roca'
     | '/recebimento/vales'
     | '/relatorios/custos'
     | '/expedicao/'
@@ -469,6 +481,7 @@ export interface RootRouteChildren {
   RecebimentoConferirRoute: typeof RecebimentoConferirRoute
   RecebimentoFaltasRoute: typeof RecebimentoFaltasRoute
   RecebimentoLiberacoesRoute: typeof RecebimentoLiberacoesRoute
+  RecebimentoSaidaRocaRoute: typeof RecebimentoSaidaRocaRoute
   RecebimentoValesRoute: typeof RecebimentoValesRoute
   RelatoriosCustosRoute: typeof RelatoriosCustosRoute
   ExpedicaoIndexRoute: typeof ExpedicaoIndexRoute
@@ -560,6 +573,13 @@ declare module '@tanstack/react-router' {
       path: '/recebimento/vales'
       fullPath: '/recebimento/vales'
       preLoaderRoute: typeof RecebimentoValesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recebimento/saida-roca': {
+      id: '/recebimento/saida-roca'
+      path: '/recebimento/saida-roca'
+      fullPath: '/recebimento/saida-roca'
+      preLoaderRoute: typeof RecebimentoSaidaRocaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/recebimento/liberacoes': {
@@ -775,6 +795,7 @@ const rootRouteChildren: RootRouteChildren = {
   RecebimentoConferirRoute: RecebimentoConferirRoute,
   RecebimentoFaltasRoute: RecebimentoFaltasRoute,
   RecebimentoLiberacoesRoute: RecebimentoLiberacoesRoute,
+  RecebimentoSaidaRocaRoute: RecebimentoSaidaRocaRoute,
   RecebimentoValesRoute: RecebimentoValesRoute,
   RelatoriosCustosRoute: RelatoriosCustosRoute,
   ExpedicaoIndexRoute: ExpedicaoIndexRoute,

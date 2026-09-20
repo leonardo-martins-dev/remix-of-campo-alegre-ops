@@ -23,10 +23,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+/** Telas que o perfil fornecedor acessa (NOP-129 inclui a saída na roça). */
+export const FORNECEDOR_SLUGS = ["fornecedor", "recebimento/saida-roca"];
+
 export const SLUG_TO_PATH: Record<string, string> = {
   dashboard: "/",
   recebimento: "/recebimento",
   "recebimento/conferir": "/recebimento/conferir",
+  "recebimento/saida-roca": "/recebimento/saida-roca",
   "recebimento/faltas": "/recebimento/faltas",
   "recebimento/vales": "/recebimento/vales",
   "recebimento/liberacoes": "/recebimento/liberacoes",

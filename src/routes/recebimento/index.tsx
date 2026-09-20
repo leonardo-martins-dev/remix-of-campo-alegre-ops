@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert, RefreshCw, Ban, Receipt } from "lucide-react";
+import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert, RefreshCw, Ban, Receipt, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { useContarValesPendentes } from "@/hooks/use-vales";
@@ -41,7 +41,8 @@ import { ImportacaoWiseDialog } from "@/components/importacao-wise-dialog";
 import { ImportacoesPanel } from "@/components/importacoes-panel";
 import { TableWrapper } from "@/components/table-wrapper";
 import { usePendenciasVinculo } from "@/hooks/use-pedidos";
-import { formatDateBRT, formatTime, todayBRT } from "@/lib/utils-date";
+import { formatDateBRT, formatDurationMinutes, formatTime, todayBRT } from "@/lib/utils-date";
+import { useSaidasEmTransito } from "@/hooks/use-saida-roca";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -90,6 +91,7 @@ type ManualItem = {
 const statusChip = (s: string) => {
   if (s === "conferido" || s === "recebido") return <span className="chip chip-ok">Recebido</span>;
   if (s === "parcial") return <span className="chip chip-warn">Parcial</span>;
+  if (s === "em_transito") return <span className="chip chip-info">Em trânsito</span>;
   if (s === "aguardando_vinculo") return <span className="chip chip-warn">Fornecedor não reconhecido</span>;
   if (s === "encerrado") return <span className="chip">Encerrado</span>;
   if (s === "aguardando_liberacao") return <span className="chip chip-warn">Aguardando liberação</span>;
@@ -98,7 +100,7 @@ const statusChip = (s: string) => {
 };
 
 function pedidoActionLink(p: PedidoDia) {
-  if (p.status === "pendente" || p.status === "parcial") {
+  if (p.status === "pendente" || p.status === "parcial" || p.status === "em_transito") {
     return (
       <Link
         to="/recebimento/conferir"
@@ -148,7 +150,7 @@ function origemLabel(o: string) {
 }
 
 function Page() {
-  const [tab, setTab] = useState<"todos" | "pendente" | "parcial" | "conferido" | "divergencia" | "aguardando_liberacao" | "aguardando_vinculo" | "encerrado" | "importacoes">("todos");
+  const [tab, setTab] = useState<"todos" | "pendente" | "parcial" | "em_transito" | "conferido" | "divergencia" | "aguardando_liberacao" | "aguardando_vinculo" | "encerrado" | "importacoes">("todos");
   const [dataFiltro, setDataFiltro] = useState(todayBRT());
   const [busca, setBusca] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
@@ -179,6 +181,7 @@ function Page() {
   const encerrarPedido = useEncerrarPedido();
   const canAdmin = isAdmin || resolveIsAdmin(profile, user);
   const { data: valesPendentes = 0 } = useContarValesPendentes();
+  const { data: emTransito = [] } = useSaidasEmTransito();
 
   const [fornecedorId, setFornecedorId] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -291,6 +294,15 @@ function Page() {
         subtitle="Pedidos a conferir do dia · recebimento sempre aceito"
         actions={
           <div className="header-actions-mobile">
+            <Link
+              to="/recebimento/saida-roca"
+              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-primary/30 bg-primary-soft text-sm font-semibold text-primary-dark hover:bg-primary/15"
+            >
+              <Truck size={14} /> <span className="hidden md:inline">Saída na </span>roça
+              {emTransito.length > 0 && (
+                <span className="chip chip-info ml-1">{emTransito.length}</span>
+              )}
+            </Link>
             {canAdmin && (
               <>
                 <Link
@@ -385,12 +397,49 @@ function Page() {
             tone: "ok",
           },
           {
+            label: "Em trânsito",
+            value: String(emTransito.length),
+            tone: "info",
+          },
+          {
             label: "Divergências",
             value: isLoading ? "…" : String(stats.divergencias),
             tone: "danger",
           },
         ]}
       />
+
+      {emTransito.length > 0 && (
+        <div className="card-base p-3 md:p-4 mb-4">
+          <h2 className="text-sm font-semibold text-navy mb-2 flex items-center gap-2">
+            <Truck size={14} /> Saíram da roça · aguardando chegada ({emTransito.length})
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {emTransito.map((s) => (
+              <Link
+                key={s.id}
+                to="/recebimento/conferir"
+                search={{ pedidoId: s.pedido_id }}
+                className="rounded-lg border border-border p-3 hover:border-primary transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-navy truncate">{s.fornecedor_nome}</span>
+                  <span className="chip chip-info shrink-0">
+                    há {formatDurationMinutes(Number(s.minutos_em_transito))}
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {s.pedido_codigo} · {s.total_caixas} cx ·{" "}
+                  {s.veiculo_fornecedor
+                    ? "veículo do fornecedor"
+                    : (s.motorista_nome ?? "motorista")}{" "}
+                  · saiu às {formatTime(s.registrado_em)}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {lastImport && (
         <div className="mb-4 p-3 rounded-lg bg-primary-soft text-navy text-sm flex flex-wrap items-center justify-between gap-2">
@@ -427,6 +476,7 @@ function Page() {
               ["todos", "Todos"],
               ["pendente", "Conferir"],
               ["parcial", "Parcial"],
+              ["em_transito", "Trânsito"],
               ["aguardando_vinculo", "Vínculo"],
               ["conferido", "Recebidos"],
               ["aguardando_liberacao", "Aguard."],

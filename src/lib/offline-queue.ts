@@ -1,6 +1,7 @@
 const QUEUE_KEY = "campo-alegre-retorno-queue";
 const FORN_QUEUE_KEY = "campo-alegre-fornecedor-queue";
 const MOV_QUEUE_KEY = "campo-alegre-movimentacao-queue";
+const SAIDA_QUEUE_KEY = "campo-alegre-saida-roca-queue";
 
 export type RetornoQueueItem = {
   id: string;
@@ -112,4 +113,52 @@ export function enqueueMov(item: Omit<MovQueueItem, "id" | "created_at">) {
 export function removeMovFromQueue(id: string) {
   const queue = getMovQueue().filter((i) => i.id !== id);
   localStorage.setItem(MOV_QUEUE_KEY, JSON.stringify(queue));
+}
+
+/* ── NOP-129: saída na roça ─────────────────────────────────── */
+
+export type SaidaCaixaQueueItem = {
+  tipo_caixa_id: string | null;
+  tipo_caixa_sigla: string;
+  qtd: number;
+  fator_usado: number | null;
+};
+
+export type SaidaItemQueueItem = {
+  item_pedido_id: string | null;
+  produto_id: string | null;
+  quantidade_pedida: number;
+  quantidade_unidades: number | null;
+  caixas: SaidaCaixaQueueItem[];
+};
+
+export type SaidaQueueItem = {
+  id: string;
+  pedido_id: string;
+  pedido_codigo?: string;
+  motorista_id: string | null;
+  veiculo_fornecedor: boolean;
+  foto_url: string | null;
+  observacoes: string | null;
+  itens: SaidaItemQueueItem[];
+  created_at: string;
+};
+
+export function getSaidaQueue(): SaidaQueueItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(SAIDA_QUEUE_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+export function enqueueSaida(item: Omit<SaidaQueueItem, "id" | "created_at">) {
+  const queue = getSaidaQueue();
+  queue.push({ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() });
+  localStorage.setItem(SAIDA_QUEUE_KEY, JSON.stringify(queue));
+}
+
+export function removeSaidaFromQueue(id: string) {
+  const queue = getSaidaQueue().filter((i) => i.id !== id);
+  localStorage.setItem(SAIDA_QUEUE_KEY, JSON.stringify(queue));
 }

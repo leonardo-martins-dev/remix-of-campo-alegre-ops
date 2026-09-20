@@ -72,7 +72,7 @@ export function useStartConferencia() {
         .eq("id", pedidoId)
         .single();
 
-      const openStatuses = ["pendente", "parcial", "recebido"];
+      const openStatuses = ["pendente", "parcial", "recebido", "em_transito"];
       if (pedido?.status && !openStatuses.includes(pedido.status)) {
         const { data: last } = await supabase
           .from("conferencias")
@@ -147,6 +147,11 @@ export function useSaveConferenciaItens() {
         valor_divergencia?: number | null;
         estimado?: boolean;
         tolerancia_pct_aplicada?: number | null;
+        /** NOP-129: divergência de transporte (saída na roça × chegada). */
+        qtd_saida_caixas?: number | null;
+        qtd_chegada_caixas?: number | null;
+        divergencia_transporte_caixas?: number | null;
+        divergencia_transporte_unidades?: number | null;
       }[];
     }) => {
       const { data: confAtual, error: confErr } = await supabase
@@ -183,6 +188,10 @@ export function useSaveConferenciaItens() {
             valor_divergencia: it.valor_divergencia ?? null,
             estimado: it.estimado ?? false,
             tolerancia_pct_aplicada: it.tolerancia_pct_aplicada ?? null,
+            qtd_saida_caixas: it.qtd_saida_caixas ?? null,
+            qtd_chegada_caixas: it.qtd_chegada_caixas ?? null,
+            divergencia_transporte_caixas: it.divergencia_transporte_caixas ?? null,
+            divergencia_transporte_unidades: it.divergencia_transporte_unidades ?? null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", it.id);

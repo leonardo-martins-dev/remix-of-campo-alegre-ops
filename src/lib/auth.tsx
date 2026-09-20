@@ -10,6 +10,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, type AccessiblePage, type Profile } from "./supabase";
 import { ensureUserProfile } from "./ensure-profile";
+import { FORNECEDOR_SLUGS } from "./pages";
 import { resolveIsAdmin } from "./roles";
 
 type AuthContextValue = {
@@ -110,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasPageAccess = useCallback(
     (slug: string) => {
       if (profile?.role === "fornecedor") {
-        return slug === "fornecedor";
+        return FORNECEDOR_SLUGS.includes(slug);
       }
       if (slug === "gestao/usuarios") {
         return resolveIsAdmin(profile, user);

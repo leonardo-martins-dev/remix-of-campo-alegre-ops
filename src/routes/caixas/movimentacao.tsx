@@ -98,6 +98,7 @@ const TIPO_ICON: Record<PosicaoTipo, typeof Store> = {
   cliente: Store,
   fornecedor: Building2,
   galpao: Warehouse,
+  motorista: Truck,
 };
 
 /* ── Wizard ─────────────────────────────────────────────────── */

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { todayBRT } from "@/lib/utils-date";
 
-export type PosicaoTipo = "cliente" | "fornecedor" | "galpao";
+export type PosicaoTipo = "cliente" | "fornecedor" | "galpao" | "motorista";
 
 export type Entidade = {
   id: string;
@@ -16,12 +16,16 @@ export const TIPO_LABEL: Record<PosicaoTipo, string> = {
   cliente: "Loja",
   fornecedor: "Fornecedor",
   galpao: "Packing",
+  motorista: "Motorista (em trânsito)",
 };
 
+// A posição motorista é movimentada pela saída na roça (NOP-129), que usa
+// RPC própria — por isso ela não entra nos destinos do wizard manual.
 const DESTINOS_PERMITIDOS: Record<PosicaoTipo, PosicaoTipo[]> = {
   cliente: ["fornecedor", "galpao"],
   fornecedor: ["galpao"],
   galpao: ["fornecedor"],
+  motorista: ["galpao"],
 };
 
 export function destinosPermitidos(origemTipo: PosicaoTipo): PosicaoTipo[] {
@@ -33,6 +37,9 @@ function getNatureza(ori: PosicaoTipo, dst: PosicaoTipo): string {
   if (ori === "cliente" && dst === "fornecedor") return "transferencia";
   if (ori === "fornecedor" && dst === "galpao") return "recebimento_cheias";
   if (ori === "galpao" && dst === "fornecedor") return "entrega_vazias";
+  // Saída na roça (fornecedor → motorista) e chegada (motorista → packing).
+  if (ori === "fornecedor" && dst === "motorista") return "transferencia";
+  if (ori === "motorista" && dst === "galpao") return "transferencia";
   return "transferencia";
 }
 

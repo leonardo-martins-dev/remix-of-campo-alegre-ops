@@ -25,6 +25,7 @@ export const STATUS_LABELS: Record<string, string> = {
   recebido: "Recebido",
   parcial: "Parcial",
   divergencia: "Com divergência",
+  em_transito: "Em trânsito",
   aguardando_liberacao: "Aguardando liberação",
   aguardando_vinculo: "Aguardando vínculo",
   encerrado: "Encerrado",

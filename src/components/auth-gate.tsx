@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import "@/routes/login.css";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
-import { pathnameToSlug } from "@/lib/pages";
+import { FORNECEDOR_SLUGS, pathnameToSlug } from "@/lib/pages";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { session, loading, profile, hasPageAccess } = useAuth();
@@ -24,7 +24,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (session && profile?.role === "fornecedor" && pathname !== "/fornecedor") {
+    if (
+      session &&
+      profile?.role === "fornecedor" &&
+      !FORNECEDOR_SLUGS.includes(pathnameToSlug(pathname))
+    ) {
       navigate({ to: "/fornecedor" });
       return;
     }

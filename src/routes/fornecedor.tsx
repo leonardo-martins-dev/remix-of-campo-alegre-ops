@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { ChevronRight, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/page-header";
@@ -131,6 +132,20 @@ function Page() {
   return (
     <div className="max-w-md mx-auto">
       <PageHeader title="Minhas caixas" subtitle="Confirme ou registre movimentos" />
+
+      <Link
+        to="/recebimento/saida-roca"
+        className="card-base p-4 mb-6 flex items-center gap-3 hover:border-primary transition-colors"
+      >
+        <Truck size={24} className="text-primary shrink-0" />
+        <span className="min-w-0">
+          <span className="block font-bold text-navy">Saída na roça</span>
+          <span className="block text-xs text-muted-foreground">
+            Avise o que saiu antes de chegar no packing
+          </span>
+        </span>
+        <ChevronRight size={18} className="ml-auto text-muted-foreground shrink-0" />
+      </Link>
 
       {pedidosPendentes.length > 0 && (
         <div className="mb-6 space-y-4">

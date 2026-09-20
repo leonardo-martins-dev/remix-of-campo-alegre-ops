@@ -10,6 +10,7 @@ import {
   Check,
   AlertTriangle,
   Receipt,
+  Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -63,8 +64,29 @@ import { useCreateVale, useValesConferente, uploadValeFoto } from "@/hooks/use-v
 import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
 import { CaixasItemEditor, type CaixaItemEntry } from "@/components/caixas-item-editor";
 import { useCaixasItemConferencia } from "@/hooks/use-caixas-item";
+import {
+  useRegistrarChegadaSaida,
+  useSaidaRocaPedido,
+  useSaidasEmTransito,
+} from "@/hooks/use-saida-roca";
 
 type ConferirSearch = { pedidoId?: string };
+
+/** Pedidos que ainda aceitam conferência — em_transito = saiu da roça (NOP-129). */
+const PEDIDO_ABERTO = ["pendente", "parcial", "em_transito"];
+
+/** "Saiu da roça às 07:40 · 32 cx · João" */
+function resumoSaida(saida: {
+  registrado_em: string;
+  total_caixas: number;
+  motorista_nome: string | null;
+  veiculo_fornecedor: boolean;
+}): string {
+  const quem = saida.veiculo_fornecedor
+    ? "veículo do fornecedor"
+    : (saida.motorista_nome ?? "motorista");
+  return `Saiu da roça às ${formatTime(saida.registrado_em)} · ${saida.total_caixas} cx · ${quem}`;
+}
 
 export const Route = createFileRoute("/recebimento/conferir")({
   validateSearch: (search: Record<string, unknown>): ConferirSearch => ({
@@ -96,7 +118,9 @@ function Page() {
   const navigate = useNavigate({ from: Route.fullPath });
 
   const { data: pedidos = [], isLoading: loadingPedidos } = usePedidosDia();
-  const pendentes = pedidos.filter((p) => p.status === "pendente" || p.status === "parcial");
+  const pendentes = pedidos.filter((p) => PEDIDO_ABERTO.includes(p.status));
+  const { data: emTransito = [] } = useSaidasEmTransito();
+  const saidaPorPedido = new Map(emTransito.map((s) => [s.pedido_id, s]));
 
   const clearPedido = () => navigate({ search: {} });
   const selectPedido = (id: string) => navigate({ search: { pedidoId: id } });
@@ -130,6 +154,7 @@ function Page() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {pendentes.map((p) => {
             const itensCount = (p as { itens_pedido?: unknown[] }).itens_pedido?.length ?? 0;
+            const saida = saidaPorPedido.get(p.id);
             return (
               <Link
                 key={p.id}
@@ -139,7 +164,9 @@ function Page() {
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="chip chip-info">Chegou {formatTime(p.hora_chegada)}</span>
-                  <span className="chip chip-warn">Pendente</span>
+                  <span className={`chip ${saida ? "chip-info" : "chip-warn"}`}>
+                    {saida ? "Em trânsito" : "Pendente"}
+                  </span>
                 </div>
                 <div className="text-base font-bold text-navy">
                   {one(p.fornecedores)?.nome ?? p.codigo}
@@ -147,6 +174,11 @@ function Page() {
                 <div className="text-xs text-muted-foreground mt-1">
                   {p.codigo} · {itensCount} itens no pedido
                 </div>
+                {saida && (
+                  <div className="text-xs text-primary-dark font-semibold mt-1">
+                    {resumoSaida(saida)}
+                  </div>
+                )}
               </Link>
             );
           })}
@@ -295,6 +327,17 @@ function gapVsPedido(
   return gap;
 }
 
+/** NOP-129: saída na roça × chegada no packing, em caixas. */
+function saldoTransporte(
+  it: LinhaItem,
+  entries: CaixaItemEntry[],
+  daSaida: { total: number } | undefined,
+) {
+  if (!daSaida) return null;
+  const chegada = Object.values(caixasParaGalpaoItem(it, entries)).reduce((a, n) => a + n, 0);
+  return { saida: daSaida.total, chegada, dif: chegada - daSaida.total };
+}
+
 function buildSavePayload(
   it: LinhaItem,
   opts?: {
@@ -377,6 +420,36 @@ function ConferenciaItens({
   });
   const entradaGalpao = useRegistrarEntradaGalpao();
 
+  // NOP-129: saída na roça desta entrega (pode não existir — nada bloqueia).
+  const { data: saida, isLoading: saidaLoading } = useSaidaRocaPedido(
+    pedidoId,
+    conferencia?.id,
+    (conferencia as { numero?: number | null } | null)?.numero ?? null,
+  );
+  const registrarChegada = useRegistrarChegadaSaida();
+  const temSaida = !!saida && saida.status === "confirmada";
+  /** caixas da saída por item do pedido */
+  const caixasSaidaPorItem = useMemo(() => {
+    const map = new Map<string, { entries: CaixaItemEntry[]; total: number }>();
+    for (const item of saida?.itens_saida_roca ?? []) {
+      if (!item.item_pedido_id) continue;
+      const entries = (item.caixas_item_saida ?? [])
+        .filter((c) => c.qtd > 0)
+        .map((c) => ({
+          tipo_caixa_id: c.tipo_caixa_id ?? "",
+          sigla: c.tipo_caixa_sigla,
+          sugerida: c.qtd,
+          real: c.qtd,
+          fator: c.fator_usado != null ? Number(c.fator_usado) : null,
+        }));
+      map.set(item.item_pedido_id, {
+        entries,
+        total: entries.reduce((a, e) => a + e.real, 0),
+      });
+    }
+    return map;
+  }, [saida]);
+
   const fornecedorIdPedido = pedido?.fornecedor_id ?? null;
   const itensParaSugestao = useMemo(() => {
     const itensPedido =
@@ -421,7 +494,7 @@ function ConferenciaItens({
   const [valeUploading, setValeUploading] = useState(false);
   const valeFotoRef = useRef<HTMLInputElement>(null);
 
-  const pendentes = pedidos.filter((p) => p.status === "pendente" || p.status === "parcial");
+  const pendentes = pedidos.filter((p) => PEDIDO_ABERTO.includes(p.status));
   const fornecedorNome =
     one(pedido?.fornecedores)?.nome ??
     one(pedidos.find((p) => p.id === pedidoId)?.fornecedores)?.nome ??
@@ -446,7 +519,7 @@ function ConferenciaItens({
     if (!pedidoId || !user?.id) return;
     if (!pedidoStatus) return;
     if (isLoading) return;
-    if (pedidoStatus !== "pendente" && pedidoStatus !== "parcial") return;
+    if (!PEDIDO_ABERTO.includes(pedidoStatus)) return;
     if (conferenciaAberta) {
       startedRef.current = `open:${pedidoId}:${conferencia?.id}`;
       return;
@@ -471,10 +544,7 @@ function ConferenciaItens({
 
   useEffect(() => {
     if (!conferencia?.itens_conferencia) return;
-    if (
-      conferencia.status === "finalizada" &&
-      (pedidoStatus === "pendente" || pedidoStatus === "parcial")
-    ) {
+    if (conferencia.status === "finalizada" && PEDIDO_ABERTO.includes(pedidoStatus ?? "")) {
       return;
     }
     // Só hidrata uma vez por conferência — refetch do React Query não pode
@@ -491,6 +561,8 @@ function ConferenciaItens({
     // a qty de caixas já ajustada pela "Nesta entr." (ex.: 1 → 50).
     if (caixasInitRef.current === conferencia.id) return;
     if (caixasItemExistentes === undefined) return;
+    // Erro ao buscar a saída não pode travar a conferência: segue sem prefill.
+    if (saidaLoading) return;
     if (
       fornecedorIdPedido &&
       itensParaSugestao.length > 0 &&
@@ -502,11 +574,25 @@ function ConferenciaItens({
     caixasInitRef.current = conferencia.id;
 
     const newCaixas: Record<string, CaixaItemEntry[]> = {};
+    /** qty "Nesta entrega (cx)" pré-preenchida pela saída na roça */
+    const prefillSaida: Record<string, number> = {};
     for (const ic of conferencia.itens_conferencia) {
       const itemId = ic.id;
       const produtoId = one(ic.itens_pedido)?.produto_id as string | undefined;
+      const itemPedidoId = one(ic.itens_pedido)?.id as string | undefined;
+      const daSaida = itemPedidoId ? caixasSaidaPorItem.get(itemPedidoId) : undefined;
 
       const existingForItem = caixasItemExistentes?.get(itemId);
+      if (
+        (!existingForItem || existingForItem.length === 0) &&
+        daSaida &&
+        daSaida.entries.length > 0
+      ) {
+        // NOP-129: chegada já abre com o que saiu da roça.
+        newCaixas[itemId] = daSaida.entries.map((e) => ({ ...e }));
+        prefillSaida[itemId] = daSaida.total;
+        continue;
+      }
       if (existingForItem && existingForItem.length > 0) {
         newCaixas[itemId] = existingForItem.map((e) => ({
           tipo_caixa_id: e.tipo_caixa_id,
@@ -532,6 +618,15 @@ function ConferenciaItens({
       }
     }
     setCaixasItem(newCaixas);
+    if (Object.keys(prefillSaida).length > 0) {
+      setItens((prev) =>
+        prev.map((row) =>
+          !row.conferido && row.recebido === 0 && prefillSaida[row.id] > 0
+            ? { ...row, recebido: prefillSaida[row.id] }
+            : row,
+        ),
+      );
+    }
   }, [
     conferencia,
     tipos,
@@ -539,6 +634,8 @@ function ConferenciaItens({
     caixasItemExistentes,
     fornecedorIdPedido,
     itensParaSugestao.length,
+    saidaLoading,
+    caixasSaidaPorItem,
   ]);
 
   useEffect(() => {
@@ -607,6 +704,9 @@ function ConferenciaItens({
   ) => {
     if (!user?.id || !conferencia?.id || !fornecedorId) return;
     if (creditadosGalpaoRef.current.has(it.id)) return;
+    // Com saída na roça as caixas já estão com o motorista: o crédito no
+    // galpão sai do movimento motorista → packing, ao finalizar a entrega.
+    if (temSaida) return;
 
     const byTipo = caixasParaGalpaoItem(it, entries);
     const cxNesta = nestaEntradaCaixas(it, entries);
@@ -812,6 +912,20 @@ function ConferenciaItens({
     };
   }, [itens, caixasItem, saldosItem, toleranciaPct, toleranciaMin]);
 
+  /** NOP-129: saída × chegada do item — separado da divergência pedido × recebido. */
+  const divergenciaTransporteDoItem = (it: LinhaItem, entries: CaixaItemEntry[]) => {
+    const daSaida = it.itemPedidoId ? caixasSaidaPorItem.get(it.itemPedidoId) : undefined;
+    const t = saldoTransporte(it, entries, daSaida);
+    if (!saida || !daSaida || !t) return {};
+    const fator = fatorDoItem(entries) ?? fatorDoItem(daSaida.entries);
+    return {
+      qtd_saida_caixas: t.saida,
+      qtd_chegada_caixas: t.chegada,
+      divergencia_transporte_caixas: t.dif,
+      divergencia_transporte_unidades: fator && fator > 0 ? t.dif * fator : null,
+    };
+  };
+
   const salvar = async (status: "parcial" | "finalizada") => {
     if (readOnly) return;
     if (!conferencia?.id) {
@@ -831,17 +945,21 @@ function ConferenciaItens({
           const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
           const chegou = chegouEfetivo(it, entries);
           const gap = gapVsPedido(it, entries, jaRecebido);
-          return buildSavePayload(
-            { ...it, recebido: chegou },
-            {
-              toleranciaPct: it.toleranciaPct ?? toleranciaPct,
-              toleranciaMin,
-              preco: it.preco,
-              fallback: fallbackPreco,
-              jaRecebido,
-              gap,
-            },
-          );
+          return {
+            ...buildSavePayload(
+              { ...it, recebido: chegou },
+              {
+                toleranciaPct: it.toleranciaPct ?? toleranciaPct,
+                toleranciaMin,
+                preco: it.preco,
+                fallback: fallbackPreco,
+                jaRecebido,
+                gap,
+              },
+            ),
+            // Divergência de transporte é separada da divergência do pedido.
+            ...divergenciaTransporteDoItem(it, entries),
+          };
         }),
       });
 
@@ -897,17 +1015,26 @@ function ConferenciaItens({
           .eq("documento_id", conferencia.id)
           .eq("documento_tipo", "entrega");
 
-        for (const t of tipos) {
-          const realQty = totaisCaixasReal[t.sigla] ?? 0;
-          if (realQty > 0) {
-            await entradaGalpao.mutateAsync({
-              tipo_caixa: t.sigla,
-              quantidade: realQty,
-              registrado_por: user.id,
-              fornecedor_id: pedido.fornecedor_id,
-              conferencia_id: conferencia.id,
-              observacoes: "Entrada conferência",
-            });
+        if (saida) {
+          // Com saída na roça as caixas vêm do motorista, não do fornecedor.
+          await registrarChegada.mutateAsync({
+            saida_id: saida.id,
+            conferencia_id: conferencia.id,
+            caixas: totaisCaixasReal,
+          });
+        } else {
+          for (const t of tipos) {
+            const realQty = totaisCaixasReal[t.sigla] ?? 0;
+            if (realQty > 0) {
+              await entradaGalpao.mutateAsync({
+                tipo_caixa: t.sigla,
+                quantidade: realQty,
+                registrado_por: user.id,
+                fornecedor_id: pedido.fornecedor_id,
+                conferencia_id: conferencia.id,
+                observacoes: "Entrada conferência",
+              });
+            }
           }
         }
       }
@@ -916,7 +1043,7 @@ function ConferenciaItens({
         .map((t) => {
           const c = totaisCaixasReal[t.sigla] ?? 0;
           if (!c) return null;
-          return `${t.sigla}: +${c} cheias → galpão`;
+          return `${t.sigla}: +${c} cheias → galpão${saida ? " (motorista)" : ""}`;
         })
         .filter(Boolean)
         .join(" · ");
@@ -1018,6 +1145,27 @@ function ConferenciaItens({
           {aguardandoLiberacao
             ? "Pedido com divergência aguarda liberação do administrador para expedição."
             : "Visualização somente leitura."}
+        </div>
+      )}
+
+      {saida && (
+        <div className="bg-primary-soft border border-primary/20 rounded-lg p-3 mb-4 flex items-start gap-2 text-sm text-primary-dark">
+          <Truck size={16} className="mt-0.5 shrink-0" />
+          <div>
+            <strong>
+              {resumoSaida({
+                registrado_em: saida.registrado_em,
+                total_caixas: saida.total_caixas,
+                motorista_nome: one(saida.motoristas)?.nome ?? null,
+                veiculo_fornecedor: saida.veiculo_fornecedor,
+              })}
+            </strong>
+            <div className="text-xs mt-0.5">
+              Caixas já pré-preenchidas pela saída. Mudar a quantidade aqui registra
+              <strong> divergência de transporte</strong> — a divergência do pedido continua
+              separada.
+            </div>
+          </div>
         </div>
       )}
 
@@ -1207,6 +1355,27 @@ function ConferenciaItens({
                 </div>
               )}
 
+              {(() => {
+                const t = saldoTransporte(
+                  it,
+                  itemCaixas,
+                  it.itemPedidoId ? caixasSaidaPorItem.get(it.itemPedidoId) : undefined,
+                );
+                if (!t) return null;
+                return (
+                  <div className="mb-3 text-xs">
+                    <span className="text-muted-foreground">Saída na roça: </span>
+                    <span className="font-semibold">{t.saida} cx</span>
+                    {t.dif !== 0 && (
+                      <span className="chip chip-danger ml-2">
+                        Transporte {t.dif > 0 ? "+" : ""}
+                        {t.dif} cx
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+
               {itemCaixas.length > 0 && (
                 <div className="mb-3">
                   <div className="text-xs text-muted-foreground mb-1.5">Caixas</div>
@@ -1371,6 +1540,25 @@ function ConferenciaItens({
                         </span>
                       )}
                       {it.foto_url && <span className="chip chip-info">Foto</span>}
+                      {(() => {
+                        const t = saldoTransporte(
+                          it,
+                          itemCaixas,
+                          it.itemPedidoId ? caixasSaidaPorItem.get(it.itemPedidoId) : undefined,
+                        );
+                        if (!t) return null;
+                        return (
+                          <>
+                            <span className="chip chip-muted">Saída {t.saida} cx</span>
+                            {t.dif !== 0 && (
+                              <span className="chip chip-danger">
+                                Transporte {t.dif > 0 ? "+" : ""}
+                                {t.dif} cx
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
                   <td className="px-4 py-3">
