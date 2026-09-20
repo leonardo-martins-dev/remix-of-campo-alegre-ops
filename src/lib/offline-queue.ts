@@ -2,6 +2,7 @@ const QUEUE_KEY = "campo-alegre-retorno-queue";
 const FORN_QUEUE_KEY = "campo-alegre-fornecedor-queue";
 const MOV_QUEUE_KEY = "campo-alegre-movimentacao-queue";
 const SAIDA_QUEUE_KEY = "campo-alegre-saida-roca-queue";
+const ENTREGA_QUEUE_KEY = "campo-alegre-entrega-expedicao-queue";
 
 export type RetornoQueueItem = {
   id: string;
@@ -161,4 +162,44 @@ export function enqueueSaida(item: Omit<SaidaQueueItem, "id" | "created_at">) {
 export function removeSaidaFromQueue(id: string) {
   const queue = getSaidaQueue().filter((i) => i.id !== id);
   localStorage.setItem(SAIDA_QUEUE_KEY, JSON.stringify(queue));
+}
+
+/* ── NOP-130: entrega no supermercado ───────────────────────── */
+
+export type EntregaCaixaQueueItem = {
+  caixa_id: string;
+  status: "entregue" | "recusada" | "nao_localizada";
+  motivo: string | null;
+};
+
+export type EntregaQueueItem = {
+  id: string;
+  saida_id: string;
+  ordem_codigo?: string;
+  cliente_nome?: string;
+  caixas: EntregaCaixaQueueItem[];
+  recebedor_nome: string | null;
+  canhoto_foto_url: string | null;
+  vazias: Record<string, number>;
+  observacoes: string | null;
+  created_at: string;
+};
+
+export function getEntregaQueue(): EntregaQueueItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(ENTREGA_QUEUE_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+export function enqueueEntrega(item: Omit<EntregaQueueItem, "id" | "created_at">) {
+  const queue = getEntregaQueue();
+  queue.push({ ...item, id: crypto.randomUUID(), created_at: new Date().toISOString() });
+  localStorage.setItem(ENTREGA_QUEUE_KEY, JSON.stringify(queue));
+}
+
+export function removeEntregaFromQueue(id: string) {
+  const queue = getEntregaQueue().filter((i) => i.id !== id);
+  localStorage.setItem(ENTREGA_QUEUE_KEY, JSON.stringify(queue));
 }

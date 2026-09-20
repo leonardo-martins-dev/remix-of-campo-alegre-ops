@@ -7,11 +7,24 @@ export type RelatorioVendaRow = {
   numero_pedido: string;
   vendedor: string;
   cliente: string;
+  /** CNPJ do supermercado quando o relatório traz a coluna. */
+  cnpj: string | null;
   codigo_produto: string;
   produto: string;
   unidade: string;
   quantidade: number;
 };
+
+const CNPJ_RE = /\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/;
+
+/** Procura um CNPJ em qualquer célula do cabeçalho do pedido. */
+export function extractCnpj(cells: string[]): string | null {
+  for (const c of cells) {
+    const m = CNPJ_RE.exec(c ?? "");
+    if (m) return m[0];
+  }
+  return null;
+}
 
 export function isRelatorioVendaHtml(buffer: ArrayBuffer): boolean {
   const head = new TextDecoder("utf-8").decode(buffer.slice(0, 8000));
@@ -70,6 +83,7 @@ export function parseRelatorioVendaHtml(buffer: ArrayBuffer): RelatorioVendaRow[
     const numero_pedido = String(hdrCells[1] ?? "").replace(/\D/g, "") || String(hdrCells[1] ?? "").trim();
     const vendedor = hdrCells[2] ?? "";
     const cliente = (hdrCells[3] || hdrCells[2] || "").trim();
+    const cnpj = extractCnpj(hdrCells);
     if (!numero_pedido || !cliente) continue;
 
     const itemsRow = rows[i + 1];
@@ -94,6 +108,7 @@ export function parseRelatorioVendaHtml(buffer: ArrayBuffer): RelatorioVendaRow[
         numero_pedido,
         vendedor,
         cliente,
+        cnpj,
         codigo_produto,
         produto,
         unidade,
@@ -137,8 +152,13 @@ export function buildMapsRelatorioVenda(entities: {
 export type RelatorioVendaBuildResult = {
   cargas: {
     codigo: string;
+    /** Nº do pedido de venda no Wise, sem o prefixo PV-. */
+    numero_ordem: string;
     cliente_id: string;
     cliente_nome: string;
+    cliente_cnpj: string | null;
+    /** Soma das quantidades do pedido (Qtde Total Itens do papel). */
+    qtde_itens: number;
     itens: {
       produto_id: string;
       quantidade_romaneio: number;
@@ -163,15 +183,7 @@ export function buildCargasFromRelatorioVenda(
     for (const [k, v] of opts.clienteIdsByName) clienteByName.set(k, v);
   }
 
-  const byPedido = new Map<
-    string,
-    {
-      codigo: string;
-      cliente_id: string;
-      cliente_nome: string;
-      itens: RelatorioVendaBuildResult["cargas"][0]["itens"];
-    }
-  >();
+  const byPedido = new Map<string, RelatorioVendaBuildResult["cargas"][0]>();
 
   const clientesFaltantes = new Set<string>();
   const produtosFaltantes = new Map<string, { codigo: string; produto: string }>();
@@ -202,12 +214,18 @@ export function buildCargasFromRelatorioVenda(
     if (!byPedido.has(key)) {
       byPedido.set(key, {
         codigo: `PV-${row.numero_pedido}`,
+        numero_ordem: row.numero_pedido,
         cliente_id,
         cliente_nome: row.cliente,
+        cliente_cnpj: row.cnpj ?? null,
+        qtde_itens: 0,
         itens: [],
       });
     }
-    byPedido.get(key)!.itens.push({
+    const carga = byPedido.get(key)!;
+    if (!carga.cliente_cnpj && row.cnpj) carga.cliente_cnpj = row.cnpj;
+    carga.qtde_itens += row.quantidade;
+    carga.itens.push({
       produto_id,
       quantidade_romaneio: row.quantidade,
       caixas_g: 0,

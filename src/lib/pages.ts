@@ -20,6 +20,7 @@ import {
   Store,
   Package,
   ArrowLeftRight,
+  Search,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,6 +38,9 @@ export const SLUG_TO_PATH: Record<string, string> = {
   expedicao: "/expedicao",
   "expedicao/tv": "/expedicao/tv",
   "expedicao/rotas": "/expedicao/rotas",
+  "expedicao/saida": "/expedicao/saida",
+  "expedicao/entrega": "/expedicao/entrega",
+  "expedicao/rastreio": "/expedicao/rastreio",
   "caixas/saldo": "/caixas/saldo",
   "caixas/economia": "/caixas/economia",
   "caixas/movimentacao": "/caixas/movimentacao",
@@ -88,6 +92,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   Store,
   Package,
   ArrowLeftRight,
+  Search,
 };
 
 export function pathnameToSlug(pathname: string): string {

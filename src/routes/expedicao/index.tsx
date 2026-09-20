@@ -12,6 +12,8 @@ import {
   RefreshCw,
   HelpCircle,
   ShoppingCart,
+  Store,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -64,7 +66,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatTime } from "@/lib/utils-date";
+import { formatDateBRT, formatTime } from "@/lib/utils-date";
+import { useConfirmarEntregaAdmin, useEntregasSemConfirmacao } from "@/hooks/use-saida-expedicao";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { fromLegacyColumns, toLegacyColumns } from "@/lib/caixas-map";
 import { CoberturaDiaCard } from "@/components/cobertura-dia";
@@ -500,6 +503,16 @@ function Page() {
       >
         <FileSpreadsheet size={14} /> <span className="lg:hidden">Exp. Wise</span><span className="hidden lg:inline">Importar exportação Wise</span>
       </button>
+      <Link to="/expedicao/saida" className={btnAction}>
+        <Truck size={14} /> <span className="lg:hidden">Saída</span>
+        <span className="hidden lg:inline">Saída para a loja</span>
+      </Link>
+      <Link to="/expedicao/entrega" className={btnAction}>
+        <Store size={14} /> Entrega
+      </Link>
+      <Link to="/expedicao/rastreio" className={btnAction}>
+        <Search size={14} /> Rastreio
+      </Link>
       <Link to="/expedicao/tv" className={btnAction}>
         <Tv size={14} /> <span className="lg:hidden">TV</span><span className="hidden lg:inline">Modo TV</span>
       </Link>
@@ -581,6 +594,8 @@ function Page() {
         />
       )}
 
+      <EntregasPendentesCard />
+
       <div className="flex flex-col md:flex-row flex-wrap items-stretch md:items-center gap-2 md:gap-3 mb-4">
         <Select value={activeId ?? ""} onValueChange={setSelectedId}>
           <SelectTrigger className="w-full md:w-[280px] h-11 lg:h-9">
@@ -643,6 +658,15 @@ function Page() {
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <h2 className="text-base sm:text-lg font-bold text-navy">{clienteNome}</h2>
                   <span className="chip chip-info">{statusLabel}</span>
+                  {activeId && (
+                    <Link
+                      to="/expedicao/rotas"
+                      search={{ cargaId: activeId }}
+                      className="ml-auto inline-flex items-center gap-1 min-h-9 px-3 rounded-lg bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary/15"
+                    >
+                      <Package size={12} /> Ordem de separação
+                    </Link>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   <span className="chip chip-muted text-xs">🚚 {placa}</span>
@@ -951,6 +975,87 @@ function Page() {
         }}
         loading={importWise.isPending}
       />
+    </div>
+  );
+}
+
+/** NOP-130: ordens em trânsito sem confirmação do motorista até o fim do dia. */
+function EntregasPendentesCard() {
+  const { isAdmin } = useAuth();
+  const { data: pendentes = [] } = useEntregasSemConfirmacao();
+  const confirmarAdmin = useConfirmarEntregaAdmin();
+  const [aberto, setAberto] = useState<string | null>(null);
+  const [justificativa, setJustificativa] = useState("");
+
+  if (!isAdmin || pendentes.length === 0) return null;
+
+  return (
+    <div className="card-base p-4 mb-4 border-l-4" style={{ borderLeftColor: "var(--danger)" }}>
+      <h3 className="text-sm font-semibold text-navy mb-1 flex items-center gap-2">
+        <Truck size={14} /> Entregas sem confirmação ({pendentes.length})
+      </h3>
+      <p className="text-xs text-muted-foreground mb-3">
+        Saíram para a loja e o motorista não confirmou a entrega até o fim do dia.
+      </p>
+      <div className="space-y-2">
+        {pendentes.map((p) => (
+          <div key={p.saida_id} className="rounded-lg border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="font-semibold text-navy tabular-nums">
+                  {p.numero_ordem} · {p.cliente_nome}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {p.total_caixas} cx · saiu {formatDateBRT(p.data_carga)} às{" "}
+                  {formatTime(p.saida_em)}
+                  {p.motorista_nome ? ` · ${p.motorista_nome}` : ""}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="min-h-10"
+                onClick={() => {
+                  setAberto(aberto === p.saida_id ? null : p.saida_id);
+                  setJustificativa("");
+                }}
+              >
+                Confirmar manualmente
+              </Button>
+            </div>
+            {aberto === p.saida_id && (
+              <div className="mt-2 flex flex-col sm:flex-row gap-2">
+                <input
+                  className="flex-1 h-10 rounded-md border border-border bg-card px-3 text-sm"
+                  placeholder="Justificativa (obrigatória)"
+                  value={justificativa}
+                  onChange={(e) => setJustificativa(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  className="min-h-10"
+                  disabled={confirmarAdmin.isPending || !justificativa.trim()}
+                  onClick={async () => {
+                    try {
+                      await confirmarAdmin.mutateAsync({
+                        carga_id: p.carga_id,
+                        justificativa: justificativa.trim(),
+                      });
+                      toast.success("Entrega confirmada pelo administrador");
+                      setAberto(null);
+                      setJustificativa("");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Erro ao confirmar");
+                    }
+                  }}
+                >
+                  Confirmar
+                </Button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -273,11 +273,26 @@ export function useImportRelatorioVenda() {
       const nomesClientes = [...new Set(payload.rows.map((r) => r.cliente.trim()).filter(Boolean))];
       const faltantes = nomesClientes.filter((n) => !maps.clienteByName.has(normalizeKey(n)));
 
+      // CNPJ do relatório, quando vem na linha do pedido (NOP-130).
+      const cnpjPorCliente = new Map<string, string>();
+      for (const r of payload.rows) {
+        const nome = r.cliente?.trim();
+        if (nome && r.cnpj && !cnpjPorCliente.has(normalizeKey(nome))) {
+          cnpjPorCliente.set(normalizeKey(nome), r.cnpj);
+        }
+      }
+
       const clienteIdsByName = new Map<string, string>();
       if (faltantes.length) {
         const { data: created, error } = await supabase
           .from("clientes")
-          .insert(faltantes.map((nome) => ({ nome, ativo: true })))
+          .insert(
+            faltantes.map((nome) => ({
+              nome,
+              cnpj: cnpjPorCliente.get(normalizeKey(nome)) ?? null,
+              ativo: true,
+            })),
+          )
           .select("id, nome");
         if (error) throw error;
         for (const c of created ?? []) {
@@ -322,6 +337,11 @@ export function useImportRelatorioVenda() {
             data_carga: hoje,
             status: "aguardando",
             origem: "excel",
+            // NOP-130: a carga já nasce como Ordem de Separação.
+            numero_ordem: c.numero_ordem,
+            cliente_cnpj: c.cliente_cnpj,
+            qtde_itens_wise: c.qtde_itens,
+            status_ordem: "importada",
           })
           .select("id")
           .single();

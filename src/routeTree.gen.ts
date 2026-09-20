@@ -36,7 +36,10 @@ import { Route as GestaoFornecedoresRouteImport } from './routes/gestao.forneced
 import { Route as GestaoConversaoRouteImport } from './routes/gestao.conversao'
 import { Route as GestaoClientesRouteImport } from './routes/gestao.clientes'
 import { Route as ExpedicaoTvRouteImport } from './routes/expedicao/tv'
+import { Route as ExpedicaoSaidaRouteImport } from './routes/expedicao/saida'
 import { Route as ExpedicaoRotasRouteImport } from './routes/expedicao/rotas'
+import { Route as ExpedicaoRastreioRouteImport } from './routes/expedicao/rastreio'
+import { Route as ExpedicaoEntregaRouteImport } from './routes/expedicao/entrega'
 import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
 import { Route as CaixasMovimentacaoRouteImport } from './routes/caixas/movimentacao'
@@ -181,9 +184,24 @@ const ExpedicaoTvRoute = ExpedicaoTvRouteImport.update({
   path: '/expedicao/tv',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExpedicaoSaidaRoute = ExpedicaoSaidaRouteImport.update({
+  id: '/expedicao/saida',
+  path: '/expedicao/saida',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExpedicaoRotasRoute = ExpedicaoRotasRouteImport.update({
   id: '/expedicao/rotas',
   path: '/expedicao/rotas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExpedicaoRastreioRoute = ExpedicaoRastreioRouteImport.update({
+  id: '/expedicao/rastreio',
+  path: '/expedicao/rastreio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExpedicaoEntregaRoute = ExpedicaoEntregaRouteImport.update({
+  id: '/expedicao/entrega',
+  path: '/expedicao/entrega',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CaixasSaldoRoute = CaixasSaldoRouteImport.update({
@@ -243,7 +261,10 @@ export interface FileRoutesByFullPath {
   '/caixas/movimentacao': typeof CaixasMovimentacaoRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/expedicao/entrega': typeof ExpedicaoEntregaRoute
+  '/expedicao/rastreio': typeof ExpedicaoRastreioRoute
   '/expedicao/rotas': typeof ExpedicaoRotasRoute
+  '/expedicao/saida': typeof ExpedicaoSaidaRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
   '/gestao/clientes': typeof GestaoClientesRoute
   '/gestao/conversao': typeof GestaoConversaoRoute
@@ -281,7 +302,10 @@ export interface FileRoutesByTo {
   '/caixas/movimentacao': typeof CaixasMovimentacaoRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/expedicao/entrega': typeof ExpedicaoEntregaRoute
+  '/expedicao/rastreio': typeof ExpedicaoRastreioRoute
   '/expedicao/rotas': typeof ExpedicaoRotasRoute
+  '/expedicao/saida': typeof ExpedicaoSaidaRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
   '/gestao/clientes': typeof GestaoClientesRoute
   '/gestao/conversao': typeof GestaoConversaoRoute
@@ -320,7 +344,10 @@ export interface FileRoutesById {
   '/caixas/movimentacao': typeof CaixasMovimentacaoRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/expedicao/entrega': typeof ExpedicaoEntregaRoute
+  '/expedicao/rastreio': typeof ExpedicaoRastreioRoute
   '/expedicao/rotas': typeof ExpedicaoRotasRoute
+  '/expedicao/saida': typeof ExpedicaoSaidaRoute
   '/expedicao/tv': typeof ExpedicaoTvRoute
   '/gestao/clientes': typeof GestaoClientesRoute
   '/gestao/conversao': typeof GestaoConversaoRoute
@@ -360,7 +387,10 @@ export interface FileRouteTypes {
     | '/caixas/movimentacao'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/expedicao/entrega'
+    | '/expedicao/rastreio'
     | '/expedicao/rotas'
+    | '/expedicao/saida'
     | '/expedicao/tv'
     | '/gestao/clientes'
     | '/gestao/conversao'
@@ -398,7 +428,10 @@ export interface FileRouteTypes {
     | '/caixas/movimentacao'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/expedicao/entrega'
+    | '/expedicao/rastreio'
     | '/expedicao/rotas'
+    | '/expedicao/saida'
     | '/expedicao/tv'
     | '/gestao/clientes'
     | '/gestao/conversao'
@@ -436,7 +469,10 @@ export interface FileRouteTypes {
     | '/caixas/movimentacao'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/expedicao/entrega'
+    | '/expedicao/rastreio'
     | '/expedicao/rotas'
+    | '/expedicao/saida'
     | '/expedicao/tv'
     | '/gestao/clientes'
     | '/gestao/conversao'
@@ -475,7 +511,10 @@ export interface RootRouteChildren {
   CaixasMovimentacaoRoute: typeof CaixasMovimentacaoRoute
   CaixasRetornoRoute: typeof CaixasRetornoRoute
   CaixasSaldoRoute: typeof CaixasSaldoRoute
+  ExpedicaoEntregaRoute: typeof ExpedicaoEntregaRoute
+  ExpedicaoRastreioRoute: typeof ExpedicaoRastreioRoute
   ExpedicaoRotasRoute: typeof ExpedicaoRotasRoute
+  ExpedicaoSaidaRoute: typeof ExpedicaoSaidaRoute
   ExpedicaoTvRoute: typeof ExpedicaoTvRoute
   QuebraLancarRoute: typeof QuebraLancarRoute
   RecebimentoConferirRoute: typeof RecebimentoConferirRoute
@@ -680,11 +719,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExpedicaoTvRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/expedicao/saida': {
+      id: '/expedicao/saida'
+      path: '/expedicao/saida'
+      fullPath: '/expedicao/saida'
+      preLoaderRoute: typeof ExpedicaoSaidaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/expedicao/rotas': {
       id: '/expedicao/rotas'
       path: '/expedicao/rotas'
       fullPath: '/expedicao/rotas'
       preLoaderRoute: typeof ExpedicaoRotasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/expedicao/rastreio': {
+      id: '/expedicao/rastreio'
+      path: '/expedicao/rastreio'
+      fullPath: '/expedicao/rastreio'
+      preLoaderRoute: typeof ExpedicaoRastreioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/expedicao/entrega': {
+      id: '/expedicao/entrega'
+      path: '/expedicao/entrega'
+      fullPath: '/expedicao/entrega'
+      preLoaderRoute: typeof ExpedicaoEntregaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/caixas/saldo': {
@@ -789,7 +849,10 @@ const rootRouteChildren: RootRouteChildren = {
   CaixasMovimentacaoRoute: CaixasMovimentacaoRoute,
   CaixasRetornoRoute: CaixasRetornoRoute,
   CaixasSaldoRoute: CaixasSaldoRoute,
+  ExpedicaoEntregaRoute: ExpedicaoEntregaRoute,
+  ExpedicaoRastreioRoute: ExpedicaoRastreioRoute,
   ExpedicaoRotasRoute: ExpedicaoRotasRoute,
+  ExpedicaoSaidaRoute: ExpedicaoSaidaRoute,
   ExpedicaoTvRoute: ExpedicaoTvRoute,
   QuebraLancarRoute: QuebraLancarRoute,
   RecebimentoConferirRoute: RecebimentoConferirRoute,

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import {
   Route as RouteIcon,
@@ -35,8 +35,14 @@ import {
   type ProdutoRota,
   type CargaLojaRota,
 } from "@/hooks/use-expedicao-rotas";
+import { OrdemSeparacao } from "@/components/ordem-separacao";
+
+type RotasSearch = { cargaId?: string };
 
 export const Route = createFileRoute("/expedicao/rotas")({
+  validateSearch: (search: Record<string, unknown>): RotasSearch => ({
+    cargaId: typeof search.cargaId === "string" ? search.cargaId : undefined,
+  }),
   component: Page,
   head: () => ({ meta: [{ title: "Expedição por Rota · Campo Alegre" }] }),
 });
@@ -64,6 +70,8 @@ function groupByFamilia(produtos: ProdutoRota[]): FamiliaGroup[] {
 }
 
 function Page() {
+  const { cargaId } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const { data: rotasExpedicao = [], isLoading: loadingRotas } = useExpedicaoPorRota();
   const [selectedRotaId, setSelectedRotaId] = useState<string | null>(null);
   const [expandedLoja, setExpandedLoja] = useState<string | null>(null);
@@ -80,6 +88,28 @@ function Page() {
   const familias = useMemo(() => groupByFamilia(produtos), [produtos]);
 
   const activeRota = rotasExpedicao.find((r) => r.rota_id === activeRotaId);
+
+  // NOP-130: ordem de separação aberta (caixas numeradas, etiquetas, conteúdo).
+  if (cargaId) {
+    return (
+      <div>
+        <PageHeader
+          title="Ordem de Separação"
+          subtitle="Monte as caixas da ordem e confirme a separação"
+          actions={
+            <Link
+              to="/expedicao/rotas"
+              search={{}}
+              className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+            >
+              <ArrowLeft size={14} /> Voltar à rota
+            </Link>
+          }
+        />
+        <OrdemSeparacao cargaId={cargaId} onVoltar={() => navigate({ search: {} })} />
+      </div>
+    );
+  }
 
   const totalCaixas = familias.reduce((a, f) => a + f.totalCaixas, 0);
   const totalProdutos = produtos.length;
@@ -411,6 +441,18 @@ function LojasView({
         const isExpanded = expandedLoja === loja.carga_id;
         return (
           <div key={loja.carga_id} className="card-base">
+            <div className="flex items-center justify-between gap-2 px-4 pt-3">
+              <span className="text-xs text-muted-foreground">
+                Ordem {loja.carga_codigo.replace(/^PV-/, "")}
+              </span>
+              <Link
+                to="/expedicao/rotas"
+                search={{ cargaId: loja.carga_id }}
+                className="inline-flex items-center gap-1 min-h-9 px-3 rounded-lg bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary/15"
+              >
+                <Package size={12} /> Separar ordem
+              </Link>
+            </div>
             <button
               type="button"
               className="w-full p-4 flex items-center justify-between text-left"
