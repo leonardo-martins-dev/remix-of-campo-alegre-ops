@@ -15,24 +15,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PageHeader } from "@/components/page-header";
 import { useFornecedores, useCadastroMutations } from "@/hooks/use-cadastros";
 import { useAliases, usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { useResolverPendencia } from "@/hooks/use-wise-pedidos";
 import { useAuth } from "@/lib/auth";
 import { normalizeKey } from "@/lib/normalize";
+import { MesclarCadastrosPanel } from "@/components/gestao/mesclar-cadastros";
 
 type FornecedorRow = {
   id: string;
   nome: string;
   ativo: boolean;
+  codigo_wise?: string | null;
+  mesclado_em_id?: string | null;
 };
 
 const AGUARDANDO_VINCULO = "Aguardando vínculo";
@@ -50,21 +47,26 @@ export function FornecedoresPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [nome, setNome] = useState("");
+  const [codigoWise, setCodigoWise] = useState("");
+  const [selecionados, setSelecionados] = useState<string[]>([]);
   const [pendingDesativar, setPendingDesativar] = useState<FornecedorRow | null>(null);
 
   const pendFornecedor = useMemo(
     () =>
-      (pendencias as { id: string; tipo: string; nome_externo: string; codigo_externo: string | null }[]).filter(
-        (p) => p.tipo === "fornecedor"
-      ),
-    [pendencias]
+      (
+        pendencias as {
+          id: string;
+          tipo: string;
+          nome_externo: string;
+          codigo_externo: string | null;
+        }[]
+      ).filter((p) => p.tipo === "fornecedor"),
+    [pendencias],
   );
 
   const rows = useMemo(() => {
     const q = normalizeKey(busca);
-    let list = (fornecedores as FornecedorRow[]).filter(
-      (f) => f.nome !== AGUARDANDO_VINCULO
-    );
+    let list = (fornecedores as FornecedorRow[]).filter((f) => f.nome !== AGUARDANDO_VINCULO);
     if (q) list = list.filter((f) => normalizeKey(f.nome).includes(q));
     const ativos = list.filter((f) => f.ativo !== false);
     const inativos = list.filter((f) => f.ativo === false);
@@ -73,55 +75,66 @@ export function FornecedoresPage() {
 
   const fornecedorAliases = useMemo(() => {
     if (!editId) return [];
-    return (aliases as { id: string; tipo: string; nome_externo: string; entidade_id?: string | null }[]).filter(
-      (a) => a.tipo === "fornecedor" && a.entidade_id === editId
-    );
+    return (
+      aliases as { id: string; tipo: string; nome_externo: string; entidade_id?: string | null }[]
+    ).filter((a) => a.tipo === "fornecedor" && a.entidade_id === editId);
   }, [aliases, editId]);
 
   const openCreate = () => {
     setEditId(null);
     setNome("");
+    setCodigoWise("");
     setSheetOpen(true);
   };
 
   const openEdit = (row: FornecedorRow) => {
     setEditId(row.id);
     setNome(row.nome);
+    setCodigoWise(row.codigo_wise ?? "");
     setSheetOpen(true);
   };
+
+  const nomePorId = useMemo(
+    () => new Map((fornecedores as FornecedorRow[]).map((f) => [f.id, f.nome])),
+    [fornecedores],
+  );
+
+  const toggleSelecionado = (id: string) =>
+    setSelecionados((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const save = () => {
     if (!nome.trim()) {
       toast.error("Informe o nome do fornecedor");
       return;
     }
+    const codigo = codigoWise.trim() || null;
     if (editId) {
       update.mutate(
-        { id: editId, nome: nome.trim() },
+        { id: editId, nome: nome.trim(), codigo_wise: codigo },
         {
           onSuccess: () => {
             toast.success("Fornecedor atualizado");
             setSheetOpen(false);
           },
           onError: (e) => toast.error(e.message),
-        }
+        },
       );
     } else {
       insert.mutate(
-        { nome: nome.trim(), ativo: true },
+        { nome: nome.trim(), codigo_wise: codigo, ativo: true },
         {
           onSuccess: () => {
             toast.success("Fornecedor cadastrado");
             setSheetOpen(false);
           },
           onError: (e) => toast.error(e.message),
-        }
+        },
       );
     }
   };
 
   const inativoCount = (fornecedores as FornecedorRow[]).filter(
-    (f) => f.ativo === false && f.nome !== AGUARDANDO_VINCULO
+    (f) => f.ativo === false && f.nome !== AGUARDANDO_VINCULO,
   ).length;
 
   return (
@@ -178,7 +191,7 @@ export function FornecedoresPage() {
                         criarNome: p.nome_externo,
                         userId: user!.id,
                       },
-                      { onSuccess: () => toast.success("Criado") }
+                      { onSuccess: () => toast.success("Criado") },
                     )
                   }
                 >
@@ -189,6 +202,14 @@ export function FornecedoresPage() {
           </CardContent>
         </Card>
       )}
+
+      <MesclarCadastrosPanel
+        tipo="fornecedor"
+        rows={fornecedores as FornecedorRow[]}
+        aliases={aliases as { tipo: string; nome_externo: string; entidade_id?: string | null }[]}
+        selecionados={selecionados}
+        onLimparSelecao={() => setSelecionados([])}
+      />
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <Input
@@ -219,7 +240,28 @@ export function FornecedoresPage() {
               className={`flex justify-between items-center py-2 px-2 rounded-md hover:bg-muted/50 cursor-pointer border-b border-border ${row.ativo === false ? "opacity-50" : ""}`}
               onClick={() => openEdit(row)}
             >
-              <span>{row.nome}</span>
+              <span className="flex items-center gap-2 min-w-0">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 shrink-0"
+                  checked={selecionados.includes(row.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => toggleSelecionado(row.id)}
+                  aria-label={`Selecionar ${row.nome}`}
+                />
+                <span className="min-w-0">
+                  {row.codigo_wise ? (
+                    <span className="chip chip-muted mr-1">{row.codigo_wise}</span>
+                  ) : null}
+                  {row.nome}
+                  {row.mesclado_em_id ? (
+                    <span className="text-muted-foreground text-xs">
+                      {" "}
+                      · mesclado em {nomePorId.get(row.mesclado_em_id) ?? "outro cadastro"}
+                    </span>
+                  ) : null}
+                </span>
+              </span>
               <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                 {row.ativo === false ? (
                   <Button
@@ -232,7 +274,7 @@ export function FornecedoresPage() {
                         {
                           onSuccess: () => toast.success("Reativado"),
                           onError: (e) => toast.error(e.message),
-                        }
+                        },
                       )
                     }
                   >
@@ -257,7 +299,10 @@ export function FornecedoresPage() {
         </ul>
       )}
 
-      <AlertDialog open={!!pendingDesativar} onOpenChange={(open) => !open && setPendingDesativar(null)}>
+      <AlertDialog
+        open={!!pendingDesativar}
+        onOpenChange={(open) => !open && setPendingDesativar(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Desativar este fornecedor?</AlertDialogTitle>
@@ -281,7 +326,7 @@ export function FornecedoresPage() {
                       setPendingDesativar(null);
                     },
                     onError: (e) => toast.error(e.message),
-                  }
+                  },
                 );
               }}
             >
@@ -298,8 +343,20 @@ export function FornecedoresPage() {
           </SheetHeader>
           <div className="py-4 space-y-4">
             <div className="space-y-1">
+              <Label>Código Wise</Label>
+              <Input
+                value={codigoWise}
+                onChange={(e) => setCodigoWise(e.target.value)}
+                placeholder="Ex.: 35527016"
+              />
+            </div>
+            <div className="space-y-1">
               <Label>Nome</Label>
-              <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome do fornecedor" />
+              <Input
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Nome do fornecedor"
+              />
             </div>
             {editId && fornecedorAliases.length > 0 && (
               <div className="space-y-1">

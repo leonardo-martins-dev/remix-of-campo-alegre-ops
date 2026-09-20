@@ -24,12 +24,24 @@ function useCadastro<T>(table: string, key: readonly string[], select = "*") {
   });
 }
 
+export type CadastroBase = {
+  id: string;
+  nome: string;
+  ativo: boolean;
+  /** NOP-132: código Wise fora do nome */
+  codigo_wise?: string | null;
+  mesclado_em_id?: string | null;
+};
+
 export function useFornecedores() {
-  return useCadastro<{ id: string; nome: string; ativo: boolean }>("fornecedores", CADASTRO_KEYS.fornecedores);
+  return useCadastro<CadastroBase>("fornecedores", CADASTRO_KEYS.fornecedores);
 }
 
 export function useClientes() {
-  return useCadastro<{ id: string; nome: string; cnpj?: string | null; ativo: boolean }>("clientes", CADASTRO_KEYS.clientes);
+  return useCadastro<CadastroBase & { cnpj?: string | null; rota_id?: string | null }>(
+    "clientes",
+    CADASTRO_KEYS.clientes,
+  );
 }
 
 export function useProdutos() {
@@ -47,14 +59,20 @@ export function useProdutos() {
 }
 
 export function useMotoristas() {
-  return useCadastro<{ id: string; nome: string; ativo: boolean }>("motoristas", CADASTRO_KEYS.motoristas);
+  return useCadastro<{ id: string; nome: string; ativo: boolean }>(
+    "motoristas",
+    CADASTRO_KEYS.motoristas,
+  );
 }
 
 export function useCaminhoes() {
   return useQuery({
     queryKey: CADASTRO_KEYS.caminhoes,
     queryFn: async () => {
-      const { data, error } = await supabase.from("caminhoes").select("id, placa, modelo, ativo").order("placa");
+      const { data, error } = await supabase
+        .from("caminhoes")
+        .select("id, placa, modelo, ativo")
+        .order("placa");
       if (error) throw error;
       return (data ?? []).map((c) => ({ ...c, nome: c.placa }));
     },
@@ -66,7 +84,10 @@ export function useRotas() {
 }
 
 export function useDestinatarios() {
-  return useCadastro<{ id: string; nome: string; ativo: boolean }>("destinatarios", CADASTRO_KEYS.destinatarios);
+  return useCadastro<{ id: string; nome: string; ativo: boolean }>(
+    "destinatarios",
+    CADASTRO_KEYS.destinatarios,
+  );
 }
 
 export function useFamilias() {

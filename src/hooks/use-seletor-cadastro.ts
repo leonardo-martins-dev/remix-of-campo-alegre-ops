@@ -101,8 +101,12 @@ export function useItensCadastro(tipo: SeletorTipo, enabled = true) {
             return {
               id: f.id,
               nome: f.nome,
-              // fornecedores não têm coluna de código: o código Wise vem do alias.
-              codigo: texto(row, "codigo") ?? codigosFornecedor.data?.[f.id] ?? null,
+              // NOP-132: código Wise tem coluna própria; alias entra como reserva.
+              codigo:
+                texto(row, "codigo_wise") ??
+                texto(row, "codigo") ??
+                codigosFornecedor.data?.[f.id] ??
+                null,
               cnpj: texto(row, "cnpj"),
               ativo: f.ativo,
               meta: { ultimaEntrega: entregas.data?.ultimaPorFornecedor[f.id] ?? null },
@@ -135,6 +139,7 @@ export function useItensCadastro(tipo: SeletorTipo, enabled = true) {
             return {
               id: c.id,
               nome: c.nome,
+              codigo: texto(row, "codigo_wise"),
               cnpj: texto(row, "cnpj"),
               ativo: c.ativo,
               meta: { rota: rotaId ? (rotaPorId.get(rotaId) ?? null) : null },

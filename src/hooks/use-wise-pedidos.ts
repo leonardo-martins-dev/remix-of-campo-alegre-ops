@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { normalizeKey } from "@/lib/normalize";
+import { normalizeNomeCadastro } from "@/lib/mesclar-cadastro";
 import {
   applyAliases,
   buildWisePedidos,
@@ -38,35 +39,49 @@ export type ImportPreview = {
 };
 
 export function mapsFromCadastros(
-  fornecedores: { id: string; nome: string }[],
+  fornecedores: { id: string; nome: string; codigo_wise?: string | null }[],
   produtos: { id: string; nome: string; codigo?: string | null }[],
   destinatarios: { id: string; nome: string }[],
   clientes: { id: string; nome: string; cnpj?: string | null }[],
-  aliases: AliasRow[]
+  aliases: AliasRow[],
 ) {
-  const fornecedorByName = new Map(fornecedores.map((f) => [normalizeKey(f.nome), f.id]));
+  const fornecedorByName = new Map<string, string>();
+  const fornecedorByCode = new Map<string, string>();
+  for (const f of fornecedores) {
+    fornecedorByName.set(normalizeKey(f.nome), f.id);
+    // NOP-132: casa também sem o código grudado e sem "E OUTRA/E OUTROS"
+    const limpo = normalizeNomeCadastro(f.nome);
+    if (limpo && !fornecedorByName.has(limpo)) fornecedorByName.set(limpo, f.id);
+    const codigo = (f as { codigo_wise?: string | null }).codigo_wise;
+    if (codigo) fornecedorByCode.set(normalizeKey(codigo), f.id);
+  }
   const produtoByName = new Map(produtos.map((p) => [normalizeKey(p.nome), p.id]));
   const produtoByCode = new Map(
     produtos
       .filter((p): p is { id: string; nome: string; codigo?: string | null } => !!p.codigo)
-      .map((p) => [normalizeKey(String(p.codigo)), p.id])
+      .map((p) => [normalizeKey(String(p.codigo)), p.id]),
   );
   const destinatarioByName = new Map(destinatarios.map((d) => [normalizeKey(d.nome), d.id]));
-  const clienteByName = new Map(clientes.map((c) => [normalizeKey(c.nome), c.id]));
+  const clienteByName = new Map<string, string>();
+  for (const c of clientes) {
+    clienteByName.set(normalizeKey(c.nome), c.id);
+    const limpo = normalizeNomeCadastro(c.nome);
+    if (limpo && !clienteByName.has(limpo)) clienteByName.set(limpo, c.id);
+  }
   const clienteByCnpj = new Map(
-    clientes.filter((c) => c.cnpj).map((c) => [String(c.cnpj).replace(/\D/g, ""), c.id])
+    clientes.filter((c) => c.cnpj).map((c) => [String(c.cnpj).replace(/\D/g, ""), c.id]),
   );
   return applyAliases(
     {
       fornecedorByName,
-      fornecedorByCode: new Map(),
+      fornecedorByCode,
       produtoByName,
       produtoByCode,
       destinatarioByName,
       clienteByName,
       clienteByCnpj,
     },
-    aliases
+    aliases,
   );
 }
 
@@ -89,41 +104,24 @@ function toRpcPedidos(pedidos: WiseBuildPedido[]) {
   }));
 }
 
-/** Cria no cadastro os fornecedores do Wise que ainda não existem (por nome). */
-async function ensureFornecedoresCadastro(
-  nomes: string[],
-  existentes: { id: string; nome: string }[]
-): Promise<{ fornecedores: { id: string; nome: string }[]; criados: string[] }> {
-  const byKey = new Map(existentes.map((f) => [normalizeKey(f.nome), f]));
-  const faltando: string[] = [];
-  const seen = new Set<string>();
-  for (const raw of nomes) {
-    const nome = raw.trim();
-    if (!nome) continue;
-    const key = normalizeKey(nome);
-    if (seen.has(key) || byKey.has(key)) continue;
-    seen.add(key);
-    faltando.push(nome);
-  }
-  if (!faltando.length) return { fornecedores: existentes, criados: [] };
-
-  const { data, error } = await supabase
-    .from("fornecedores")
-    .insert(faltando.map((nome) => ({ nome, ativo: true })))
-    .select("id, nome");
-  if (error) throw new Error(error.message || "Erro ao cadastrar fornecedores da importação");
-
-  const criados = (data ?? []).map((f) => f.nome);
-  return {
-    fornecedores: [...existentes, ...(data ?? [])],
-    criados,
-  };
+/**
+ * NOP-132: a importação não cria mais fornecedor por nome novo — o que não
+ * casa (nome, nome limpo, alias ou código Wise) vira pendência "a vincular",
+ * para não multiplicar cadastros duplicados a cada planilha.
+ */
+function fornecedoresDaImportacao(
+  existentes: { id: string; nome: string; codigo_wise?: string | null }[],
+): {
+  fornecedores: { id: string; nome: string; codigo_wise?: string | null }[];
+  criados: string[];
+} {
+  return { fornecedores: existentes, criados: [] };
 }
 
 export async function buildImportPreview(payload: {
   file: ArrayBuffer;
   filename: string;
-  fornecedores: { id: string; nome: string }[];
+  fornecedores: { id: string; nome: string; codigo_wise?: string | null }[];
   produtos: { id: string; nome: string; codigo?: string | null }[];
   destinatarios: { id: string; nome: string }[];
   clientes?: { id: string; nome: string; cnpj?: string | null }[];
@@ -131,12 +129,12 @@ export async function buildImportPreview(payload: {
   const parsed = parseWisePedido(payload.file);
   if (!parsed.ok) throw new Error(parsed.error);
 
-  const { data: aliases } = await supabase.from("aliases").select("tipo, nome_externo, codigo_externo, entidade_id");
+  const { data: aliases } = await supabase
+    .from("aliases")
+    .select("tipo, nome_externo, codigo_externo, entidade_id");
 
-  const nomesForn = parsed.rows.map((r) => r.fornecedor).filter(Boolean);
-  const { fornecedores, criados: fornecedoresCriados } = await ensureFornecedoresCadastro(
-    nomesForn,
-    payload.fornecedores
+  const { fornecedores, criados: fornecedoresCriados } = fornecedoresDaImportacao(
+    payload.fornecedores,
   );
 
   const maps = mapsFromCadastros(
@@ -144,7 +142,7 @@ export async function buildImportPreview(payload: {
     payload.produtos,
     payload.destinatarios,
     payload.clientes ?? [],
-    (aliases ?? []) as AliasRow[]
+    (aliases ?? []) as AliasRow[],
   );
   const pedidos = buildWisePedidos(parsed.rows, maps);
   const ids = pedidos.map((p) => p.wise_pedido_id);
@@ -162,7 +160,10 @@ export async function buildImportPreview(payload: {
     .limit(1)
     .maybeSingle();
 
-  const semPreco = pedidos.reduce((n, p) => n + p.itens.filter((i) => i.preco_unitario == null).length, 0);
+  const semPreco = pedidos.reduce(
+    (n, p) => n + p.itens.filter((i) => i.preco_unitario == null).length,
+    0,
+  );
   const unidadeVazia = pedidos.reduce((n, p) => n + p.itens.filter((i) => !i.unidade).length, 0);
 
   return {
@@ -242,7 +243,7 @@ export function useImportWisePedidos() {
       file: ArrayBuffer;
       filename: string;
       created_by: string;
-      fornecedores: { id: string; nome: string }[];
+      fornecedores: { id: string; nome: string; codigo_wise?: string | null }[];
       produtos: { id: string; nome: string; codigo?: string | null }[];
       destinatarios: { id: string; nome: string }[];
       clientes?: { id: string; nome: string; cnpj?: string | null }[];
@@ -263,7 +264,7 @@ export function useSyncWisePedidos() {
   return useMutation({
     mutationFn: async (payload: {
       created_by: string;
-      fornecedores: { id: string; nome: string }[];
+      fornecedores: { id: string; nome: string; codigo_wise?: string | null }[];
       produtos: { id: string; nome: string; codigo?: string | null }[];
       destinatarios: { id: string; nome: string }[];
       clientes: { id: string; nome: string; cnpj?: string | null }[];
@@ -285,17 +286,16 @@ export function useSyncWisePedidos() {
           probed: result?.probed ?? [],
         };
       }
-      const { data: aliases } = await supabase.from("aliases").select("tipo, nome_externo, codigo_externo, entidade_id");
-      const { fornecedores, criados } = await ensureFornecedoresCadastro(
-        rows.map((r) => r.fornecedor).filter(Boolean),
-        payload.fornecedores
-      );
+      const { data: aliases } = await supabase
+        .from("aliases")
+        .select("tipo, nome_externo, codigo_externo, entidade_id");
+      const { fornecedores, criados } = fornecedoresDaImportacao(payload.fornecedores);
       const maps = mapsFromCadastros(
         fornecedores,
         payload.produtos,
         payload.destinatarios,
         payload.clientes,
-        (aliases ?? []) as AliasRow[]
+        (aliases ?? []) as AliasRow[],
       );
       const pedidos = buildWisePedidos(rows, maps);
       const preview: ImportPreview = {
@@ -306,7 +306,10 @@ export function useSyncWisePedidos() {
         pedidos,
         ignoradas: [],
         semItens: pedidos.every((p) => !p.itens.length),
-        semPreco: pedidos.reduce((n, p) => n + p.itens.filter((i) => i.preco_unitario == null).length, 0),
+        semPreco: pedidos.reduce(
+          (n, p) => n + p.itens.filter((i) => i.preco_unitario == null).length,
+          0,
+        ),
         unidadeVazia: 0,
         existentes: [],
         fornecedoresCriados: criados,
@@ -342,9 +345,15 @@ export function useDesfazerImportacao() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (importacaoId: string) => {
-      const { data, error } = await supabase.rpc("desfazer_importacao", { p_importacao_id: importacaoId });
+      const { data, error } = await supabase.rpc("desfazer_importacao", {
+        p_importacao_id: importacaoId,
+      });
       if (error) throw new Error(error.message);
-      return data as { removidos: number; mantidos: { codigo: string; motivo: string }[]; pendencias_removidas: number };
+      return data as {
+        removidos: number;
+        mantidos: { codigo: string; motivo: string }[];
+        pendencias_removidas: number;
+      };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pedidos"] });
@@ -358,7 +367,9 @@ export function useLimparPendenciasLote() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (importacaoId: string) => {
-      const { data, error } = await supabase.rpc("limpar_pendencias_importacao", { p_importacao_id: importacaoId });
+      const { data, error } = await supabase.rpc("limpar_pendencias_importacao", {
+        p_importacao_id: importacaoId,
+      });
       if (error) throw new Error(error.message);
       return Number(data ?? 0);
     },
@@ -387,7 +398,12 @@ export function useResolverPendencia() {
       let entidadeId = payload.entidadeId ?? null;
 
       if (payload.acao === "criar") {
-        const table = payload.tipo === "fornecedor" ? "fornecedores" : payload.tipo === "produto" ? "produtos" : "destinatarios";
+        const table =
+          payload.tipo === "fornecedor"
+            ? "fornecedores"
+            : payload.tipo === "produto"
+              ? "produtos"
+              : "destinatarios";
         const row: Record<string, unknown> = { nome: payload.criarNome ?? payload.nomeExterno };
         if (payload.tipo === "produto") {
           row.unidade = "UN";
@@ -413,14 +429,19 @@ export function useResolverPendencia() {
             entidade_id: entidadeId,
             origem: "wise",
           },
-          { onConflict: "tipo,origem,nome_externo" }
+          { onConflict: "tipo,origem,nome_externo" },
         );
       }
 
       const { data: pend } = await supabase
         .from("pendencias_vinculo")
         .update({
-          status: payload.acao === "dispensar" ? "dispensada" : payload.acao === "criar" ? "criada" : "vinculada",
+          status:
+            payload.acao === "dispensar"
+              ? "dispensada"
+              : payload.acao === "criar"
+                ? "criada"
+                : "vinculada",
           motivo: payload.motivo ?? null,
           entidade_id: entidadeId,
           resolved_by: payload.userId,
@@ -438,14 +459,21 @@ export function useResolverPendencia() {
             .eq("pedido_id", pend.pedido_id)
             .is("produto_id", null);
           const ids = (loose ?? [])
-            .filter((i) => i.nome_externo === payload.nomeExterno || (payload.codigoExterno && i.codigo_externo === payload.codigoExterno))
+            .filter(
+              (i) =>
+                i.nome_externo === payload.nomeExterno ||
+                (payload.codigoExterno && i.codigo_externo === payload.codigoExterno),
+            )
             .map((i) => i.id);
           if (ids.length) {
             await supabase.from("itens_pedido").update({ produto_id: entidadeId }).in("id", ids);
           }
         }
         if (payload.tipo === "fornecedor") {
-          await supabase.from("pedidos_recebimento").update({ fornecedor_id: entidadeId }).eq("id", pend.pedido_id);
+          await supabase
+            .from("pedidos_recebimento")
+            .update({ fornecedor_id: entidadeId })
+            .eq("id", pend.pedido_id);
         }
       }
 
@@ -457,9 +485,16 @@ export function useResolverPendencia() {
           .eq("tipo", "fornecedor")
           .eq("status", "aberta");
         if (!count) {
-          const { data: ped } = await supabase.from("pedidos_recebimento").select("status, fornecedor_id").eq("id", pend.pedido_id).maybeSingle();
+          const { data: ped } = await supabase
+            .from("pedidos_recebimento")
+            .select("status, fornecedor_id")
+            .eq("id", pend.pedido_id)
+            .maybeSingle();
           if (ped?.status === "aguardando_vinculo" && ped.fornecedor_id) {
-            await supabase.from("pedidos_recebimento").update({ status: "pendente" }).eq("id", pend.pedido_id);
+            await supabase
+              .from("pedidos_recebimento")
+              .update({ status: "pendente" })
+              .eq("id", pend.pedido_id);
           }
         }
       }
@@ -491,7 +526,7 @@ export function useAliasRapido() {
           entidade_id: payload.entidadeId,
           origem: "wise",
         },
-        { onConflict: "tipo,origem,nome_externo" }
+        { onConflict: "tipo,origem,nome_externo" },
       );
       if (error) throw error;
     },
