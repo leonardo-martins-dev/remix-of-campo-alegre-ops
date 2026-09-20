@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,34 +143,28 @@ export function FornecedoresPage() {
             {pendFornecedor.map((p) => (
               <div key={p.id} className="flex flex-wrap items-center gap-2 text-sm border-b pb-2">
                 <span className="font-medium">{p.nome_externo}</span>
-                <select
-                  className="h-8 rounded-md border px-2 text-sm"
-                  defaultValue=""
-                  onChange={(e) => {
-                    if (!e.target.value) return;
-                    resolver.mutate(
-                      {
-                        pendenciaId: p.id,
-                        acao: "vincular",
-                        tipo: "fornecedor",
-                        nomeExterno: p.nome_externo,
-                        codigoExterno: p.codigo_externo,
-                        entidadeId: e.target.value,
-                        userId: user!.id,
-                      },
-                      { onSuccess: () => toast.success("Vinculado") }
-                    );
-                  }}
-                >
-                  <option value="">Vincular a…</option>
-                  {(fornecedores as FornecedorRow[])
-                    .filter((f) => f.nome !== AGUARDANDO_VINCULO)
-                    .map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.nome}
-                      </option>
-                    ))}
-                </select>
+                <div className="w-52">
+                  <SeletorCadastro
+                    tipo="fornecedor"
+                    value={null}
+                    placeholder="Vincular a…"
+                    onChange={(id) => {
+                      if (!id) return;
+                      resolver.mutate(
+                        {
+                          pendenciaId: p.id,
+                          acao: "vincular",
+                          tipo: "fornecedor",
+                          nomeExterno: p.nome_externo,
+                          codigoExterno: p.codigo_externo,
+                          entidadeId: id,
+                          userId: user!.id,
+                        },
+                        { onSuccess: () => toast.success("Vinculado") },
+                      );
+                    }}
+                  />
+                </div>
                 <Button
                   size="sm"
                   variant="outline"

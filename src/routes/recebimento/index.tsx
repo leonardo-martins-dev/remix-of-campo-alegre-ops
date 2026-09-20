@@ -13,13 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -43,6 +36,8 @@ import { TableWrapper } from "@/components/table-wrapper";
 import { usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { formatDateBRT, formatDurationMinutes, formatTime, todayBRT } from "@/lib/utils-date";
 import { useSaidasEmTransito } from "@/hooks/use-saida-roca";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
+import { useFornecedoresComEntregaRecente } from "@/hooks/use-seletor-cadastro";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -182,6 +177,7 @@ function Page() {
   const canAdmin = isAdmin || resolveIsAdmin(profile, user);
   const { data: valesPendentes = 0 } = useContarValesPendentes();
   const { data: emTransito = [] } = useSaidasEmTransito();
+  const fornecedoresRecentes = useFornecedoresComEntregaRecente();
 
   const [fornecedorId, setFornecedorId] = useState("");
   const [codigo, setCodigo] = useState("");
@@ -714,18 +710,12 @@ function Page() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label>Fornecedor</Label>
-                <Select value={fornecedorId || undefined} onValueChange={setFornecedorId}>
-                  <SelectTrigger className="h-10 sm:h-9">
-                    <SelectValue placeholder="Selecione…" />
-                  </SelectTrigger>
-                  <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
-                    {fornecedores.filter((f) => f.ativo !== false).map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SeletorCadastro
+                  tipo="fornecedor"
+                  value={fornecedorId || null}
+                  onChange={(id) => setFornecedorId(id)}
+                  suggestedIds={fornecedoresRecentes}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Código do pedido</Label>
@@ -740,25 +730,18 @@ function Page() {
                   <div className="space-y-1">
                     <Label className="text-xs">Produto</Label>
                     <div className="flex gap-2">
-                      <Select
-                        value={item.produto_id || undefined}
-                        onValueChange={(v) =>
-                          setManualItens((prev) =>
-                            prev.map((it, i) => (i === idx ? { ...it, produto_id: v } : it))
-                          )
-                        }
-                      >
-                        <SelectTrigger className="h-10 sm:h-9 flex-1">
-                          <SelectValue placeholder="Produto…" />
-                        </SelectTrigger>
-                        <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
-                          {produtos.filter((pr) => (pr as { ativo?: boolean }).ativo !== false).map((pr) => (
-                            <SelectItem key={pr.id} value={pr.id}>
-                              {pr.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex-1">
+                        <SeletorCadastro
+                          tipo="produto"
+                          value={item.produto_id || null}
+                          fornecedorId={fornecedorId || null}
+                          onChange={(v) =>
+                            setManualItens((prev) =>
+                              prev.map((it, i) => (i === idx ? { ...it, produto_id: v } : it)),
+                            )
+                          }
+                        />
+                      </div>
                       {manualItens.length > 1 && (
                         <Button
                           type="button"
@@ -806,25 +789,15 @@ function Page() {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Cliente (CNPJ / nome)</Label>
-                    <Select
-                      value={item.cliente_id || undefined}
-                      onValueChange={(v) =>
+                    <SeletorCadastro
+                      tipo="cliente"
+                      value={item.cliente_id || null}
+                      onChange={(v) =>
                         setManualItens((prev) =>
-                          prev.map((it, i) => (i === idx ? { ...it, cliente_id: v } : it))
+                          prev.map((it, i) => (i === idx ? { ...it, cliente_id: v } : it)),
                         )
                       }
-                    >
-                      <SelectTrigger className="h-10 sm:h-9">
-                        <SelectValue placeholder="Cliente…" />
-                      </SelectTrigger>
-                      <SelectContent position="popper" onCloseAutoFocus={(e) => e.preventDefault()}>
-                        {clientes.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.nome}{c.cnpj ? ` · ${c.cnpj}` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
                 </div>
               ))}

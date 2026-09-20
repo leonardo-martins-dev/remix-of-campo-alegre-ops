@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import {
   Card,
   CardContent,
@@ -125,27 +126,23 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
           {role === "fornecedor" && (
             <div className="space-y-2">
               <Label>Fornecedor vinculado</Label>
-              <Select value={fornecedorId} onValueChange={setFornecedorId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {fornecedores.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SeletorCadastro
+                tipo="fornecedor"
+                value={fornecedorId || null}
+                onChange={(id) => setFornecedorId(id)}
+              />
             </div>
           )}
           <div className="space-y-2">
             <Label>Motorista vinculado (opcional)</Label>
-            <Select value={motoristaId || "__none"} onValueChange={(v) => setMotoristaId(v === "__none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none">Nenhum</SelectItem>
-                {motoristas.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SeletorCadastro
+              tipo="motorista"
+              value={motoristaId || null}
+              onChange={(id) => setMotoristaId(id)}
+              allowClear
+              clearLabel="Nenhum"
+              placeholder="Nenhum"
+            />
           </div>
           <Button type="submit" className="w-full sm:w-auto" disabled={loading}>
             {loading ? "Criando..." : "Criar usuário"}
@@ -308,34 +305,36 @@ export function UsersList() {
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Select
-                  value={u.motorista_id ?? "__none"}
-                  onValueChange={(v) =>
-                    updateProfile.mutate({ id: u.id, motorista_id: v === "__none" ? null : v }, { onSuccess: () => toast.success("Motorista vinculado") })
-                  }
-                >
-                  <SelectTrigger className="w-44 h-8"><SelectValue placeholder="Motorista" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">Sem motorista</SelectItem>
-                    {motoristas.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={u.fornecedor_id ?? "__none"}
-                  onValueChange={(v) =>
-                    updateProfile.mutate({ id: u.id, fornecedor_id: v === "__none" ? null : v }, { onSuccess: () => toast.success("Fornecedor vinculado") })
-                  }
-                >
-                  <SelectTrigger className="w-44 h-8"><SelectValue placeholder="Fornecedor" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">Sem fornecedor</SelectItem>
-                    {fornecedores.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="w-44">
+                  <SeletorCadastro
+                    tipo="motorista"
+                    value={u.motorista_id ?? null}
+                    onChange={(id) =>
+                      updateProfile.mutate(
+                        { id: u.id, motorista_id: id || null },
+                        { onSuccess: () => toast.success("Motorista vinculado") },
+                      )
+                    }
+                    allowClear
+                    clearLabel="Sem motorista"
+                    placeholder="Motorista"
+                  />
+                </div>
+                <div className="w-44">
+                  <SeletorCadastro
+                    tipo="fornecedor"
+                    value={u.fornecedor_id ?? null}
+                    onChange={(id) =>
+                      updateProfile.mutate(
+                        { id: u.id, fornecedor_id: id || null },
+                        { onSuccess: () => toast.success("Fornecedor vinculado") },
+                      )
+                    }
+                    allowClear
+                    clearLabel="Sem fornecedor"
+                    placeholder="Fornecedor"
+                  />
+                </div>
               </div>
             </div>
           ))}

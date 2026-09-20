@@ -36,6 +36,7 @@ import { useAuth } from "@/lib/auth";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { useSaldosCaixa, usePosicoes } from "@/hooks/use-ledger";
 import { useClientes, useFornecedores } from "@/hooks/use-cadastros";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import {
   useConciliarInventario,
   useContagensCaixa,
@@ -401,10 +402,6 @@ function VisaoGeralInventario() {
 
 function ConfigurarMinimoEstoque() {
   const { data: fornecedoresAll = [] } = useFornecedores();
-  const fornecedores = useMemo(
-    () => (fornecedoresAll as { id: string; nome: string; ativo: boolean }[]).filter((f) => f.ativo !== false),
-    [fornecedoresAll],
-  );
   const { data: tipos = [] } = useTiposCaixa();
   const { data: minimos = [] } = useMinimosEstoque();
   const saveMinimo = useSaveMinimoEstoque();
@@ -438,29 +435,24 @@ function ConfigurarMinimoEstoque() {
       <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 items-end">
         <div className="col-span-2 sm:flex-1 sm:min-w-[180px]">
           <Label className="text-xs">Fornecedor</Label>
-          <select
-            className="h-10 w-full rounded-md border px-2 mt-1 bg-background"
-            value={fornId}
-            onChange={(e) => setFornId(e.target.value)}
-          >
-            <option value="">Selecione…</option>
-            {fornecedores.map((f) => (
-              <option key={f.id} value={f.id}>{f.nome}</option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SeletorCadastro
+              tipo="fornecedor"
+              value={fornId || null}
+              onChange={(id) => setFornId(id)}
+            />
+          </div>
         </div>
-        <div>
+        <div className="col-span-2 sm:w-40">
           <Label className="text-xs">Tipo</Label>
-          <select
-            className="h-10 w-full sm:w-24 rounded-md border px-2 mt-1 bg-background"
-            value={tipoSel}
-            onChange={(e) => setTipoSel(e.target.value)}
-          >
-            <option value="">Tipo…</option>
-            {tipos.map((t) => (
-              <option key={t.id} value={t.sigla}>{t.sigla}</option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <SeletorCadastro
+              tipo="tipo_caixa"
+              value={tipos.find((t) => t.sigla === tipoSel)?.id ?? null}
+              onChange={(_id, item) => setTipoSel(item?.meta?.sigla ?? "")}
+              placeholder="Tipo…"
+            />
+          </div>
         </div>
         <div>
           <Label className="text-xs">Mínimo</Label>

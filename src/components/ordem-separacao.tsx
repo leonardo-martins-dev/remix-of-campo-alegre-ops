@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, Check, Package, Plus, Printer, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { NumberStepper } from "@/components/number-stepper";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
@@ -488,18 +489,14 @@ export function OrdemSeparacao({ cargaId, onVoltar }: { cargaId: string; onVolta
                     {bloqueada ? (
                       <span className="chip chip-muted">{cx.tipo_caixa_sigla || "—"}</span>
                     ) : (
-                      <select
-                        className="h-9 rounded-md border border-border bg-card px-2 text-xs"
-                        value={cx.tipo_caixa_sigla}
-                        onChange={(e) => trocarTipo(cx.key, e.target.value)}
-                      >
-                        <option value="">Tipo…</option>
-                        {tipos.map((t) => (
-                          <option key={t.id} value={t.sigla}>
-                            {t.sigla}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="w-32">
+                        <SeletorCadastro
+                          tipo="tipo_caixa"
+                          value={tipos.find((t) => t.sigla === cx.tipo_caixa_sigla)?.id ?? null}
+                          onChange={(_id, item) => trocarTipo(cx.key, item?.meta?.sigla ?? "")}
+                          placeholder="Tipo…"
+                        />
+                      </div>
                     )}
                     {!bloqueada && (
                       <button

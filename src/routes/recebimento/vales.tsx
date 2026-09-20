@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { KpiCard } from "@/components/kpi-card";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -291,19 +292,16 @@ function Page() {
             <Input type="date" className="flex-1 sm:flex-none sm:w-36 h-10 sm:h-9" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
           </div>
         )}
-        <Select value={fornecedorId} onValueChange={setFornecedorId}>
-          <SelectTrigger className="w-full sm:w-[200px] h-10 sm:h-9">
-            <SelectValue placeholder="Fornecedor" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos fornecedores</SelectItem>
-            {fornecedores.map((f) => (
-              <SelectItem key={f.id} value={f.id}>
-                {f.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="w-full sm:w-[200px]">
+          <SeletorCadastro
+            tipo="fornecedor"
+            value={fornecedorId === "all" ? null : fornecedorId}
+            onChange={(id) => setFornecedorId(id || "all")}
+            allowClear
+            clearLabel="Todos fornecedores"
+            placeholder="Todos fornecedores"
+          />
+        </div>
       </div>
 
       {/* Tabs */}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -247,12 +248,11 @@ function AberturaTab() {
           </div>
           <div className="space-y-1">
             <Label>Tipo de caixa</Label>
-            <select className="h-9 w-full rounded-md border px-2 text-sm" value={sigla} onChange={(e) => setSigla(e.target.value)}>
-              <option value="">Selecione…</option>
-              {tipos.map((t) => (
-                <option key={t.id} value={t.sigla}>{t.sigla}</option>
-              ))}
-            </select>
+            <SeletorCadastro
+              tipo="tipo_caixa"
+              value={tipos.find((t) => t.sigla === sigla)?.id ?? null}
+              onChange={(_id, item) => setSigla(item?.meta?.sigla ?? "")}
+            />
           </div>
           <div className="space-y-1">
             <Label>Quantidade</Label>

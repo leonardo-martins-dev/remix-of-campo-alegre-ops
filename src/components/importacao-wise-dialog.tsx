@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { formatDateBRT } from "@/lib/utils-date";
 import type { ImportPreview } from "@/hooks/use-wise-pedidos";
 import { useAliasRapido } from "@/hooks/use-wise-pedidos";
@@ -150,10 +151,14 @@ export function ImportacaoWiseDialog({
             {[...counts.forn.entries()].map(([nome, n]) => (
               <div key={nome} className="flex gap-2 items-center py-1 text-sm">
                 <span className="flex-1">{nome} · {n}x</span>
-                <select className="h-8 border rounded px-2" value={pickForn[nome] ?? ""} onChange={(e) => setPickForn((s) => ({ ...s, [nome]: e.target.value }))}>
-                  <option value="">Vincular a…</option>
-                  {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                </select>
+                <div className="w-52">
+                  <SeletorCadastro
+                    tipo="fornecedor"
+                    value={pickForn[nome] ?? null}
+                    onChange={(id) => setPickForn((s) => ({ ...s, [nome]: id }))}
+                    placeholder="Vincular a…"
+                  />
+                </div>
                 <Button size="sm" variant="outline" disabled={!pickForn[nome] || aliasMut.isPending} onClick={() => rebuildWithAlias("fornecedor", nome, undefined, pickForn[nome])}>
                   Vincular
                 </Button>
@@ -167,10 +172,14 @@ export function ImportacaoWiseDialog({
             {[...counts.prod.entries()].map(([nome, info]) => (
               <div key={nome} className="flex gap-2 items-center py-1 text-sm">
                 <span className="flex-1">{nome}{info.codigo ? ` · ${info.codigo}` : ""} · {info.n}x</span>
-                <select className="h-8 border rounded px-2" value={pickProd[nome] ?? ""} onChange={(e) => setPickProd((s) => ({ ...s, [nome]: e.target.value }))}>
-                  <option value="">Vincular a…</option>
-                  {produtos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                </select>
+                <div className="w-52">
+                  <SeletorCadastro
+                    tipo="produto"
+                    value={pickProd[nome] ?? null}
+                    onChange={(id) => setPickProd((s) => ({ ...s, [nome]: id }))}
+                    placeholder="Vincular a…"
+                  />
+                </div>
                 <Button size="sm" variant="outline" disabled={!pickProd[nome] || aliasMut.isPending} onClick={() => rebuildWithAlias("produto", nome, info.codigo, pickProd[nome])}>
                   Vincular
                 </Button>

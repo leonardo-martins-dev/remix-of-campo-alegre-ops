@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
-  Building2,
   Camera,
   Check,
   ChevronLeft,
@@ -14,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { NumberStepper } from "@/components/number-stepper";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
@@ -347,21 +347,13 @@ function Page() {
           {!loadingFornecedores && fornecedores.length === 0 && (
             <p className="text-sm text-muted-foreground">Nenhum fornecedor com pedido aberto.</p>
           )}
-          <div className="grid grid-cols-1 gap-2">
-            {fornecedores.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFornecedorId(f.id)}
-                className="card-base p-4 text-left flex items-center justify-between gap-3 active:scale-[0.99] transition-transform"
-              >
-                <span className="flex items-center gap-2 font-semibold text-navy">
-                  <Building2 size={18} className="text-primary" /> {f.nome}
-                </span>
-                <span className="chip chip-info">{f.pedidos} pedido(s)</span>
-              </button>
-            ))}
-          </div>
+          <SeletorCadastro
+            tipo="fornecedor"
+            value={null}
+            onChange={(id) => setFornecedorId(id || null)}
+            items={fornecedores.map((f) => ({ id: f.id, nome: f.nome }))}
+            placeholder="Escolher fornecedor…"
+          />
         </div>
       )}
 
@@ -463,25 +455,18 @@ function Page() {
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-2">
-                {motoristas
-                  .filter((m) => m.ativo !== false)
-                  .map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        setVeiculoFornecedor(false);
-                        setMotoristaId(m.id);
-                        setStep(3);
-                      }}
-                      className={`card-base p-4 text-left font-semibold text-navy active:scale-[0.99] transition-transform ${
-                        !veiculoFornecedor && motoristaId === m.id ? "border-primary" : ""
-                      }`}
-                    >
-                      {m.nome}
-                    </button>
-                  ))}
+              <div className="space-y-2">
+                <SeletorCadastro
+                  tipo="motorista"
+                  value={veiculoFornecedor ? null : motoristaId || null}
+                  onChange={(id) => {
+                    if (!id) return;
+                    setVeiculoFornecedor(false);
+                    setMotoristaId(id);
+                    setStep(3);
+                  }}
+                  placeholder="Escolher motorista…"
+                />
                 {motoristas.length === 0 && (
                   <p className="text-sm text-muted-foreground">Nenhum motorista cadastrado.</p>
                 )}

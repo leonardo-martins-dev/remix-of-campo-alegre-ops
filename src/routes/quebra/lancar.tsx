@@ -6,8 +6,10 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
-import { useFamilias, useFornecedores, useProdutos } from "@/hooks/use-cadastros";
+import { useProdutos } from "@/hooks/use-cadastros";
 import { useConfigValor } from "@/hooks/use-pedidos";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
+import { useFornecedoresComEntregaRecente } from "@/hooks/use-seletor-cadastro";
 import {
   useRegistrarQuebra,
   useUltimasEntregasProduto,
@@ -32,15 +34,14 @@ type ItemState = {
 
 function Page() {
   const { user } = useAuth();
-  const { data: fornecedores = [] } = useFornecedores();
   const { data: produtos = [] } = useProdutos();
-  const { data: familias = [] } = useFamilias();
   const { data: fallback = 4.5 } = useConfigValor("impacto_falta_por_unidade", 4.5);
   const registrar = useRegistrarQuebra();
   const [fornecedorId, setFornecedorId] = useState("");
-  const [familiaId, setFamiliaId] = useState("all");
-  const [busca, setBusca] = useState("");
+  const [produtosSel, setProdutosSel] = useState<string[]>([]);
   const [itens, setItens] = useState<Record<string, ItemState>>({});
+  // Fornecedores que entregaram na última semana sobem na lista.
+  const fornecedoresRecentes = useFornecedoresComEntregaRecente();
   const [obs, setObs] = useState("");
   const [saving, setSaving] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
@@ -63,13 +64,31 @@ function Page() {
       obs: "",
     };
 
-  const filtrados = useMemo(() => {
-    return (produtos as { id: string; nome: string; familia_id: string | null }[]).filter((p) => {
-      if (familiaId !== "all" && p.familia_id !== familiaId) return false;
-      if (busca && !p.nome.toLowerCase().includes(busca.toLowerCase())) return false;
-      return true;
+  const selecionados = useMemo(() => {
+    const porId = new Map((produtos as { id: string; nome: string }[]).map((p) => [p.id, p]));
+    return produtosSel
+      .map((id) => porId.get(id))
+      .filter((p): p is { id: string; nome: string } => !!p);
+  }, [produtos, produtosSel]);
+
+  /** Trocar os produtos com problema mantém as quantidades já digitadas. */
+  const aplicarSelecao = (ids: string[]) => {
+    setProdutosSel(ids);
+    setItens((prev) => {
+      const next: Record<string, ItemState> = {};
+      for (const id of ids) {
+        next[id] = prev[id] ?? {
+          qtd: 1,
+          vinculo: "",
+          tipo: "quebra",
+          fotoFile: null,
+          fotoPreview: null,
+          obs: "",
+        };
+      }
+      return next;
     });
-  }, [produtos, familiaId, busca]);
+  };
 
   const lancados = Object.entries(itens).filter(([, it]) => it.qtd > 0);
 
@@ -137,6 +156,7 @@ function Page() {
 
       toast.success("Laudo de ocorrência registrado");
       setItens({});
+      setProdutosSel([]);
       setObs("");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
@@ -168,40 +188,27 @@ function Page() {
             registre.
           </span>
         </div>
-        <select
-          className="h-11 w-full rounded-md border px-2"
-          value={fornecedorId}
-          onChange={(e) => setFornecedorId(e.target.value)}
-        >
-          <option value="">Fornecedor de origem…</option>
-          {fornecedores.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.nome}
-            </option>
-          ))}
-        </select>
-        <div className="flex flex-wrap gap-2">
-          <Input
-            placeholder="Buscar produto"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="flex-1"
-          />
-          <select
-            className="h-9 rounded-md border px-2"
-            value={familiaId}
-            onChange={(e) => setFamiliaId(e.target.value)}
-          >
-            <option value="all">Todas as famílias</option>
-            {(familias as { id: string; nome: string }[]).map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.nome}
-              </option>
-            ))}
-          </select>
-        </div>
+        <SeletorCadastro
+          tipo="fornecedor"
+          label="Fornecedor de origem"
+          value={fornecedorId || null}
+          onChange={(id) => setFornecedorId(id)}
+          suggestedIds={fornecedoresRecentes}
+          placeholder="Fornecedor de origem…"
+        />
+
+        <SeletorCadastro
+          tipo="produto"
+          label="Produtos com problema"
+          multiple
+          values={produtosSel}
+          onChangeMultiple={aplicarSelecao}
+          fornecedorId={fornecedorId || null}
+          placeholder="Selecionar produtos…"
+        />
+
         <div className="space-y-2 max-h-[50vh] overflow-y-auto">
-          {filtrados.map((p) => {
+          {selecionados.map((p) => {
             const item = getItem(p.id);
             return (
               <ProdutoLinha
@@ -217,6 +224,11 @@ function Page() {
               />
             );
           })}
+          {selecionados.length === 0 && (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              Escolha os produtos com problema no seletor acima.
+            </p>
+          )}
         </div>
         <Input
           placeholder="Observação geral do laudo"

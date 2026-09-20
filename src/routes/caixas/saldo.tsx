@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { parseCustoValor, shouldSaveCusto } from "@/lib/custo-unitario";
-import { Box, RotateCcw, Clock, Users, FileSpreadsheet, Search } from "lucide-react";
+import { Box, RotateCcw, Clock, Users, FileSpreadsheet } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { TableWrapper } from "@/components/table-wrapper";
 import { KpiCard } from "@/components/kpi-card";
@@ -25,13 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 
 export const Route = createFileRoute("/caixas/saldo")({
   component: Page,
@@ -86,7 +80,6 @@ function Page() {
   const cobrar = useCobrarCaixa();
   const [aba, setAba] = useState<"cliente" | "fornecedor" | "galpao">("cliente");
   const [parceiroId, setParceiroId] = useState<string>("ALL");
-  const [buscaParceiro, setBuscaParceiro] = useState("");
   const [filtro, setFiltro] = useState<string>("ALL");
   const [draftCustos, setDraftCustos] = useState<Record<string, string>>({});
   const [extratoId, setExtratoId] = useState<string | null>(null);
@@ -94,7 +87,6 @@ function Page() {
 
   useEffect(() => {
     setParceiroId("ALL");
-    setBuscaParceiro("");
   }, [aba]);
 
   const fornecedores = useMemo(
@@ -129,25 +121,6 @@ function Page() {
     }
     return m;
   }, [aging]);
-
-  const opcoesParceiro = useMemo(() => {
-    const q = buscaParceiro.trim().toLowerCase();
-    const base =
-      aba === "cliente"
-        ? clientesAtivos
-        : aba === "fornecedor"
-          ? fornecedores
-          : [];
-    const sorted = [...base].sort((a, b) => a.nome.localeCompare(b.nome));
-    if (!q) return sorted;
-    const filtered = sorted.filter((p) => p.nome.toLowerCase().includes(q));
-    // Mantém o selecionado na lista mesmo se a busca o ocultar
-    if (parceiroId !== "ALL" && !filtered.some((p) => p.id === parceiroId)) {
-      const selected = sorted.find((p) => p.id === parceiroId);
-      if (selected) return [selected, ...filtered];
-    }
-    return filtered;
-  }, [aba, clientesAtivos, fornecedores, buscaParceiro, parceiroId]);
 
   const clientesFiltrados = useMemo(() => {
     if (parceiroId === "ALL") return clientes;
@@ -321,30 +294,15 @@ function Page() {
         </div>
 
         {aba !== "galpao" && (
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-end flex-1 min-w-[220px] max-w-md">
-            <div className="relative flex-1">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder={`Buscar ${parceiroLabel.toLowerCase()}...`}
-                value={buscaParceiro}
-                onChange={(e) => setBuscaParceiro(e.target.value)}
-                className="w-full h-9 pl-8 pr-3 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-            <Select value={parceiroId} onValueChange={setParceiroId}>
-              <SelectTrigger className="w-full sm:w-56 h-9">
-                <SelectValue placeholder={`Todas · ${parceiroLabel}`} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Todas</SelectItem>
-                {opcoesParceiro.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex-1 min-w-[220px] max-w-md">
+            <SeletorCadastro
+              tipo={aba === "cliente" ? "cliente" : "fornecedor"}
+              value={parceiroId === "ALL" ? null : parceiroId}
+              onChange={(id) => setParceiroId(id || "ALL")}
+              allowClear
+              clearLabel={`Todas · ${parceiroLabel}`}
+              placeholder={`Todas · ${parceiroLabel}`}
+            />
           </div>
         )}
       </div>

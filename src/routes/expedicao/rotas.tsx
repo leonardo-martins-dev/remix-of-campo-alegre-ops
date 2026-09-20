@@ -17,13 +17,7 @@ import { PageHeader } from "@/components/page-header";
 import { TableWrapper } from "@/components/table-wrapper";
 import { StatStrip } from "@/components/stat-strip";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import {
   useExpedicaoPorRota,
   useProdutosPorRota,
@@ -171,24 +165,19 @@ function Page() {
       />
 
       <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 mb-4">
-        <Select value={activeRotaId ?? ""} onValueChange={setSelectedRotaId}>
-          <SelectTrigger className="w-full sm:w-[280px] h-10 sm:h-9">
-            <SelectValue placeholder="Selecionar rota" />
-          </SelectTrigger>
-          <SelectContent>
-            {rotasExpedicao.map((r) => (
-              <SelectItem key={r.rota_id} value={r.rota_id}>
-                <div className="flex items-center gap-2">
-                  <RouteIcon size={14} />
-                  {r.rota_nome}
-                  <span className="text-xs text-muted-foreground ml-1">
-                    ({r.total_lojas} loja{r.total_lojas !== 1 ? "s" : ""})
-                  </span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="w-full sm:w-[280px]">
+          <SeletorCadastro
+            tipo="rota"
+            value={activeRotaId}
+            onChange={(id) => setSelectedRotaId(id)}
+            items={rotasExpedicao.map((r) => ({
+              id: r.rota_id,
+              nome: r.rota_nome,
+              meta: { rota: `${r.total_lojas} loja${r.total_lojas !== 1 ? "s" : ""}` },
+            }))}
+            placeholder="Selecionar rota"
+          />
+        </div>
 
         <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary/50">
           <button

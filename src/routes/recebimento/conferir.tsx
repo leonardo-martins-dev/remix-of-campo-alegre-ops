@@ -33,13 +33,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -64,6 +57,7 @@ import { useCreateVale, useValesConferente, uploadValeFoto } from "@/hooks/use-v
 import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
 import { CaixasItemEditor, type CaixaItemEntry } from "@/components/caixas-item-editor";
 import { useCaixasItemConferencia } from "@/hooks/use-caixas-item";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import {
   useRegistrarChegadaSaida,
   useSaidaRocaPedido,
@@ -464,6 +458,11 @@ function ConferenciaItens({
     }));
   }, [pedido]);
   const { data: sugestoesCaixas } = useSugestaoCaixas(fornecedorIdPedido, itensParaSugestao);
+  /** Produtos do próprio pedido sobem no seletor do item avulso. */
+  const produtosDoPedido = useMemo(
+    () => itensParaSugestao.map((i) => i.produto_id).filter((id): id is string => !!id),
+    [itensParaSugestao],
+  );
 
   const { data: caixasItemExistentes } = useCaixasItemConferencia(conferencia?.id);
   const [caixasItem, setCaixasItem] = useState<Record<string, CaixaItemEntry[]>>({});
@@ -1740,18 +1739,13 @@ function ConferenciaItens({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Produto</Label>
-              <Select value={avulsoProduto} onValueChange={setAvulsoProduto}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {produtos.map((pr) => (
-                    <SelectItem key={pr.id} value={pr.id}>
-                      {pr.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SeletorCadastro
+                tipo="produto"
+                value={avulsoProduto || null}
+                onChange={(id) => setAvulsoProduto(id)}
+                fornecedorId={fornecedorId || null}
+                suggestedIds={produtosDoPedido}
+              />
             </div>
             <div className="space-y-2">
               <Label>Quantidade recebida</Label>

@@ -23,13 +23,7 @@ import { Donut } from "@/components/charts";
 import { BarRow } from "@/components/charts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { useAuth } from "@/lib/auth";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { useMotoristas } from "@/hooks/use-cadastros";
@@ -738,18 +732,12 @@ function MovimentacaoWizard() {
 
             {!veiculoFornecedor &&
               (isAdmin || !(profile as { motorista_id?: string } | null)?.motorista_id) && (
-                <Select value={motoristaId} onValueChange={setMotoristaId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione o motorista" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {motoristas.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SeletorCadastro
+                  tipo="motorista"
+                  value={motoristaId || null}
+                  onChange={(id) => setMotoristaId(id)}
+                  placeholder="Selecione o motorista"
+                />
               )}
 
             {!veiculoFornecedor && motoristaId && (

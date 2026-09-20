@@ -12,6 +12,7 @@ import { useConfirmarMovimento, useMovimentosFornecedor, usePosicoes, useRegistr
 import { useRegistrarInventario } from "@/hooks/use-inventario";
 import { enqueueFornecedorMov, getFornecedorQueue, removeFornecedorFromQueue } from "@/lib/offline-queue";
 import { NumberStepper } from "@/components/number-stepper";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { SugestaoCaixas } from "@/components/sugestao-caixas";
 import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
 import { supabase } from "@/lib/supabase";
@@ -203,10 +204,12 @@ function Page() {
           <option value="entrega_vazias">Levei vazias</option>
           <option value="recebimento_cheias">Entreguei cheias</option>
         </select>
-        <select className="h-11 w-full rounded-md border px-2" value={tipo} onChange={(e) => setTipo(e.target.value)}>
-          <option value="">Tipo…</option>
-          {tipos.map((t) => <option key={t.id} value={t.sigla}>{t.sigla} · {t.nome}</option>)}
-        </select>
+        <SeletorCadastro
+          tipo="tipo_caixa"
+          value={tipos.find((t) => t.sigla === tipo)?.id ?? null}
+          onChange={(_id, item) => setTipo(item?.meta?.sigla ?? "")}
+          placeholder="Tipo…"
+        />
         <NumberStepper value={qtd} onChange={setQtd} />
         <Button className="min-h-11 w-full" onClick={handleReg}>Registrar movimento</Button>
       </div>

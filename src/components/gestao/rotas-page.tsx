@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -224,26 +225,20 @@ export function RotasPage() {
                 className="flex items-center justify-between gap-2 border-b border-border py-2"
               >
                 <span className="font-medium text-sm">{c.cliente_nome}</span>
-                <select
-                  className="h-8 rounded-md border border-border px-2 text-sm"
-                  defaultValue=""
-                  onChange={(e) => {
-                    if (!e.target.value) return;
-                    alocarCliente.mutate(
-                      { clienteId: c.cliente_id, rotaId: e.target.value },
-                      { onSuccess: () => toast.success("Supermercado alocado à rota") }
-                    );
-                  }}
-                >
-                  <option value="">Selecionar rota…</option>
-                  {rotasList
-                    .filter((r) => r.ativo)
-                    .map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.nome}
-                      </option>
-                    ))}
-                </select>
+                <div className="w-48">
+                  <SeletorCadastro
+                    tipo="rota"
+                    value={null}
+                    placeholder="Selecionar rota…"
+                    onChange={(id) => {
+                      if (!id) return;
+                      alocarCliente.mutate(
+                        { clienteId: c.cliente_id, rotaId: id },
+                        { onSuccess: () => toast.success("Supermercado alocado à rota") },
+                      );
+                    }}
+                  />
+                </div>
               </div>
             ))}
           </CardContent>
@@ -283,29 +278,25 @@ export function RotasPage() {
             </div>
             <div className="space-y-1">
               <Label>Motorista padrão</Label>
-              <select
-                className="h-9 w-full rounded-md border border-border px-2 text-sm bg-background"
-                value={motoristaId}
-                onChange={(e) => setMotoristaId(e.target.value)}
-              >
-                <option value="">Nenhum</option>
-                {motoristas.map((m) => (
-                  <option key={m.id} value={m.id}>{m.nome}</option>
-                ))}
-              </select>
+              <SeletorCadastro
+                tipo="motorista"
+                value={motoristaId || null}
+                onChange={(id) => setMotoristaId(id)}
+                allowClear
+                clearLabel="Nenhum"
+                placeholder="Nenhum"
+              />
             </div>
             <div className="space-y-1">
               <Label>Caminhão padrão</Label>
-              <select
-                className="h-9 w-full rounded-md border border-border px-2 text-sm bg-background"
-                value={caminhaoId}
-                onChange={(e) => setCaminhaoId(e.target.value)}
-              >
-                <option value="">Nenhum</option>
-                {caminhoes.map((c) => (
-                  <option key={c.id} value={c.id}>{c.placa ?? c.nome}</option>
-                ))}
-              </select>
+              <SeletorCadastro
+                tipo="caminhao"
+                value={caminhaoId || null}
+                onChange={(id) => setCaminhaoId(id)}
+                allowClear
+                clearLabel="Nenhum"
+                placeholder="Nenhum"
+              />
             </div>
           </div>
           <SheetFooter>

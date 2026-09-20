@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { TableWrapper } from "@/components/table-wrapper";
 import { Button } from "@/components/ui/button";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -224,35 +225,21 @@ function ConversaoProdutoTab() {
           <div className="grid gap-3">
             <div className="grid gap-1">
               <Label>Produto</Label>
-              <select
-                className="h-9 rounded-md border border-border px-2 text-sm bg-background"
-                value={form.produto_id}
-                onChange={(e) => setForm((s) => ({ ...s, produto_id: e.target.value }))}
+              <SeletorCadastro
+                tipo="produto"
+                value={form.produto_id || null}
+                onChange={(id) => setForm((s) => ({ ...s, produto_id: id }))}
                 disabled={!!form.id}
-              >
-                <option value="">Selecione...</option>
-                {(produtos as { id: string; nome: string; codigo?: string | null }[]).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.codigo ? `${p.codigo} · ` : ""}{p.nome}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="grid gap-1">
               <Label>Tipo de caixa</Label>
-              <select
-                className="h-9 rounded-md border border-border px-2 text-sm bg-background"
-                value={form.tipo_caixa_id}
-                onChange={(e) => setForm((s) => ({ ...s, tipo_caixa_id: e.target.value }))}
+              <SeletorCadastro
+                tipo="tipo_caixa"
+                value={form.tipo_caixa_id || null}
+                onChange={(id) => setForm((s) => ({ ...s, tipo_caixa_id: id }))}
                 disabled={!!form.id}
-              >
-                <option value="">Selecione...</option>
-                {tiposCaixa.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.sigla} · {t.nome}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="grid gap-1">
               <Label>Fator (unidades por caixa)</Label>
@@ -418,49 +405,31 @@ function ConversaoFornecedorTab() {
           <div className="grid gap-3">
             <div className="grid gap-1">
               <Label>Fornecedor</Label>
-              <select
-                className="h-9 rounded-md border border-border px-2 text-sm bg-background"
-                value={form.fornecedor_id}
-                onChange={(e) => setForm((s) => ({ ...s, fornecedor_id: e.target.value }))}
+              <SeletorCadastro
+                tipo="fornecedor"
+                value={form.fornecedor_id || null}
+                onChange={(id) => setForm((s) => ({ ...s, fornecedor_id: id }))}
                 disabled={!!form.id}
-              >
-                <option value="">Selecione...</option>
-                {fornecedores.map((f) => (
-                  <option key={f.id} value={f.id}>{f.nome}</option>
-                ))}
-              </select>
+              />
             </div>
             <div className="grid gap-1">
               <Label>Produto</Label>
-              <select
-                className="h-9 rounded-md border border-border px-2 text-sm bg-background"
-                value={form.produto_id}
-                onChange={(e) => setForm((s) => ({ ...s, produto_id: e.target.value }))}
+              <SeletorCadastro
+                tipo="produto"
+                value={form.produto_id || null}
+                fornecedorId={form.fornecedor_id || null}
+                onChange={(id) => setForm((s) => ({ ...s, produto_id: id }))}
                 disabled={!!form.id}
-              >
-                <option value="">Selecione...</option>
-                {(produtos as { id: string; nome: string; codigo?: string | null }[]).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.codigo ? `${p.codigo} · ` : ""}{p.nome}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="grid gap-1">
               <Label>Tipo de caixa</Label>
-              <select
-                className="h-9 rounded-md border border-border px-2 text-sm bg-background"
-                value={form.tipo_caixa_id}
-                onChange={(e) => setForm((s) => ({ ...s, tipo_caixa_id: e.target.value }))}
+              <SeletorCadastro
+                tipo="tipo_caixa"
+                value={form.tipo_caixa_id || null}
+                onChange={(id) => setForm((s) => ({ ...s, tipo_caixa_id: id }))}
                 disabled={!!form.id}
-              >
-                <option value="">Selecione...</option>
-                {tiposCaixa.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.sigla} · {t.nome}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="grid gap-1">
               <Label>Fator (unidades por caixa)</Label>

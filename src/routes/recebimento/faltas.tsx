@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { FileSpreadsheet, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { TableWrapper } from "@/components/table-wrapper";
 import { KpiCard } from "@/components/kpi-card";
 import { BarRow } from "@/components/charts";
@@ -185,19 +186,16 @@ function Page() {
 
       <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 mb-4">
         <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-3">
-          <Select value={fornecedorId} onValueChange={setFornecedorId}>
-            <SelectTrigger className="w-full sm:w-[180px] h-10 sm:h-9">
-              <SelectValue placeholder="Fornecedor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos fornecedores</SelectItem>
-              {fornecedores.map((f) => (
-                <SelectItem key={f.id} value={f.id}>
-                  {f.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="w-full sm:w-[200px]">
+            <SeletorCadastro
+              tipo="fornecedor"
+              value={fornecedorId === "all" ? null : fornecedorId}
+              onChange={(id) => setFornecedorId(id || "all")}
+              allowClear
+              clearLabel="Todos fornecedores"
+              placeholder="Todos fornecedores"
+            />
+          </div>
           <Select value={period} onValueChange={(v) => setPeriod(v as typeof period)}>
             <SelectTrigger className="w-full sm:w-[120px] h-10 sm:h-9">
               <SelectValue />

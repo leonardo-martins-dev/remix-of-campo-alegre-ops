@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ArrowLeft, Boxes, Check, ChevronLeft, Store, Truck } from "lucide-react";
+import { ArrowLeft, Boxes, Check, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { useAuth } from "@/lib/auth";
 import { useMotoristas } from "@/hooks/use-cadastros";
 import { formatDateBRT } from "@/lib/utils-date";
@@ -130,23 +131,15 @@ function Page() {
       {step === 1 && (
         <div className="space-y-3">
           <h2 className="text-lg font-bold text-navy">Quem leva a carga?</h2>
-          <div className="grid grid-cols-1 gap-2">
-            {motoristas
-              .filter((m) => m.ativo !== false)
-              .map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setMotoristaId(m.id)}
-                  className="card-base p-4 text-left font-semibold text-navy flex items-center gap-2 active:scale-[0.99] transition-transform"
-                >
-                  <Truck size={18} className="text-primary" /> {m.nome}
-                </button>
-              ))}
-            {motoristas.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhum motorista cadastrado.</p>
-            )}
-          </div>
+          <SeletorCadastro
+            tipo="motorista"
+            value={motoristaId || null}
+            onChange={(id) => setMotoristaId(id)}
+            placeholder="Escolher motorista…"
+          />
+          {motoristas.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhum motorista cadastrado.</p>
+          )}
         </div>
       )}
 
@@ -163,27 +156,18 @@ function Page() {
               Nenhuma loja com ordem hoje. Importe as ordens no painel de expedição.
             </p>
           )}
-          <div className="grid grid-cols-1 gap-2">
-            {supermercados.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setClienteId(s.id)}
-                className="card-base p-4 text-left active:scale-[0.99] transition-transform"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-navy flex items-center gap-2 min-w-0">
-                    <Store size={16} className="text-primary shrink-0" />
-                    <span className="truncate">{s.nome}</span>
-                  </span>
-                  <span className={`chip shrink-0 ${s.separadas > 0 ? "chip-ok" : "chip-muted"}`}>
-                    {s.separadas} separada(s)
-                  </span>
-                </div>
-                {s.cnpj && <div className="text-xs text-muted-foreground mt-1">CNPJ {s.cnpj}</div>}
-              </button>
-            ))}
-          </div>
+          <SeletorCadastro
+            tipo="cliente"
+            value={clienteId}
+            onChange={(id) => setClienteId(id || null)}
+            items={supermercados.map((sm) => ({
+              id: sm.id,
+              nome: sm.nome,
+              cnpj: sm.cnpj,
+              meta: { rota: `${sm.separadas} separada(s)` },
+            }))}
+            placeholder="Escolher supermercado…"
+          />
         </div>
       )}
 

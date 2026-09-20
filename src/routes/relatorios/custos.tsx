@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { DollarSign, Package, AlertTriangle, Scale, ClipboardList, FileSpreadsheet, TrendingDown, Building2 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { TableWrapper } from "@/components/table-wrapper";
 import { KpiCard } from "@/components/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -220,56 +221,56 @@ function Page() {
           ))}
         </div>
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3">
-          <select
-            className="h-10 sm:h-8 rounded-md border px-2 text-xs sm:text-sm bg-background w-full sm:w-auto"
-            value={fornecedorId ?? ""}
-            onChange={(e) => setFornecedorId(e.target.value || null)}
-          >
-            <option value="">Fornecedor</option>
-            {fornecedores.map((f) => (
-              <option key={f.id} value={f.id}>{f.nome}</option>
-            ))}
-          </select>
-          <select
-            className="h-10 sm:h-8 rounded-md border px-2 text-xs sm:text-sm bg-background w-full sm:w-auto"
-            value={clienteId ?? ""}
-            onChange={(e) => setClienteId(e.target.value || null)}
-          >
-            <option value="">Supermercado</option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>{c.nome}</option>
-            ))}
-          </select>
-          <select
-            className="h-10 sm:h-8 rounded-md border px-2 text-xs sm:text-sm bg-background w-full sm:w-auto"
-            value={rotaId ?? ""}
-            onChange={(e) => setRotaId(e.target.value || null)}
-          >
-            <option value="">Rota</option>
-            {rotas.map((r) => (
-              <option key={r.id} value={r.id}>{r.nome}</option>
-            ))}
-          </select>
-          <select
-            className="h-10 sm:h-8 rounded-md border px-2 text-xs sm:text-sm bg-background w-full sm:w-auto"
-            value={motoristaId ?? ""}
-            onChange={(e) => setMotoristaId(e.target.value || null)}
-          >
-            <option value="">Motorista</option>
-            {motoristas.map((m) => (
-              <option key={m.id} value={m.id}>{m.nome}</option>
-            ))}
-          </select>
-          <select
-            className="h-10 sm:h-8 rounded-md border px-2 text-xs sm:text-sm bg-background w-full sm:w-auto"
-            value={tipoCaixa ?? ""}
-            onChange={(e) => setTipoCaixa(e.target.value || null)}
-          >
-            <option value="">Tipo caixa</option>
-            {tiposCaixa.map((t) => (
-              <option key={t.id} value={t.sigla}>{t.nome} ({t.sigla})</option>
-            ))}
-          </select>
+          <div className="w-full sm:w-44">
+            <SeletorCadastro
+              tipo="fornecedor"
+              value={fornecedorId}
+              onChange={(id) => setFornecedorId(id || null)}
+              allowClear
+              clearLabel="Todos · Fornecedor"
+              placeholder="Fornecedor"
+            />
+          </div>
+          <div className="w-full sm:w-44">
+            <SeletorCadastro
+              tipo="cliente"
+              value={clienteId}
+              onChange={(id) => setClienteId(id || null)}
+              allowClear
+              clearLabel="Todos · Supermercado"
+              placeholder="Supermercado"
+            />
+          </div>
+          <div className="w-full sm:w-44">
+            <SeletorCadastro
+              tipo="rota"
+              value={rotaId}
+              onChange={(id) => setRotaId(id || null)}
+              allowClear
+              clearLabel="Todos · Rota"
+              placeholder="Rota"
+            />
+          </div>
+          <div className="w-full sm:w-44">
+            <SeletorCadastro
+              tipo="motorista"
+              value={motoristaId}
+              onChange={(id) => setMotoristaId(id || null)}
+              allowClear
+              clearLabel="Todos · Motorista"
+              placeholder="Motorista"
+            />
+          </div>
+          <div className="w-full sm:w-44">
+            <SeletorCadastro
+              tipo="tipo_caixa"
+              value={tiposCaixa.find((t) => t.sigla === tipoCaixa)?.id ?? null}
+              onChange={(_id, item) => setTipoCaixa(item?.meta?.sigla ?? null)}
+              allowClear
+              clearLabel="Todos · Tipo caixa"
+              placeholder="Tipo caixa"
+            />
+          </div>
           {(fornecedorId || clienteId || rotaId || motoristaId || tipoCaixa) && (
             <Button size="sm" variant="ghost" className="h-10 sm:h-8 col-span-2 sm:col-span-1" onClick={clearFilters}>Limpar</Button>
           )}

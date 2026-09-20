@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -522,18 +523,20 @@ function ProdutoFatoresEditor({ produtoId }: { produtoId: string }) {
         <div className="flex flex-wrap items-end gap-2 pt-1">
           <div className="space-y-1">
             <Label className="text-xs">Tipo</Label>
-            <select
-              className="h-8 rounded-md border border-border px-2 text-sm bg-background"
-              value={tipoId}
-              onChange={(e) => setTipoId(e.target.value)}
-            >
-              <option value="">Selecionar</option>
-              {tiposDisponiveis.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nome} ({t.sigla})
-                </option>
-              ))}
-            </select>
+            <div className="w-44">
+              <SeletorCadastro
+                tipo="tipo_caixa"
+                value={tipoId || null}
+                onChange={(id) => setTipoId(id)}
+                items={tiposDisponiveis.map((t) => ({
+                  id: t.id,
+                  nome: t.nome,
+                  codigo: t.sigla,
+                  meta: { sigla: t.sigla },
+                }))}
+                placeholder="Selecionar"
+              />
+            </div>
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Fator</Label>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { exportToExcel } from "@/lib/excel";
 import { dateRangeBRT } from "@/lib/utils-date";
 import { useFornecedores } from "@/hooks/use-cadastros";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { useAuth } from "@/lib/auth";
 import {
   useEditarQuebraItem,
@@ -102,18 +103,16 @@ function Page() {
             {p === "today" ? "Hoje" : p === "week" ? "7 dias" : "30 dias"}
           </Button>
         ))}
-        <select
-          className="h-8 rounded-md border px-2 text-sm"
-          value={fornecedorId ?? ""}
-          onChange={(e) => setFornecedorId(e.target.value || null)}
-        >
-          <option value="">Todos fornecedores</option>
-          {fornecedores.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.nome}
-            </option>
-          ))}
-        </select>
+        <div className="w-full sm:w-56">
+          <SeletorCadastro
+            tipo="fornecedor"
+            value={fornecedorId}
+            onChange={(id) => setFornecedorId(id || null)}
+            allowClear
+            clearLabel="Todos fornecedores"
+            placeholder="Todos fornecedores"
+          />
+        </div>
         <select
           className="h-8 rounded-md border px-2 text-sm"
           value={tipoOcorrencia}
