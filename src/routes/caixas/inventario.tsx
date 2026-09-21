@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { NumberStepper } from "@/components/number-stepper";
 import { KpiCard } from "@/components/kpi-card";
+import { PendenciasInventarioSemanal } from "@/components/pendencias-inventario-semanal";
 import { useAuth } from "@/lib/auth";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { useSaldosCaixa, usePosicoes } from "@/hooks/use-ledger";
@@ -214,6 +215,9 @@ function VisaoGeralInventario() {
           positiveIsGood={false}
         />
       </div>
+
+      {/* NOP-158: pendência do inventário de embalagens junto com a de caixas */}
+      <PendenciasInventarioSemanal origem="caixas" />
 
       {/* Alertas pendentes */}
       {isAdmin && (pendentes.length > 0 || abaixoMinimo.length > 0 || divergencias.length > 0) && (

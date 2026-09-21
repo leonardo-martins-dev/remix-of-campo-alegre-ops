@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { todayISO } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { capitalNaRua, computeFifoAging } from "@/lib/caixas-map";
-import { addDaysBRT, todayBRT } from "@/lib/utils-date";
+import { addDaysBRT, formatDateBRT, todayBRT } from "@/lib/utils-date";
 
 export function useDashboard() {
   const date = todayISO();
@@ -135,7 +135,7 @@ export function useAlertas(enabled = true) {
     queryKey: ["alertas"],
     enabled,
     queryFn: async () => {
-      const [{ data: configs }, { data: saldo }, { data: cargas }, { data: tipos }, { data: pend }, { data: parciais }, { count: contestacoes }, { data: movs }, { data: lastCount }, { data: vencendo }, { data: lastInvAll }] = await Promise.all([
+      const [{ data: configs }, { data: saldo }, { data: cargas }, { data: tipos }, { data: pend }, { data: parciais }, { count: contestacoes }, { data: movs }, { data: lastCount }, { data: vencendo }, { data: lastInvAll }, { data: invEmbalagem }] = await Promise.all([
         supabase.from("configuracoes").select("chave, valor").in("chave", ["aging_critico_dias", "aging_alerta_dias", "lembrete_contagem_dias", "benchmark_quebra_fornecedor", "dias_confirmacao_fornecedor", "dias_encerrar_pedido", "lembrete_inventario_galpao_dias", "lembrete_inventario_cliente_dias", "lembrete_inventario_fornecedor_dias", "dias_conciliar_inventario"]),
         supabase.from("v_saldo_caixas_cliente").select("*"),
         supabase.from("cargas").select("codigo, status, clientes(nome), hora_inicio").eq("status", "aguardando"),
@@ -147,6 +147,7 @@ export function useAlertas(enabled = true) {
         supabase.from("contagens_caixa").select("created_at, conciliado_em, status, posicoes_caixa(tipo)").order("created_at", { ascending: false }).limit(30),
         supabase.from("pedidos_recebimento").select("codigo, data_prevista").in("status", ["parcial", "pendente"]),
         supabase.from("contagens_caixa").select("created_at, status, posicao_id").eq("status", "pendente").limit(20),
+        supabase.from("v_inventario_embalagem_status").select("*").maybeSingle(),
       ]);
 
       const critico = Number(configs?.find((c) => c.chave === "aging_critico_dias")?.valor ?? 10);
@@ -296,6 +297,27 @@ export function useAlertas(enabled = true) {
           });
         }
       });
+      // NOP-158: inventário semanal de embalagens (vence sexta, BRT) — só alerta, não bloqueia.
+      const emb = invEmbalagem as {
+        ultima_contagem_data: string | null;
+        dias_desde_contagem: number | null;
+        nunca_contado: boolean;
+        vencimento: string;
+        pendente: boolean;
+        situacao: string;
+      } | null;
+      if (emb?.pendente) {
+        const grave = emb.situacao === "atrasado" || emb.situacao === "sem_contagem";
+        (grave ? danger : warn).push({
+          tone: grave ? "danger" : "warn",
+          title: `Inventário de embalagens ${emb.situacao === "atrasado" ? "atrasado" : "pendente"}`,
+          desc: emb.nunca_contado
+            ? `Nenhuma contagem registrada. Vence na sexta (${formatDateBRT(emb.vencimento)}).`
+            : `Última contagem em ${formatDateBRT(emb.ultima_contagem_data)} (${emb.dias_desde_contagem} dias). Vence na sexta (${formatDateBRT(emb.vencimento)}).`,
+          href: "/embalagens/inventario",
+        });
+      }
+
       if ((contestacoes ?? 0) > 0) {
         danger.push({ tone: "danger", title: `${contestacoes} movimento(s) contestado(s)`, desc: "Revise no extrato do fornecedor.", href: "/caixas/movimentacao" });
       }

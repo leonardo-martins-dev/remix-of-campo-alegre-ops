@@ -41,6 +41,7 @@ import { Route as ExpedicaoSaidaRouteImport } from './routes/expedicao/saida'
 import { Route as ExpedicaoRotasRouteImport } from './routes/expedicao/rotas'
 import { Route as ExpedicaoRastreioRouteImport } from './routes/expedicao/rastreio'
 import { Route as ExpedicaoEntregaRouteImport } from './routes/expedicao/entrega'
+import { Route as EmbalagensInventarioRouteImport } from './routes/embalagens/inventario'
 import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
 import { Route as CaixasMovimentacaoRouteImport } from './routes/caixas/movimentacao'
@@ -210,6 +211,11 @@ const ExpedicaoEntregaRoute = ExpedicaoEntregaRouteImport.update({
   path: '/expedicao/entrega',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EmbalagensInventarioRoute = EmbalagensInventarioRouteImport.update({
+  id: '/embalagens/inventario',
+  path: '/embalagens/inventario',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CaixasSaldoRoute = CaixasSaldoRouteImport.update({
   id: '/caixas/saldo',
   path: '/caixas/saldo',
@@ -267,6 +273,7 @@ export interface FileRoutesByFullPath {
   '/caixas/movimentacao': typeof CaixasMovimentacaoRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/embalagens/inventario': typeof EmbalagensInventarioRoute
   '/expedicao/entrega': typeof ExpedicaoEntregaRoute
   '/expedicao/rastreio': typeof ExpedicaoRastreioRoute
   '/expedicao/rotas': typeof ExpedicaoRotasRoute
@@ -309,6 +316,7 @@ export interface FileRoutesByTo {
   '/caixas/movimentacao': typeof CaixasMovimentacaoRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/embalagens/inventario': typeof EmbalagensInventarioRoute
   '/expedicao/entrega': typeof ExpedicaoEntregaRoute
   '/expedicao/rastreio': typeof ExpedicaoRastreioRoute
   '/expedicao/rotas': typeof ExpedicaoRotasRoute
@@ -352,6 +360,7 @@ export interface FileRoutesById {
   '/caixas/movimentacao': typeof CaixasMovimentacaoRoute
   '/caixas/retorno': typeof CaixasRetornoRoute
   '/caixas/saldo': typeof CaixasSaldoRoute
+  '/embalagens/inventario': typeof EmbalagensInventarioRoute
   '/expedicao/entrega': typeof ExpedicaoEntregaRoute
   '/expedicao/rastreio': typeof ExpedicaoRastreioRoute
   '/expedicao/rotas': typeof ExpedicaoRotasRoute
@@ -396,6 +405,7 @@ export interface FileRouteTypes {
     | '/caixas/movimentacao'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/embalagens/inventario'
     | '/expedicao/entrega'
     | '/expedicao/rastreio'
     | '/expedicao/rotas'
@@ -438,6 +448,7 @@ export interface FileRouteTypes {
     | '/caixas/movimentacao'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/embalagens/inventario'
     | '/expedicao/entrega'
     | '/expedicao/rastreio'
     | '/expedicao/rotas'
@@ -480,6 +491,7 @@ export interface FileRouteTypes {
     | '/caixas/movimentacao'
     | '/caixas/retorno'
     | '/caixas/saldo'
+    | '/embalagens/inventario'
     | '/expedicao/entrega'
     | '/expedicao/rastreio'
     | '/expedicao/rotas'
@@ -523,6 +535,7 @@ export interface RootRouteChildren {
   CaixasMovimentacaoRoute: typeof CaixasMovimentacaoRoute
   CaixasRetornoRoute: typeof CaixasRetornoRoute
   CaixasSaldoRoute: typeof CaixasSaldoRoute
+  EmbalagensInventarioRoute: typeof EmbalagensInventarioRoute
   ExpedicaoEntregaRoute: typeof ExpedicaoEntregaRoute
   ExpedicaoRastreioRoute: typeof ExpedicaoRastreioRoute
   ExpedicaoRotasRoute: typeof ExpedicaoRotasRoute
@@ -766,6 +779,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExpedicaoEntregaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/embalagens/inventario': {
+      id: '/embalagens/inventario'
+      path: '/embalagens/inventario'
+      fullPath: '/embalagens/inventario'
+      preLoaderRoute: typeof EmbalagensInventarioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/caixas/saldo': {
       id: '/caixas/saldo'
       path: '/caixas/saldo'
@@ -870,6 +890,7 @@ const rootRouteChildren: RootRouteChildren = {
   CaixasMovimentacaoRoute: CaixasMovimentacaoRoute,
   CaixasRetornoRoute: CaixasRetornoRoute,
   CaixasSaldoRoute: CaixasSaldoRoute,
+  EmbalagensInventarioRoute: EmbalagensInventarioRoute,
   ExpedicaoEntregaRoute: ExpedicaoEntregaRoute,
   ExpedicaoRastreioRoute: ExpedicaoRastreioRoute,
   ExpedicaoRotasRoute: ExpedicaoRotasRoute,
