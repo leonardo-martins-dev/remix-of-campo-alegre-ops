@@ -17,6 +17,7 @@ import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 import { one } from "@/lib/embed";
 import { formatDateBRT } from "@/lib/utils-date";
 import { useMotoristas } from "@/hooks/use-cadastros";
@@ -36,6 +37,20 @@ export const Route = createFileRoute("/recebimento/saida-roca")({
   component: Page,
   head: () => ({ meta: [{ title: "Saída na roça · Campo Alegre" }] }),
 });
+
+const PASSOS = ["Pedido", "Transporte", "Caixas", "Confirmar"] as const;
+
+/**
+ * Barra de ação que acompanha a rolagem (NOP-155): em tablet no campo o
+ * Avançar/Confirmar precisa ficar sempre à mão, sem rolar até o fim.
+ */
+function BarraAcao({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="sticky bottom-0 z-30 -mx-3 mt-4 border-t border-border bg-background/95 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md md:-mx-5 md:px-5 md:pt-4">
+      {children}
+    </div>
+  );
+}
 
 type CaixaEntry = {
   tipo_caixa_id: string | null;
@@ -283,7 +298,7 @@ function Page() {
   const podeVoltar = step > 1 || (!!fornecedorId && !isFornecedor);
 
   return (
-    <div className="w-full max-w-lg mx-auto sm:max-w-2xl">
+    <div className="w-full max-w-lg mx-auto sm:max-w-2xl md:max-w-3xl lg:max-w-4xl">
       <input
         ref={fotoRef}
         type="file"
@@ -306,24 +321,54 @@ function Page() {
         }
       />
 
-      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
-        {["Pedido", "Transporte", "Caixas", "Confirmar"].map((label, i) => (
-          <span key={label} className="flex items-center gap-1">
-            {i > 0 && <span className="mx-0.5">›</span>}
-            <span
-              className={
-                step > i + 1 ? "text-primary" : step === i + 1 ? "text-primary font-bold" : ""
-              }
-            >
-              {label}
-            </span>
-          </span>
-        ))}
-      </div>
+      <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-2 mb-4 text-muted-foreground md:gap-x-3 md:mb-5">
+        {PASSOS.map((label, i) => {
+          const n = i + 1;
+          const feito = step > n;
+          const atual = step === n;
+          return (
+            <li key={label} className="flex items-center gap-1.5 md:gap-3">
+              {i > 0 && (
+                <span aria-hidden className="text-muted-foreground/60 md:text-lg">
+                  ›
+                </span>
+              )}
+              <span
+                aria-current={atual ? "step" : undefined}
+                className={cn(
+                  "flex items-center gap-1.5 md:gap-2",
+                  atual || feito ? "text-primary" : "text-muted-foreground",
+                )}
+              >
+                <span
+                  className={cn(
+                    "hidden sm:inline-flex h-7 w-7 items-center justify-center rounded-full border text-xs font-bold md:h-9 md:w-9 md:text-sm",
+                    atual
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : feito
+                        ? "border-primary/40 bg-primary-soft text-primary"
+                        : "border-border text-muted-foreground",
+                  )}
+                >
+                  {feito ? <Check size={16} /> : n}
+                </span>
+                <span
+                  className={cn(
+                    "text-xs sm:text-sm md:text-base",
+                    atual ? "font-bold" : feito ? "font-semibold" : "",
+                  )}
+                >
+                  {label}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
 
       {(offline || pendentes > 0) && (
-        <div className="rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs px-3 py-2 mb-3 flex items-center gap-2">
-          <WifiOff size={14} />
+        <div className="rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 text-sm px-3 py-2.5 mb-3 flex items-center gap-2 md:text-base md:px-4 md:py-3">
+          <WifiOff size={16} />
           {offline ? "Modo offline" : ""}
           {pendentes > 0 && ` · ${pendentes} saída(s) na fila`}
         </div>
@@ -333,19 +378,23 @@ function Page() {
         <button
           type="button"
           onClick={voltar}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-navy mb-3"
+          className="flex items-center gap-1 min-h-11 text-sm text-muted-foreground hover:text-navy mb-2 md:text-base"
         >
-          <ChevronLeft size={16} /> Voltar
+          <ChevronLeft size={20} /> Voltar
         </button>
       )}
 
       {/* ── 1a: motorista/admin escolhe o fornecedor ───────────── */}
       {step === 1 && !fornecedorId && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-bold text-navy">De qual fornecedor?</h2>
-          {loadingFornecedores && <p className="text-sm text-muted-foreground">Carregando…</p>}
+        <div className="space-y-3 md:space-y-4">
+          <h2 className="text-lg font-bold text-navy md:text-2xl">De qual fornecedor?</h2>
+          {loadingFornecedores && (
+            <p className="text-sm text-muted-foreground md:text-base">Carregando…</p>
+          )}
           {!loadingFornecedores && fornecedores.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nenhum fornecedor com pedido aberto.</p>
+            <p className="text-sm text-muted-foreground md:text-base">
+              Nenhum fornecedor com pedido aberto.
+            </p>
           )}
           <SeletorCadastro
             tipo="fornecedor"
@@ -353,35 +402,38 @@ function Page() {
             onChange={(id) => setFornecedorId(id || null)}
             items={fornecedores.map((f) => ({ id: f.id, nome: f.nome }))}
             placeholder="Escolher fornecedor…"
+            className="md:min-h-16 md:px-4 md:text-base"
           />
         </div>
       )}
 
       {/* ── 1b: escolher pedido aberto ─────────────────────────── */}
       {step === 1 && fornecedorId && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-bold text-navy">Qual pedido está saindo?</h2>
+        <div className="space-y-3 md:space-y-4">
+          <h2 className="text-lg font-bold text-navy md:text-2xl">Qual pedido está saindo?</h2>
           {pedidos.length > 4 && (
             <div className="relative">
               <Search
-                size={16}
+                size={18}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
               />
               <Input
-                className="pl-9 h-11"
+                className="pl-10 h-12 text-base md:h-14 md:text-base"
                 placeholder="Buscar pedido…"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
               />
             </div>
           )}
-          {loadingPedidos && <p className="text-sm text-muted-foreground">Carregando pedidos…</p>}
+          {loadingPedidos && (
+            <p className="text-sm text-muted-foreground md:text-base">Carregando pedidos…</p>
+          )}
           {!loadingPedidos && pedidosFiltrados.length === 0 && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground md:text-base">
               Nenhum pedido aberto para registrar saída.
             </p>
           )}
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
             {pedidosFiltrados.map((p) => (
               <button
                 key={p.id}
@@ -391,16 +443,18 @@ function Page() {
                   caixasInitRef.current = null;
                   setStep(2);
                 }}
-                className="card-base p-4 text-left active:scale-[0.99] transition-transform"
+                className="card-base p-4 min-h-20 text-left active:scale-[0.99] transition-transform md:p-5 md:min-h-24"
               >
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="font-bold text-navy">{p.codigo}</span>
+                  <span className="font-bold text-navy text-base md:text-lg">{p.codigo}</span>
                   <span className={`chip ${p.status === "parcial" ? "chip-warn" : "chip-muted"}`}>
                     {p.status === "parcial" ? "Parcial" : "A entregar"}
                   </span>
                 </div>
-                <div className="text-sm text-ink">{one(p.fornecedores)?.nome ?? "—"}</div>
-                <div className="text-xs text-muted-foreground mt-1">
+                <div className="text-sm text-ink md:text-base">
+                  {one(p.fornecedores)?.nome ?? "—"}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1 md:text-sm">
                   {(p.itens_pedido ?? []).length} item(ns)
                   {p.data_prevista ? ` · prevista ${formatDateBRT(p.data_prevista)}` : ""}
                 </div>
@@ -412,8 +466,8 @@ function Page() {
 
       {/* ── 2: transporte ──────────────────────────────────────── */}
       {step === 2 && pedido && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-bold text-navy">Quem leva a carga?</h2>
+        <div className="space-y-4 md:space-y-5">
+          <h2 className="text-lg font-bold text-navy md:text-2xl">Quem leva a carga?</h2>
 
           <button
             type="button"
@@ -421,30 +475,30 @@ function Page() {
               setVeiculoFornecedor(true);
               setStep(3);
             }}
-            className={`w-full card-base p-4 flex items-center gap-3 text-left active:scale-[0.99] transition-transform ${
+            className={`w-full card-base p-4 min-h-16 flex items-center gap-3 text-left active:scale-[0.99] transition-transform md:p-5 md:min-h-20 md:gap-4 ${
               veiculoFornecedor ? "border-primary" : ""
             }`}
           >
-            <Truck size={22} className="text-primary" />
+            <Truck size={26} className="text-primary shrink-0" />
             <span>
-              <span className="block font-bold text-navy">Veículo do fornecedor</span>
-              <span className="block text-xs text-muted-foreground">
+              <span className="block font-bold text-navy md:text-lg">Veículo do fornecedor</span>
+              <span className="block text-xs text-muted-foreground md:text-sm">
                 Sem motorista Campo Alegre
               </span>
             </span>
           </button>
 
           <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground md:text-sm">
               Motorista
             </div>
             {motoristaDoPerfil && !isAdmin ? (
-              <div className="card-base p-4 flex items-center justify-between">
-                <span className="font-semibold text-navy">
+              <div className="card-base p-4 flex items-center justify-between gap-3 md:p-5">
+                <span className="font-semibold text-navy md:text-lg">
                   {motoristas.find((m) => m.id === motoristaDoPerfil)?.nome ?? "Meu cadastro"}
                 </span>
                 <Button
-                  className="min-h-11"
+                  className="min-h-12 px-6 md:min-h-14 md:text-base"
                   onClick={() => {
                     setVeiculoFornecedor(false);
                     setMotoristaId(motoristaDoPerfil);
@@ -466,9 +520,12 @@ function Page() {
                     setStep(3);
                   }}
                   placeholder="Escolher motorista…"
+                  className="md:min-h-16 md:px-4 md:text-base"
                 />
                 {motoristas.length === 0 && (
-                  <p className="text-sm text-muted-foreground">Nenhum motorista cadastrado.</p>
+                  <p className="text-sm text-muted-foreground md:text-base">
+                    Nenhum motorista cadastrado.
+                  </p>
                 )}
               </div>
             )}
@@ -478,48 +535,58 @@ function Page() {
 
       {/* ── 3: caixas por produto ──────────────────────────────── */}
       {step === 3 && pedido && (
-        <div className="space-y-4">
-          <div className="text-xs text-muted-foreground">
+        <div className="space-y-4 md:space-y-5">
+          <div className="text-sm text-muted-foreground md:text-base">
             {pedido.codigo} ·{" "}
             <span className="font-semibold text-navy">
               {veiculoFornecedor ? "Veículo do fornecedor" : (motoristaNome ?? "Motorista")}
             </span>
           </div>
-          <h2 className="text-lg font-bold text-navy">Quantas caixas de cada produto?</h2>
+          <h2 className="text-lg font-bold text-navy md:text-2xl">
+            Quantas caixas de cada produto?
+          </h2>
 
-          <div className="space-y-3">
+          {/* Em paisagem (lg) cabem dois cartões por linha sem espremer o stepper. */}
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
             {itens.map((it) => {
               const entries = caixas[it.item_pedido_id] ?? [];
               const sug = it.produto_id ? sugestoes?.get(it.produto_id) : undefined;
               const totalItem = entries.reduce((a, e) => a + e.qtd, 0);
               return (
-                <div key={it.item_pedido_id} className="card-base p-4 space-y-3">
+                <div
+                  key={it.item_pedido_id}
+                  className="card-base p-4 space-y-3 md:p-5 md:space-y-4"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-bold text-navy leading-tight">{it.produto}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
+                      <div className="font-bold text-navy leading-tight text-base md:text-xl">
+                        {it.produto}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5 md:text-sm">
                         Pedido: {it.quantidade_pedida} {it.unidade}
                       </div>
                     </div>
-                    <span className="chip chip-info shrink-0">{totalItem} cx</span>
+                    <span className="chip chip-info shrink-0 md:text-sm">{totalItem} cx</span>
                   </div>
 
                   {(!sug || sug.sem_conversao) && (
-                    <p className="text-xs text-amber-700">
+                    <p className="text-xs text-amber-700 md:text-sm">
                       Sem fator un/cx cadastrado — informe as caixas manualmente.
                     </p>
                   )}
 
-                  <div className="space-y-2">
+                  <div className="space-y-2 md:space-y-2.5">
                     {entries.map((e) => (
                       <div
                         key={`${it.item_pedido_id}-${e.tipo_caixa_id ?? e.sigla}`}
-                        className="flex items-center justify-between gap-3 rounded-lg bg-secondary/40 p-2"
+                        className="flex items-center justify-between gap-3 rounded-lg bg-secondary/40 p-2 min-h-16 md:p-3"
                       >
                         <div className="min-w-0">
-                          <div className="font-semibold text-navy text-sm">{e.sigla}</div>
+                          <div className="font-semibold text-navy text-base md:text-lg">
+                            {e.sigla}
+                          </div>
                           {e.fator ? (
-                            <div className="text-[11px] text-muted-foreground">
+                            <div className="text-xs text-muted-foreground">
                               {e.fator} {it.unidade}/cx
                             </div>
                           ) : null}
@@ -528,6 +595,7 @@ function Page() {
                           value={e.qtd}
                           onChange={(v) => setQtd(it.item_pedido_id, e.tipo_caixa_id, e.sigla, v)}
                           inputMode="numeric"
+                          size="touch"
                         />
                       </div>
                     ))}
@@ -536,101 +604,122 @@ function Page() {
               );
             })}
             {itens.length === 0 && (
-              <p className="text-sm text-muted-foreground">Pedido sem itens cadastrados.</p>
+              <p className="text-sm text-muted-foreground md:text-base lg:col-span-2">
+                Pedido sem itens cadastrados.
+              </p>
             )}
           </div>
 
-          <Button
-            className="w-full min-h-12"
-            disabled={totalCaixas === 0}
-            onClick={() => setStep(4)}
-          >
-            Avançar · {totalCaixas} cx
-          </Button>
+          <BarraAcao>
+            <div className="flex items-center gap-3">
+              <div className="hidden text-sm text-muted-foreground md:block">
+                Total <span className="font-bold text-navy">{totalCaixas} cx</span>
+              </div>
+              <Button
+                className="w-full min-h-12 text-base md:ml-auto md:w-auto md:min-h-14 md:px-8"
+                disabled={totalCaixas === 0}
+                onClick={() => setStep(4)}
+              >
+                Avançar · {totalCaixas} cx
+              </Button>
+            </div>
+          </BarraAcao>
         </div>
       )}
 
       {/* ── 4: resumo e confirmação ────────────────────────────── */}
       {step === 4 && pedido && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-bold text-navy">Confirmar saída</h2>
+        <div className="space-y-4 md:space-y-5">
+          <h2 className="text-lg font-bold text-navy md:text-2xl">Confirmar saída</h2>
 
-          <div className="card-base p-4 space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Pedido</span>
-              <span className="font-semibold text-navy">{pedido.codigo}</span>
+          {/* Em paisagem: resumo à esquerda, foto/observação à direita. */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start lg:gap-5">
+            <div className="card-base p-4 space-y-2 text-sm md:p-5 md:space-y-2.5 md:text-base">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Pedido</span>
+                <span className="font-semibold text-navy">{pedido.codigo}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Fornecedor</span>
+                <span className="font-semibold text-navy">
+                  {one(pedido.fornecedores)?.nome ?? "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Transporte</span>
+                <span className="font-semibold text-navy">
+                  {veiculoFornecedor ? "Veículo do fornecedor" : (motoristaNome ?? "—")}
+                </span>
+              </div>
+              <div className="border-t border-border pt-2 space-y-1 md:space-y-1.5">
+                {Object.entries(totaisPorTipo).map(([sigla, qtd]) => (
+                  <div key={sigla} className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Package size={16} className="text-primary" /> {sigla}
+                    </span>
+                    <span className="font-bold text-navy">{qtd} cx</span>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-border pt-2 flex items-center justify-between font-bold md:text-lg">
+                <span>Total</span>
+                <span className="text-navy">{totalCaixas} cx</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Fornecedor</span>
-              <span className="font-semibold text-navy">
-                {one(pedido.fornecedores)?.nome ?? "—"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Transporte</span>
-              <span className="font-semibold text-navy">
-                {veiculoFornecedor ? "Veículo do fornecedor" : (motoristaNome ?? "—")}
-              </span>
-            </div>
-            <div className="border-t border-border pt-2 space-y-1">
-              {Object.entries(totaisPorTipo).map(([sigla, qtd]) => (
-                <div key={sigla} className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Package size={14} className="text-primary" /> {sigla}
-                  </span>
-                  <span className="font-bold text-navy">{qtd} cx</span>
+
+            <div className="space-y-4 md:space-y-5">
+              <div className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground md:text-sm">
+                  Foto da carga (opcional)
                 </div>
-              ))}
-            </div>
-            <div className="border-t border-border pt-2 flex items-center justify-between font-bold">
-              <span>Total</span>
-              <span className="text-navy">{totalCaixas} cx</span>
+                <div className="flex items-center gap-3">
+                  {fotoUrl && (
+                    <img
+                      src={fotoUrl}
+                      alt="Carga"
+                      className="w-16 h-16 rounded-lg object-cover border border-border md:w-20 md:h-20"
+                    />
+                  )}
+                  <Button
+                    variant="outline"
+                    className="min-h-12 px-5 md:min-h-14 md:text-base"
+                    disabled={enviandoFoto}
+                    onClick={() => fotoRef.current?.click()}
+                  >
+                    <Camera size={18} />{" "}
+                    {enviandoFoto ? "Enviando…" : fotoUrl ? "Trocar foto" : "Tirar foto"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground md:text-sm">
+                  Observação (opcional)
+                </div>
+                <Input
+                  className="h-12 text-base md:h-14 md:text-base"
+                  placeholder="Alguma observação da carga…"
+                  value={obs}
+                  onChange={(e) => setObs(e.target.value)}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Foto da carga (opcional)
-            </div>
+          <BarraAcao>
             <div className="flex items-center gap-3">
-              {fotoUrl && (
-                <img
-                  src={fotoUrl}
-                  alt="Carga"
-                  className="w-16 h-16 rounded-lg object-cover border border-border"
-                />
-              )}
+              <div className="hidden text-sm text-muted-foreground md:block">
+                {pedido.codigo} · <span className="font-bold text-navy">{totalCaixas} cx</span>
+              </div>
               <Button
-                variant="outline"
-                className="min-h-11"
-                disabled={enviandoFoto}
-                onClick={() => fotoRef.current?.click()}
+                className="w-full min-h-12 text-base md:ml-auto md:w-auto md:min-h-14 md:px-8"
+                disabled={confirmar.isPending || totalCaixas === 0}
+                onClick={enviar}
               >
-                <Camera size={16} />{" "}
-                {enviandoFoto ? "Enviando…" : fotoUrl ? "Trocar foto" : "Tirar foto"}
+                <Check size={20} /> Confirmar saída · {totalCaixas} cx
               </Button>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Observação (opcional)
-            </div>
-            <Input
-              className="h-11"
-              placeholder="Alguma observação da carga…"
-              value={obs}
-              onChange={(e) => setObs(e.target.value)}
-            />
-          </div>
-
-          <Button
-            className="w-full min-h-12"
-            disabled={confirmar.isPending || totalCaixas === 0}
-            onClick={enviar}
-          >
-            <Check size={18} /> Confirmar saída · {totalCaixas} cx
-          </Button>
+          </BarraAcao>
         </div>
       )}
     </div>

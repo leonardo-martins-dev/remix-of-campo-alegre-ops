@@ -6,7 +6,8 @@ interface Props {
   onChange: (n: number) => void;
   min?: number;
   step?: number;
-  size?: "sm" | "md";
+  /** `touch` = alvo grande que não encolhe no lg (telas de campo em tablet) */
+  size?: "sm" | "md" | "touch";
   width?: string;
   inputMode?: "numeric" | "decimal" | "text";
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
@@ -30,10 +31,15 @@ export function NumberStepper({
   inputRef,
   autoFocus,
 }: Props) {
-  const h = size === "sm" ? "h-9 w-9 lg:h-6 lg:w-6" : "h-11 w-11 lg:h-7 lg:w-7";
-  const ic = size === "sm" ? 14 : 16;
-  const icSm = size === "sm" ? 11 : 12;
-  const w = width ?? (size === "sm" ? "w-14 lg:w-10" : "w-16 lg:w-12");
+  const h =
+    size === "sm"
+      ? "h-9 w-9 lg:h-6 lg:w-6"
+      : size === "touch"
+        ? "h-12 w-12"
+        : "h-11 w-11 lg:h-7 lg:w-7";
+  const ic = size === "sm" ? 14 : size === "touch" ? 20 : 16;
+  const icSm = size === "sm" ? 11 : size === "touch" ? 20 : 12;
+  const w = width ?? (size === "sm" ? "w-14 lg:w-10" : size === "touch" ? "w-16" : "w-16 lg:w-12");
   const clamp = (n: number) => (Number.isFinite(n) ? Math.max(min, n) : min);
 
   const [focused, setFocused] = useState(false);
@@ -98,7 +104,13 @@ export function NumberStepper({
           commitDraft(draft);
         }}
         onKeyDown={onKeyDown}
-        className={`${w} text-center font-bold text-navy bg-transparent border border-transparent rounded focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30 px-1 ${size === "sm" ? "text-sm h-9 lg:text-xs lg:h-6" : "text-base h-11 lg:text-sm lg:h-7"}`}
+        className={`${w} text-center font-bold text-navy bg-transparent border border-transparent rounded focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30 px-1 ${
+          size === "sm"
+            ? "text-sm h-9 lg:text-xs lg:h-6"
+            : size === "touch"
+              ? "text-lg h-12"
+              : "text-base h-11 lg:text-sm lg:h-7"
+        }`}
       />
       <button
         type="button"
