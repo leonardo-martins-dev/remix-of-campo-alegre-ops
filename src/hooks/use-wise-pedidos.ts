@@ -262,67 +262,66 @@ export function useImportWisePedidos() {
 export function useSyncWisePedidos() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: {
+    mutationFn: async (_payload: {
       created_by: string;
       fornecedores: { id: string; nome: string; codigo_wise?: string | null }[];
       produtos: { id: string; nome: string; codigo?: string | null }[];
       destinatarios: { id: string; nome: string }[];
       clientes: { id: string; nome: string; cnpj?: string | null }[];
     }): Promise<ImportWiseResult & { source: string; message?: string; probed?: string[] }> => {
+      // Proxy → wise-sync-service (CMP218). Importação atômica fica na RPC do serviço.
       const { data: result, error } = await supabase.functions.invoke("sync-wise-pedidos", {
         body: {},
       });
       if (error) throw error;
-      const rows = (result?.rows ?? []) as Parameters<typeof buildWisePedidos>[0];
-      if (!rows.length) {
+      const rpc = (result?.result?.rpc ?? {}) as Partial<ImportWiseResult>;
+      const source = String(result?.source ?? "wise-sync-service");
+      if (source === "unconfigured" || result?.result?.empty_window) {
         return {
           novos: 0,
           atualizados: 0,
           itens: 0,
           pendencias: 0,
           ignoradas: [],
-          source: result?.source ?? "none",
-          message: result?.message ?? "Nenhum pedido na API Wise. Use a importação por arquivo.",
-          probed: result?.probed ?? [],
+          source,
+          message: result?.message ?? "Nenhum pedido na janela Wise. Use a importação por arquivo.",
         };
       }
-      const { data: aliases } = await supabase
-        .from("aliases")
-        .select("tipo, nome_externo, codigo_externo, entidade_id");
-      const { fornecedores, criados } = fornecedoresDaImportacao(payload.fornecedores);
-      const maps = mapsFromCadastros(
-        fornecedores,
-        payload.produtos,
-        payload.destinatarios,
-        payload.clientes,
-        (aliases ?? []) as AliasRow[],
-      );
-      const pedidos = buildWisePedidos(rows, maps);
-      const preview: ImportPreview = {
-        hash: "sync-wise-api",
-        filename: "sync-wise-api",
-        formato: "api",
-        linhasLidas: rows.length,
-        pedidos,
-        ignoradas: [],
-        semItens: pedidos.every((p) => !p.itens.length),
-        semPreco: pedidos.reduce(
-          (n, p) => n + p.itens.filter((i) => i.preco_unitario == null).length,
-          0,
-        ),
-        unidadeVazia: 0,
-        existentes: [],
-        fornecedoresCriados: criados,
-        arquivoAnterior: null,
+      if (result?.result && result.result.ok === false) {
+        throw new Error(result.result.error ?? result.message ?? "Falha no sync Wise");
+      }
+      return {
+        novos: Number(rpc.novos ?? 0),
+        atualizados: Number(rpc.atualizados ?? 0),
+        itens: Number(rpc.itens ?? 0),
+        pendencias: Number(rpc.pendencias ?? 0),
+        ignoradas: (rpc.ignoradas as ImportWiseResult["ignoradas"]) ?? [],
+        source,
+        message: result?.message,
       };
-      const upserted = await confirmImport(preview);
-      return { ...upserted, source: result?.source ?? "api", probed: result?.probed ?? [] };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pedidos"] });
       qc.invalidateQueries({ queryKey: ["pendencias-vinculo"] });
       qc.invalidateQueries({ queryKey: ["importacoes"] });
+      qc.invalidateQueries({ queryKey: ["wise-sync-status"] });
     },
+  });
+}
+
+export function useWiseSyncStatus() {
+  return useQuery({
+    queryKey: ["wise-sync-status"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("v_wise_sync_status").select("*").maybeSingle();
+      if (error) throw error;
+      return data as {
+        ultima_compra: string | null;
+        ultima_venda: string | null;
+        atualizado_em: string | null;
+      } | null;
+    },
+    staleTime: 60_000,
   });
 }
 

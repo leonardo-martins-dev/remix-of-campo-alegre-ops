@@ -29,7 +29,7 @@ import { useFornecedores, useProdutos, useDestinatarios, useClientes } from "@/h
 import { useAuth } from "@/lib/auth";
 import { resolveIsAdmin } from "@/lib/roles";
 import { downloadWiseModelo, type AliasRow } from "@/lib/excel-wise-pedidos";
-import { useConfirmWiseImport, usePreviewWiseImport, useSyncWisePedidos, type ImportPreview, type ImportWiseResult } from "@/hooks/use-wise-pedidos";
+import { useConfirmWiseImport, usePreviewWiseImport, useSyncWisePedidos, useWiseSyncStatus, type ImportPreview, type ImportWiseResult } from "@/hooks/use-wise-pedidos";
 import { ImportacaoWiseDialog } from "@/components/importacao-wise-dialog";
 import { ImportacoesPanel } from "@/components/importacoes-panel";
 import { TableWrapper } from "@/components/table-wrapper";
@@ -170,6 +170,7 @@ function Page() {
   const previewMut = usePreviewWiseImport();
   const confirmMut = useConfirmWiseImport();
   const syncWise = useSyncWisePedidos();
+  const { data: wiseSyncStatus } = useWiseSyncStatus();
   const { data: aliases = [] } = useAliases();
   const { data: pendencias = [] } = usePendenciasVinculo();
   const updatePedido = useUpdatePedidoAdmin();
@@ -401,6 +402,18 @@ function Page() {
             label: "Divergências",
             value: isLoading ? "…" : String(stats.divergencias),
             tone: "danger",
+          },
+          {
+            label: "Wise atualizado",
+            value: wiseSyncStatus?.ultima_compra
+              ? new Date(wiseSyncStatus.ultima_compra).toLocaleString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "—",
+            tone: "info",
           },
         ]}
       />

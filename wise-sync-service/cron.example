@@ -1,0 +1,4 @@
+# Install on VPS (America/Sao_Paulo). Requires CRON_SECRET in the environment.
+# crontab -e → paste:
+
+0 6 * * * curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" http://127.0.0.1:3021/v1/sync/all >> /var/log/wise-sync.log 2>&1

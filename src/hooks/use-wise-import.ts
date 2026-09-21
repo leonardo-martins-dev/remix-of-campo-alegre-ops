@@ -11,14 +11,27 @@ export type WiseCarregamento = {
   itens: { produto: string; produto_id?: string; quantidade: number }[];
 };
 
-export function useWiseCarregamentos(date = todayBRT()) {
+export function useWiseCarregamentos(_date = todayBRT()) {
   return useMutation({
-    mutationFn: async (rows?: Record<string, unknown>[]): Promise<WiseCarregamento[]> => {
+    mutationFn: async (): Promise<{
+      carregamentos: WiseCarregamento[];
+      message?: string;
+      source?: string;
+      result?: Record<string, unknown>;
+    }> => {
       const { data: result, error } = await supabase.functions.invoke("sync-wise-cargas", {
-        body: rows?.length ? { rows } : {},
+        body: {},
       });
       if (error) throw error;
-      return (result?.carregamentos ?? []) as WiseCarregamento[];
+      if (result?.result && result.result.ok === false) {
+        throw new Error(result.result.error ?? result.message ?? "Falha no sync Wise");
+      }
+      return {
+        carregamentos: (result?.carregamentos ?? []) as WiseCarregamento[],
+        message: result?.message,
+        source: result?.source,
+        result: result?.result,
+      };
     },
   });
 }

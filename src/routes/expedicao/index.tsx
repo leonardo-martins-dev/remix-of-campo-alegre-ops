@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { StatStrip } from "@/components/stat-strip";
+import { useWiseSyncStatus } from "@/hooks/use-wise-pedidos";
 import { ProgressRing } from "@/components/charts";
 import { NumberStepper } from "@/components/number-stepper";
 import {
@@ -145,6 +146,7 @@ function Page() {
   const importRelatorioVenda = useImportRelatorioVenda();
   const wiseFetch = useWiseCarregamentos();
   const importWise = useImportWiseCarregamento();
+  const { data: wiseSyncStatus } = useWiseSyncStatus();
   const iniciar = useIniciarCarga();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"todas" | "carregando" | "aguardando" | "concluida">("todas");
@@ -433,11 +435,15 @@ function Page() {
 
   const openWiseImport = async () => {
     try {
-      const list = await wiseFetch.mutateAsync(undefined);
+      const res = await wiseFetch.mutateAsync();
+      const list = res.carregamentos ?? [];
       setWiseList(list);
       setWiseSelected(list[0]?.id ?? "");
-      setWiseOpen(true);
-      if (!list.length) toast.info("Nenhum carregamento Wise para hoje (modo stub)");
+      if (list.length) {
+        setWiseOpen(true);
+      } else {
+        toast.info(res.message ?? "Sync Wise disparado. Cargas entram pelo serviço diário (ou importe Excel).");
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao consultar Wise");
     }
@@ -640,6 +646,18 @@ function Page() {
             label: "Itens conferidos",
             value: totalItens ? `${progresso}%` : "—",
             tone: "ok",
+          },
+          {
+            label: "Wise atualizado",
+            value: wiseSyncStatus?.ultima_venda
+              ? new Date(wiseSyncStatus.ultima_venda).toLocaleString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "—",
+            tone: "info",
           },
         ]}
       />
