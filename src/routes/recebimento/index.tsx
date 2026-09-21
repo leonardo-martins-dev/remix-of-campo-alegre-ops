@@ -514,21 +514,21 @@ function Page() {
                 </div>
                 {statusChip(p.status)}
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Itens</div>
-                  <div className="font-semibold text-navy">{p.itens_pedido?.length ?? 0}</div>
+              <div className="divide-y divide-border border-y border-border text-sm sm:grid sm:grid-cols-2 sm:gap-2 sm:border-0 sm:divide-y-0">
+                <div className="flex items-center justify-between gap-2 py-2 sm:block sm:py-0">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Itens</span>
+                  <span className="block font-semibold text-navy">{p.itens_pedido?.length ?? 0}</span>
                 </div>
-                <div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Chegada</div>
-                  <div className="font-semibold text-navy">{formatTime(p.hora_chegada)}</div>
+                <div className="flex items-center justify-between gap-2 py-2 sm:block sm:py-0">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Chegada</span>
+                  <span className="block font-semibold text-navy">{formatTime(p.hora_chegada)}</span>
                 </div>
-                <div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Prevista</div>
-                  <div className="font-semibold text-navy">{formatDateBRT(p.data_prevista)}</div>
+                <div className="flex items-center justify-between gap-2 py-2 sm:block sm:py-0">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Prevista</span>
+                  <span className="block font-semibold text-navy">{formatDateBRT(p.data_prevista)}</span>
                 </div>
-                <div>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide">Origem</div>
+                <div className="flex items-center justify-between gap-2 py-2 sm:block sm:py-0">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wide">Origem</span>
                   <span className={`chip ${p.origem === "wisetec" ? "chip-info" : "chip-muted"}`}>
                     {origemLabel(p.origem)}
                   </span>

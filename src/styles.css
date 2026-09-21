@@ -463,3 +463,14 @@
     }
   }
 }
+
+/* NOP-156: fora de @layer para vencer utilitários (text-sm/text-xs).
+   iOS dá zoom ao focar campo com fonte < 16px — no celular todo campo de
+   digitação sobe para 16px. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

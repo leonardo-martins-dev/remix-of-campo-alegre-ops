@@ -460,10 +460,10 @@ function MovimentacaoWizard() {
               placeholder="Buscar..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              className="w-full h-10 pl-9 pr-3 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full h-12 pl-9 pr-3 rounded-lg border border-border bg-card text-base sm:h-11 sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
-          <div className="space-y-1 max-h-[50vh] overflow-y-auto rounded-xl border border-border bg-card">
+          <div className="space-y-1 max-h-[60vh] overflow-y-auto overscroll-contain rounded-xl border border-border bg-card">
             {loadingEntidades && (
               <p className="p-4 text-sm text-muted-foreground">Carregando...</p>
             )}
@@ -482,9 +482,9 @@ function MovimentacaoWizard() {
                 key={ent.id}
                 type="button"
                 onClick={() => pickOrigem(ent)}
-                className="w-full text-left px-4 py-3 hover:bg-secondary/50 flex items-center justify-between border-b border-border last:border-0"
+                className="w-full min-h-14 text-left px-4 py-3 hover:bg-secondary/50 active:bg-secondary flex items-center justify-between gap-2 border-b border-border last:border-0"
               >
-                <span className="font-semibold text-navy">{ent.nome}</span>
+                <span className="font-semibold text-navy text-[15px]">{ent.nome}</span>
                 {ent.tipo === "cliente" && clientesHojeIds.has(ent.id) && (
                   <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-semibold">
                     rota hoje
@@ -499,7 +499,7 @@ function MovimentacaoWizard() {
       {/* ── STEP 2: Destino ────────────────────────────────── */}
       {step === 2 && origem && !destinoTipo && (
         <div className="space-y-3">
-          <div className="text-xs text-muted-foreground">
+          <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
             Origem: <span className="font-semibold text-navy">{origem.nome}</span> ({TIPO_LABEL[origem.tipo]})
           </div>
           <h2 className="text-lg font-bold text-navy">Para onde vão as caixas?</h2>
@@ -524,7 +524,7 @@ function MovimentacaoWizard() {
 
       {step === 2 && origem && destinoTipo && destinoTipo !== "galpao" && !destino && (
         <div className="space-y-3">
-          <div className="text-xs text-muted-foreground">
+          <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
             Origem: <span className="font-semibold text-navy">{origem.nome}</span> → {TIPO_LABEL[destinoTipo]}
           </div>
           <h2 className="text-lg font-bold text-navy">
@@ -537,10 +537,10 @@ function MovimentacaoWizard() {
               placeholder="Buscar..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              className="w-full h-10 pl-9 pr-3 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full h-12 pl-9 pr-3 rounded-lg border border-border bg-card text-base sm:h-11 sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
-          <div className="space-y-1 max-h-[50vh] overflow-y-auto rounded-xl border border-border bg-card">
+          <div className="space-y-1 max-h-[60vh] overflow-y-auto overscroll-contain rounded-xl border border-border bg-card">
             {loadingEntidades && (
               <p className="p-4 text-sm text-muted-foreground">Carregando...</p>
             )}
@@ -559,9 +559,9 @@ function MovimentacaoWizard() {
                 key={ent.id}
                 type="button"
                 onClick={() => pickDestino(ent)}
-                className="w-full text-left px-4 py-3 hover:bg-secondary/50 flex items-center justify-between border-b border-border last:border-0"
+                className="w-full min-h-14 text-left px-4 py-3 hover:bg-secondary/50 active:bg-secondary flex items-center justify-between gap-2 border-b border-border last:border-0"
               >
-                <span className="font-semibold text-navy">{ent.nome}</span>
+                <span className="font-semibold text-navy text-[15px]">{ent.nome}</span>
               </button>
             ))}
           </div>
@@ -571,7 +571,7 @@ function MovimentacaoWizard() {
       {/* ── STEP 3: Quantidades ────────────────────────────── */}
       {step === 3 && origem && destino && (
         <div className="space-y-4">
-          <div className="text-xs text-muted-foreground">
+          <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
             <span className="font-semibold text-navy">{origem.nome}</span>
             {" → "}
             <span className="font-semibold text-navy">{destino.nome}</span>

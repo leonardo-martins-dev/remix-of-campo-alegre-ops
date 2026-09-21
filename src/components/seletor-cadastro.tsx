@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Clock, Search, Sparkles, X } from "lucide-react";
-import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
+import { Drawer, DrawerClose, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -120,14 +120,16 @@ function Linha({
       onMouseMove={onHover}
       data-ativo={ativo ? "true" : undefined}
       className={cn(
-        "w-full min-h-12 px-3 py-2 flex items-center gap-3 text-left rounded-lg transition-colors",
+        "w-full min-h-14 sm:min-h-12 px-3 py-2.5 sm:py-2 flex items-center gap-3 text-left rounded-lg transition-colors",
         ativo ? "bg-secondary" : "hover:bg-secondary/60",
         selecionado && "bg-primary-soft",
       )}
     >
       <Avatar item={item} tipo={tipo} />
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-navy truncate">{item.nome}</span>
+        <span className="block text-[15px] sm:text-sm font-semibold text-navy truncate">
+          {item.nome}
+        </span>
         {detalhe && <span className="block text-xs text-muted-foreground truncate">{detalhe}</span>}
       </span>
       {tipo === "produto" && item.meta?.familia && (
@@ -309,7 +311,7 @@ function Painel({
 
   return (
     <div className="flex flex-1 flex-col min-h-0" onKeyDown={onKeyDown}>
-      <div className="p-3 pb-2 border-b border-border">
+      <div className="shrink-0 p-3 pb-2 border-b border-border bg-card">
         <div className="relative">
           <Search
             size={16}
@@ -321,7 +323,7 @@ function Painel({
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder={SELETOR_LABEL[tipo].placeholder}
-            className="w-full h-11 pl-9 pr-9 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full h-12 sm:h-11 pl-9 pr-9 rounded-lg border border-border bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
           {busca && (
             <button
@@ -393,7 +395,7 @@ function Painel({
           <button
             type="button"
             onClick={() => onPick({ id: "", nome: clearLabel ?? "Todos" })}
-            className="w-full min-h-12 px-3 py-2 text-left rounded-lg hover:bg-secondary/60 text-sm font-semibold text-muted-foreground"
+            className="w-full min-h-14 sm:min-h-12 px-3 py-2.5 sm:py-2 text-left rounded-lg hover:bg-secondary/60 text-sm font-semibold text-muted-foreground"
           >
             {clearLabel ?? `Todos · ${SELETOR_LABEL[tipo].plural}`}
           </button>
@@ -536,13 +538,21 @@ export function SeletorCadastro({
     : (atual?.nome ??
       (value && !itensFinais.length ? "…" : (placeholder ?? `${SELETOR_LABEL[tipo].singular}…`)));
 
+  const detalheAtual = atual ? detalheDoItem(atual, tipo, false) : null;
+  /** Escolhido fica visível na origem como cartão, com ação "Trocar". */
+  const preenchido = !!atual || selecionados.length > 0;
+
   const gatilho = (
     <button
       type="button"
       disabled={disabled}
       onClick={() => !disabled && setOpen(true)}
+      aria-label={preenchido ? `${textoBotao} — trocar` : textoBotao}
       className={cn(
-        "w-full min-h-11 px-3 rounded-lg border border-border bg-card flex items-center gap-2 text-left text-sm disabled:opacity-50",
+        "w-full min-h-14 sm:min-h-12 px-3 py-2 rounded-xl border flex items-center gap-2.5 text-left text-sm disabled:opacity-50 transition-colors",
+        preenchido
+          ? "border-primary/35 bg-primary-soft/50"
+          : "border-border bg-card hover:bg-secondary/40",
         className,
       )}
     >
@@ -550,19 +560,26 @@ export function SeletorCadastro({
       <span className="min-w-0 flex-1">
         <span
           className={cn(
-            "block truncate",
-            atual || selecionados.length ? "font-semibold text-navy" : "text-muted-foreground",
+            "block text-[15px] sm:text-sm leading-tight",
+            preenchido ? "font-bold text-navy line-clamp-2" : "text-muted-foreground truncate",
           )}
         >
           {textoBotao}
         </span>
-        {atual && detalheDoItem(atual, tipo, false) && (
-          <span className="block text-xs text-muted-foreground truncate">
-            {detalheDoItem(atual, tipo, false)}
+        {atual && detalheAtual && (
+          <span className="mt-0.5 block text-xs text-muted-foreground truncate">
+            {detalheAtual}
           </span>
         )}
       </span>
-      <ChevronDown size={16} className="shrink-0 text-muted-foreground" />
+      {preenchido ? (
+        <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-card border border-primary/30 px-2.5 py-1 text-xs font-bold text-primary-dark">
+          Trocar
+          <ChevronDown size={13} />
+        </span>
+      ) : (
+        <ChevronDown size={16} className="shrink-0 text-muted-foreground" />
+      )}
     </button>
   );
 
@@ -578,10 +595,18 @@ export function SeletorCadastro({
         <>
           {gatilho}
           <Drawer open={open} onOpenChange={setOpen}>
-            <DrawerContent className="max-h-[85vh]">
-              <DrawerTitle className="px-4 pt-1 pb-2 text-base font-bold text-navy">
-                {multiple ? SELETOR_LABEL[tipo].plural : SELETOR_LABEL[tipo].singular}
-              </DrawerTitle>
+            <DrawerContent className="h-[88dvh] max-h-[88dvh]">
+              <div className="shrink-0 flex items-center gap-2 px-4 pt-1 pb-2">
+                <DrawerTitle className="flex-1 min-w-0 text-base font-bold text-navy truncate">
+                  {multiple ? SELETOR_LABEL[tipo].plural : SELETOR_LABEL[tipo].singular}
+                </DrawerTitle>
+                <DrawerClose
+                  aria-label="Fechar"
+                  className="h-10 w-10 -mr-1 shrink-0 rounded-full flex items-center justify-center text-muted-foreground active:bg-secondary"
+                >
+                  <X size={18} />
+                </DrawerClose>
+              </div>
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">{open && painel}</div>
             </DrawerContent>
           </Drawer>

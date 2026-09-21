@@ -58,6 +58,7 @@ import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
 import { CaixasItemEditor, type CaixaItemEntry } from "@/components/caixas-item-editor";
 import { useCaixasItemConferencia } from "@/hooks/use-caixas-item";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
+import { isAguardandoVinculo } from "@/lib/seletor-cadastro";
 import {
   useRegistrarChegadaSaida,
   useSaidaRocaPedido,
@@ -494,6 +495,15 @@ function ConferenciaItens({
   const valeFotoRef = useRef<HTMLInputElement>(null);
 
   const pendentes = pedidos.filter((p) => PEDIDO_ABERTO.includes(p.status));
+  /** Pedidos abertos no seletor de troca (celular): nome do fornecedor + código. */
+  const pedidosSeletor = pendentes.map((p) => {
+    const nome = one(p.fornecedores)?.nome;
+    return {
+      id: p.id,
+      nome: !nome || isAguardandoVinculo(nome) ? p.codigo : nome,
+      codigo: p.codigo,
+    };
+  });
   const fornecedorNome =
     one(pedido?.fornecedores)?.nome ??
     one(pedidos.find((p) => p.id === pedidoId)?.fornecedores)?.nome ??
@@ -1187,14 +1197,27 @@ function ConferenciaItens({
         );
       })()}
 
+      {!readOnly && pendentes.length > 1 && (
+        <div className="mb-4 lg:hidden">
+          <SeletorCadastro
+            tipo="fornecedor"
+            label="Pedido em conferência"
+            items={pedidosSeletor}
+            value={pedidoId}
+            onChange={(id) => id && id !== pedidoId && onTrocar(id)}
+            placeholder="Escolher pedido…"
+          />
+        </div>
+      )}
+
       {!readOnly && (
-        <div className="flex flex-wrap gap-2 mb-4 overflow-x-auto pb-1">
+        <div className="hidden lg:flex flex-wrap gap-2 mb-4">
           {pendentes.map((p) => (
             <button
               key={p.id}
               type="button"
               onClick={() => onTrocar(p.id)}
-              className={`px-3 min-h-10 md:min-h-11 rounded-md text-xs md:text-sm font-semibold transition-colors whitespace-nowrap ${
+              className={`px-3 min-h-11 rounded-md text-sm font-semibold transition-colors whitespace-nowrap ${
                 p.id === pedidoId
                   ? "bg-primary text-primary-foreground"
                   : "bg-card border border-border text-navy hover:bg-secondary"
@@ -1307,23 +1330,23 @@ function ConferenciaItens({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                <div className="p-2 rounded-lg bg-secondary/50">
-                  <div className="text-xs text-muted-foreground">Pedido</div>
-                  <div className="font-bold text-navy">{it.pedido}</div>
+              <div className="mb-3 rounded-lg bg-secondary/50 divide-y divide-border sm:grid sm:grid-cols-3 sm:gap-2 sm:bg-transparent sm:divide-y-0">
+                <div className="flex items-center justify-between gap-2 px-3 py-2.5 sm:flex-col sm:gap-0 sm:rounded-lg sm:bg-secondary/50 sm:px-2 sm:py-2 sm:text-center">
+                  <span className="text-xs text-muted-foreground">Pedido</span>
+                  <span className="font-bold text-navy tabular-nums">{it.pedido}</span>
                 </div>
-                <div className="p-2 rounded-lg bg-secondary/50">
-                  <div className="text-xs text-muted-foreground">Já receb.</div>
-                  <div className="font-bold text-muted-foreground">{jaRecebido}</div>
+                <div className="flex items-center justify-between gap-2 px-3 py-2.5 sm:flex-col sm:gap-0 sm:rounded-lg sm:bg-secondary/50 sm:px-2 sm:py-2 sm:text-center">
+                  <span className="text-xs text-muted-foreground">Já receb.</span>
+                  <span className="font-bold text-muted-foreground tabular-nums">{jaRecebido}</span>
                 </div>
-                <div className="p-2 rounded-lg bg-secondary/50">
-                  <div className="text-xs text-muted-foreground">Saldo</div>
-                  <div
-                    className="font-bold"
+                <div className="flex items-center justify-between gap-2 px-3 py-2.5 sm:flex-col sm:gap-0 sm:rounded-lg sm:bg-secondary/50 sm:px-2 sm:py-2 sm:text-center">
+                  <span className="text-xs text-muted-foreground">Saldo</span>
+                  <span
+                    className="font-bold tabular-nums"
                     style={{ color: saldo > 0 ? "var(--warning)" : "var(--success)" }}
                   >
                     {saldo}
-                  </div>
+                  </span>
                 </div>
               </div>
 
@@ -1829,18 +1852,24 @@ function ConferenciaItens({
                 </div>
               </div>
               
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="p-3 rounded-lg border">
-                  <div className="text-2xl font-bold text-navy">{itLive.pedido}</div>
-                  <div className="text-xs text-muted-foreground">Pedido (un)</div>
+              <div className="rounded-lg border divide-y sm:grid sm:grid-cols-3 sm:gap-3 sm:border-0 sm:divide-y-0 sm:text-center">
+                <div className="flex items-center justify-between gap-2 p-3 sm:flex-col sm:gap-0 sm:rounded-lg sm:border">
+                  <span className="text-xs text-muted-foreground sm:order-2">Pedido (un)</span>
+                  <span className="text-xl sm:text-2xl font-bold text-navy tabular-nums sm:order-1">
+                    {itLive.pedido}
+                  </span>
                 </div>
-                <div className="p-3 rounded-lg border">
-                  <div className="text-2xl font-bold text-navy">{recebidoUn}</div>
-                  <div className="text-xs text-muted-foreground">Recebido (un)</div>
+                <div className="flex items-center justify-between gap-2 p-3 sm:flex-col sm:gap-0 sm:rounded-lg sm:border">
+                  <span className="text-xs text-muted-foreground sm:order-2">Recebido (un)</span>
+                  <span className="text-xl sm:text-2xl font-bold text-navy tabular-nums sm:order-1">
+                    {recebidoUn}
+                  </span>
                 </div>
-                <div className="p-3 rounded-lg border border-amber-200 bg-amber-50">
-                  <div className="text-2xl font-bold text-amber-700">{diferencaUn}</div>
-                  <div className="text-xs text-amber-600">Diferença (un)</div>
+                <div className="flex items-center justify-between gap-2 p-3 bg-amber-50 sm:flex-col sm:gap-0 sm:rounded-lg sm:border sm:border-amber-200">
+                  <span className="text-xs text-amber-600 sm:order-2">Diferença (un)</span>
+                  <span className="text-xl sm:text-2xl font-bold text-amber-700 tabular-nums sm:order-1">
+                    {diferencaUn}
+                  </span>
                 </div>
               </div>
 
