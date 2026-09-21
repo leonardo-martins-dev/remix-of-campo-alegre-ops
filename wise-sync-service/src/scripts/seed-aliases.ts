@@ -133,7 +133,7 @@ async function main() {
     .from("clientes")
     .select("id", { count: "exact", head: true })
     .eq("ativo", true)
-    .not("codigo", "is", null);
+    .not("codigo_wise", "is", null);
 
   logger.info(
     {

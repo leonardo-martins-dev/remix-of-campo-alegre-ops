@@ -31,11 +31,12 @@ export async function loadAliases(): Promise<AliasRow[]> {
 
 export async function loadClientesByCodigo(): Promise<Map<string, string>> {
   const sb = getSupabase();
-  const { data, error } = await sb.from("clientes").select("id, codigo").eq("ativo", true);
+  const { data, error } = await sb.from("clientes").select("id, codigo_wise").eq("ativo", true);
   if (error) throw new Error(error.message);
   const map = new Map<string, string>();
   for (const c of data ?? []) {
-    if (c.codigo) map.set(String(c.codigo).trim(), c.id);
+    const codigo = (c as { codigo_wise?: string | null }).codigo_wise;
+    if (codigo) map.set(String(codigo).trim(), c.id);
   }
   return map;
 }
