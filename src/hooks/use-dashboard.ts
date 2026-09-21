@@ -130,9 +130,10 @@ export function useIndicadores() {
   });
 }
 
-export function useAlertas() {
+export function useAlertas(enabled = true) {
   return useQuery({
     queryKey: ["alertas"],
+    enabled,
     queryFn: async () => {
       const [{ data: configs }, { data: saldo }, { data: cargas }, { data: tipos }, { data: pend }, { data: parciais }, { count: contestacoes }, { data: movs }, { data: lastCount }, { data: vencendo }, { data: lastInvAll }] = await Promise.all([
         supabase.from("configuracoes").select("chave, valor").in("chave", ["aging_critico_dias", "aging_alerta_dias", "lembrete_contagem_dias", "benchmark_quebra_fornecedor", "dias_confirmacao_fornecedor", "dias_encerrar_pedido", "lembrete_inventario_galpao_dias", "lembrete_inventario_cliente_dias", "lembrete_inventario_fornecedor_dias", "dias_conciliar_inventario"]),

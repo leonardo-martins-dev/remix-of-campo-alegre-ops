@@ -11,13 +11,31 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase, type AccessiblePage, type Profile } from "./supabase";
 import { ensureUserProfile } from "./ensure-profile";
 import { FORNECEDOR_SLUGS } from "./pages";
-import { resolveIsAdmin } from "./roles";
+import {
+  canViewValoresCaixa as resolveCanViewValoresCaixa,
+  isValoresCaixaSlug,
+  resolveIsAdmin,
+  type ViewMode,
+} from "./roles";
+
+const VIEW_MODE_KEY = "ca-view-mode";
+
+function readViewMode(): ViewMode {
+  if (typeof sessionStorage === "undefined") return "admin";
+  const raw = sessionStorage.getItem(VIEW_MODE_KEY);
+  return raw === "operador" ? "operador" : "admin";
+}
 
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
   isAdmin: boolean;
+  /** Modo de interface na sessão (admin pode alternar para operador sem re-login). */
+  viewMode: ViewMode;
+  setViewMode: (mode: ViewMode) => void;
+  /** Valores/saldos de caixa — regra centralizada por modo/perfil. */
+  canViewValoresCaixa: boolean;
   pages: AccessiblePage[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -48,6 +66,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [pages, setPages] = useState<AccessiblePage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewModeState] = useState<ViewMode>(readViewMode);
+
+  const setViewMode = useCallback((mode: ViewMode) => {
+    try {
+      sessionStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch {
+      /* sessionStorage indisponível */
+    }
+    setViewModeState(mode);
+  }, []);
 
   const loadUserData = useCallback(async (user: User) => {
     const [p, pg] = await Promise.all([
@@ -108,10 +136,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const user = session?.user ?? null;
   const isAdmin = resolveIsAdmin(profile, user);
 
+  const canViewValoresCaixa = resolveCanViewValoresCaixa(isAdmin, viewMode);
+
+  const visiblePages = useMemo(() => {
+    if (canViewValoresCaixa) return pages;
+    return pages.filter((p) => !isValoresCaixaSlug(p.slug));
+  }, [pages, canViewValoresCaixa]);
+
   const hasPageAccess = useCallback(
     (slug: string) => {
       if (profile?.role === "fornecedor") {
         return FORNECEDOR_SLUGS.includes(slug);
+      }
+      if (isValoresCaixaSlug(slug) && !resolveCanViewValoresCaixa(resolveIsAdmin(profile, user), viewMode)) {
+        return false;
       }
       if (slug === "gestao/usuarios") {
         return resolveIsAdmin(profile, user);
@@ -119,7 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (resolveIsAdmin(profile, user)) return true;
       return pages.some((p) => p.slug === slug);
     },
-    [profile, user, pages]
+    [profile, user, pages, viewMode]
   );
 
   const value = useMemo(
@@ -128,14 +166,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       isAdmin,
-      pages,
+      viewMode: isAdmin ? viewMode : ("operador" as ViewMode),
+      setViewMode,
+      canViewValoresCaixa,
+      pages: visiblePages,
       loading,
       signIn,
       signOut,
       refreshProfile,
       hasPageAccess,
     }),
-    [session, user, profile, isAdmin, pages, loading, signIn, signOut, refreshProfile, hasPageAccess]
+    [
+      session,
+      user,
+      profile,
+      isAdmin,
+      viewMode,
+      setViewMode,
+      canViewValoresCaixa,
+      visiblePages,
+      loading,
+      signIn,
+      signOut,
+      refreshProfile,
+      hasPageAccess,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

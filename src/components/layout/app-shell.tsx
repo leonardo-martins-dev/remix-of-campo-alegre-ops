@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState, Outlet } from "@tanstack/react-router";
 import {
-  ChevronDown, Bell, Search, Sprout, LogOut, Settings, UserPlus,
+  ChevronDown, Bell, Search, Sprout, LogOut, Settings, UserPlus, Eye, EyeOff,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -127,20 +127,24 @@ function SidebarNav({
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
-  const { profile, isAdmin, signOut } = useAuth();
+  const { profile, isAdmin, signOut, canViewValoresCaixa, viewMode, setViewMode } = useAuth();
   const isNarrow = useIsMobile();
   const [desktopOpen, setDesktopOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState("");
   const { data: searchResults } = useGlobalSearch(search);
-  const { data: alertas = [] } = useAlertas();
+  const { data: alertas = [] } = useAlertas(canViewValoresCaixa);
 
   const isTv = pathname.startsWith("/expedicao/tv");
   const isFornecedor = profile?.role === "fornecedor";
 
   if (isTv || isFornecedor) return <Outlet />;
 
-  const roleLabel = isAdmin ? "Administrador" : "Operação";
+  const roleLabel = !isAdmin
+    ? "Operação"
+    : viewMode === "operador"
+      ? "Admin · modo operador"
+      : "Administrador";
   const toggleNav = () => {
     if (isNarrow) setMobileOpen(true);
     else setDesktopOpen((o) => !o);
@@ -206,7 +210,8 @@ export function AppShell() {
                     Pedido {p.codigo} · {one(p.fornecedores)?.nome}
                   </button>
                 ))}
-                {searchResults.clientes.map((c: { id: string; nome: string }) => (
+                {canViewValoresCaixa &&
+                  searchResults.clientes.map((c: { id: string; nome: string }) => (
                   <button
                     key={c.id}
                     type="button"
@@ -285,6 +290,22 @@ export function AppShell() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {isAdmin && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const next = viewMode === "operador" ? "admin" : "operador";
+                      setViewMode(next);
+                      if (next === "operador") navigate({ to: "/" });
+                    }}
+                  >
+                    {viewMode === "operador" ? (
+                      <Eye size={14} className="mr-2" />
+                    ) : (
+                      <EyeOff size={14} className="mr-2" />
+                    )}
+                    {viewMode === "operador" ? "Modo administrador" : "Modo operador"}
+                  </DropdownMenuItem>
+                )}
                 {isAdmin && (
                   <DropdownMenuItem onClick={() => navigate({ to: "/gestao/usuarios" })}>
                     <UserPlus size={14} className="mr-2" /> Criar Usuários

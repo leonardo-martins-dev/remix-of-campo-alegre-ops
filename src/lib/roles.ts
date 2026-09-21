@@ -35,3 +35,21 @@ export function resolveProfile(
     ativo: true,
   };
 }
+
+/** Páginas com painel de valores/saldos de caixa (gerencial). */
+export const VALORES_CAIXA_SLUGS = ["caixas/saldo", "caixas/economia"] as const;
+
+export type ViewMode = "admin" | "operador";
+
+/**
+ * Painel de valores de caixa (saldos, totais, capital) — só no modo administrador.
+ * Centralizado para telas futuras herdarem a mesma regra.
+ */
+export function canViewValoresCaixa(isAdmin: boolean, viewMode: ViewMode = "admin"): boolean {
+  if (!isAdmin) return false;
+  return viewMode === "admin";
+}
+
+export function isValoresCaixaSlug(slug: string): boolean {
+  return (VALORES_CAIXA_SLUGS as readonly string[]).includes(slug);
+}

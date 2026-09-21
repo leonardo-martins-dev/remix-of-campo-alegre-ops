@@ -1,18 +1,95 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Truck, Percent, Box, DollarSign, AlertCircle } from "lucide-react";
+import {
+  Truck,
+  Percent,
+  Box,
+  DollarSign,
+  AlertCircle,
+  PackageCheck,
+  ArrowLeftRight,
+  ClipboardCheck,
+} from "lucide-react";
 import { KpiCard } from "@/components/kpi-card";
 import { formatBRL } from "@/lib/format";
 import { Donut, BarRow } from "@/components/charts";
 import { PageHeader } from "@/components/page-header";
 import { useDashboard, useAlertas } from "@/hooks/use-dashboard";
 import { CoberturaDiaCard } from "@/components/cobertura-dia";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
   head: () => ({ meta: [{ title: "Dashboard · Campo Alegre" }] }),
 });
 
+const OPS_ACTIONS = [
+  {
+    to: "/recebimento" as const,
+    title: "Recebimento",
+    desc: "Pedidos, chegada e faltas",
+    icon: PackageCheck,
+  },
+  {
+    to: "/recebimento/conferir" as const,
+    title: "Conferência",
+    desc: "Conferir carga e gerar vale",
+    icon: ClipboardCheck,
+  },
+  {
+    to: "/caixas/movimentacao" as const,
+    title: "Movimentação de caixas",
+    desc: "Entrada, saída e transferência",
+    icon: ArrowLeftRight,
+  },
+  {
+    to: "/expedicao" as const,
+    title: "Expedição",
+    desc: "Painel de carga, saída e entrega",
+    icon: Truck,
+  },
+];
+
+function OperatorHome() {
+  return (
+    <div>
+      <PageHeader
+        title="Operação"
+        subtitle="Atalhos do dia a dia — sem painel de valores de caixa"
+      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+        {OPS_ACTIONS.map((a) => {
+          const Icon = a.icon;
+          return (
+            <Link
+              key={a.to}
+              to={a.to}
+              className="card-base p-4 md:p-5 flex items-start gap-3 md:gap-4 hover:bg-secondary/50 active:bg-secondary/70 transition-colors touch-target min-h-[4.5rem]"
+            >
+              <div
+                className="h-11 w-11 shrink-0 rounded-lg flex items-center justify-center"
+                style={{ background: "var(--primary-soft)", color: "var(--primary-dark)" }}
+              >
+                <Icon size={20} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-navy">{a.title}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{a.desc}</div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Dashboard() {
+  const { canViewValoresCaixa } = useAuth();
+  if (!canViewValoresCaixa) return <OperatorHome />;
+  return <AdminDashboard />;
+}
+
+function AdminDashboard() {
   const { data, isLoading, isError } = useDashboard();
   const { data: alertas = [], isLoading: loadingAlertas } = useAlertas();
 
