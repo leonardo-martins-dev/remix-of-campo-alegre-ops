@@ -9,6 +9,7 @@ import {
   Package,
   ArrowLeftRight,
   Box,
+  PackageOpen,
   Route as RouteIcon,
   Truck,
   Settings,
@@ -89,6 +90,12 @@ function CadastrosHub() {
       description: "Sigla, nome, cor e custo unitário de cada tipo",
       icon: Box,
       href: "/gestao/tipos-caixa",
+    },
+    {
+      title: "Tipos de embalagem",
+      description: "Sacos, filme, etiquetas — unidade de contagem e quantidade por pacote",
+      icon: PackageOpen,
+      href: "/gestao/tipos-embalagem",
     },
     {
       title: "Rotas",

@@ -27,6 +27,7 @@ import { Route as RecebimentoFaltasRouteImport } from './routes/recebimento/falt
 import { Route as RecebimentoConferirRouteImport } from './routes/recebimento/conferir'
 import { Route as QuebraLancarRouteImport } from './routes/quebra/lancar'
 import { Route as GestaoUsuariosRouteImport } from './routes/gestao.usuarios'
+import { Route as GestaoTiposEmbalagemRouteImport } from './routes/gestao.tipos-embalagem'
 import { Route as GestaoTiposCaixaRouteImport } from './routes/gestao.tipos-caixa'
 import { Route as GestaoRotasRouteImport } from './routes/gestao.rotas'
 import { Route as GestaoRegrasRouteImport } from './routes/gestao.regras'
@@ -137,6 +138,11 @@ const QuebraLancarRoute = QuebraLancarRouteImport.update({
 const GestaoUsuariosRoute = GestaoUsuariosRouteImport.update({
   id: '/usuarios',
   path: '/usuarios',
+  getParentRoute: () => GestaoRoute,
+} as any)
+const GestaoTiposEmbalagemRoute = GestaoTiposEmbalagemRouteImport.update({
+  id: '/tipos-embalagem',
+  path: '/tipos-embalagem',
   getParentRoute: () => GestaoRoute,
 } as any)
 const GestaoTiposCaixaRoute = GestaoTiposCaixaRouteImport.update({
@@ -274,6 +280,7 @@ export interface FileRoutesByFullPath {
   '/gestao/regras': typeof GestaoRegrasRoute
   '/gestao/rotas': typeof GestaoRotasRoute
   '/gestao/tipos-caixa': typeof GestaoTiposCaixaRoute
+  '/gestao/tipos-embalagem': typeof GestaoTiposEmbalagemRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/quebra/lancar': typeof QuebraLancarRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
@@ -315,6 +322,7 @@ export interface FileRoutesByTo {
   '/gestao/regras': typeof GestaoRegrasRoute
   '/gestao/rotas': typeof GestaoRotasRoute
   '/gestao/tipos-caixa': typeof GestaoTiposCaixaRoute
+  '/gestao/tipos-embalagem': typeof GestaoTiposEmbalagemRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/quebra/lancar': typeof QuebraLancarRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
@@ -357,6 +365,7 @@ export interface FileRoutesById {
   '/gestao/regras': typeof GestaoRegrasRoute
   '/gestao/rotas': typeof GestaoRotasRoute
   '/gestao/tipos-caixa': typeof GestaoTiposCaixaRoute
+  '/gestao/tipos-embalagem': typeof GestaoTiposEmbalagemRoute
   '/gestao/usuarios': typeof GestaoUsuariosRoute
   '/quebra/lancar': typeof QuebraLancarRoute
   '/recebimento/conferir': typeof RecebimentoConferirRoute
@@ -400,6 +409,7 @@ export interface FileRouteTypes {
     | '/gestao/regras'
     | '/gestao/rotas'
     | '/gestao/tipos-caixa'
+    | '/gestao/tipos-embalagem'
     | '/gestao/usuarios'
     | '/quebra/lancar'
     | '/recebimento/conferir'
@@ -441,6 +451,7 @@ export interface FileRouteTypes {
     | '/gestao/regras'
     | '/gestao/rotas'
     | '/gestao/tipos-caixa'
+    | '/gestao/tipos-embalagem'
     | '/gestao/usuarios'
     | '/quebra/lancar'
     | '/recebimento/conferir'
@@ -482,6 +493,7 @@ export interface FileRouteTypes {
     | '/gestao/regras'
     | '/gestao/rotas'
     | '/gestao/tipos-caixa'
+    | '/gestao/tipos-embalagem'
     | '/gestao/usuarios'
     | '/quebra/lancar'
     | '/recebimento/conferir'
@@ -656,6 +668,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GestaoUsuariosRouteImport
       parentRoute: typeof GestaoRoute
     }
+    '/gestao/tipos-embalagem': {
+      id: '/gestao/tipos-embalagem'
+      path: '/tipos-embalagem'
+      fullPath: '/gestao/tipos-embalagem'
+      preLoaderRoute: typeof GestaoTiposEmbalagemRouteImport
+      parentRoute: typeof GestaoRoute
+    }
     '/gestao/tipos-caixa': {
       id: '/gestao/tipos-caixa'
       path: '/tipos-caixa'
@@ -815,6 +834,7 @@ interface GestaoRouteChildren {
   GestaoRegrasRoute: typeof GestaoRegrasRoute
   GestaoRotasRoute: typeof GestaoRotasRoute
   GestaoTiposCaixaRoute: typeof GestaoTiposCaixaRoute
+  GestaoTiposEmbalagemRoute: typeof GestaoTiposEmbalagemRoute
   GestaoUsuariosRoute: typeof GestaoUsuariosRoute
 }
 
@@ -827,6 +847,7 @@ const GestaoRouteChildren: GestaoRouteChildren = {
   GestaoRegrasRoute: GestaoRegrasRoute,
   GestaoRotasRoute: GestaoRotasRoute,
   GestaoTiposCaixaRoute: GestaoTiposCaixaRoute,
+  GestaoTiposEmbalagemRoute: GestaoTiposEmbalagemRoute,
   GestaoUsuariosRoute: GestaoUsuariosRoute,
 }
 
