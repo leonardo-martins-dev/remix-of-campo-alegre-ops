@@ -18,6 +18,8 @@ COMMENT ON COLUMN public.quebras.fornecedor_id IS
   'Fornecedor de origem; NULL = origem não identificada (ADM vincula depois)';
 
 -- NOP-18: quebras sem fornecedor entram como linha própria nos custos
+-- DROP necessário: CREATE OR REPLACE não pode renomear coluna (registrado_em -> status)
+DROP VIEW IF EXISTS public.v_custo_quebra CASCADE;
 CREATE OR REPLACE VIEW public.v_custo_quebra
 WITH (security_invoker = true) AS
 SELECT
