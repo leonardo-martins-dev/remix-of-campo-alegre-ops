@@ -66,6 +66,7 @@ export function usePedidosDia(date = todayBRT()) {
   return useQuery({
     queryKey: ["pedidos", date],
     queryFn: async () => {
+      // Dia operacional = data_prevista (entrega). Fallback: data_pedido quando prevista nula.
       const { data, error } = await supabase
         .from("pedidos_recebimento")
         .select(`
@@ -73,7 +74,7 @@ export function usePedidosDia(date = todayBRT()) {
           fornecedores(nome),
           itens_pedido(id, cliente_id, clientes(nome), itens_pedido_rateio(destinatario_id, quantidade, destinatarios(nome)))
         `)
-        .eq("data_pedido", date)
+        .or(`data_prevista.eq.${date},and(data_prevista.is.null,data_pedido.eq.${date})`)
         .order("hora_chegada", { ascending: true });
       if (error) throw error;
       return data ?? [];

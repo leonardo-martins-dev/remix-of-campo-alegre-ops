@@ -474,7 +474,14 @@ function Page() {
       )}
 
       <div className="flex flex-col md:flex-row gap-2 md:gap-3 mb-3">
-        <Input type="date" className="w-full md:w-44 h-11 lg:h-9" value={dataFiltro} onChange={(e) => setDataFiltro(e.target.value || todayBRT())} />
+        <Input
+          type="date"
+          className="w-full md:w-44 h-11 lg:h-9"
+          value={dataFiltro}
+          onChange={(e) => setDataFiltro(e.target.value || todayBRT())}
+          title="Data prevista de entrega"
+          aria-label="Data prevista de entrega"
+        />
         <Input className="w-full md:flex-1 lg:max-w-sm h-11 lg:h-9" placeholder="Buscar pedido, fornecedor..." value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
 
