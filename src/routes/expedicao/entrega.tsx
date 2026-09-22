@@ -17,6 +17,7 @@ import { StatusOrdemBadge } from "@/components/expedicao/fluxo-ordem";
 import { NumberStepper } from "@/components/number-stepper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ChipLabel, NumeroRotulo } from "@/components/ui-galpao";
 import { useAuth } from "@/lib/auth";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { formatDateBRT, formatTime } from "@/lib/utils-date";
@@ -87,9 +88,22 @@ function Page() {
   }, [saidaSel, emTransito]);
 
   const entregues = emTransito.filter((c) => (statusCaixa[c.id] ?? "entregue") === "entregue");
-  const recusadas = emTransito.filter((c) => (statusCaixa[c.id] ?? "entregue") !== "entregue");
+  const recusadas = emTransito.filter((c) => (statusCaixa[c.id] ?? "entregue") === "recusada");
+  const naoLocalizadas = emTransito.filter(
+    (c) => (statusCaixa[c.id] ?? "entregue") === "nao_localizada",
+  );
   const statusFinal =
-    entregues.length === 0 ? "Recusada" : recusadas.length > 0 ? "Entregue parcial" : "Entregue";
+    entregues.length === 0
+      ? "Recusada"
+      : recusadas.length + naoLocalizadas.length > 0
+        ? "Entregue parcial"
+        : "Entregue";
+
+  const tipoLabel = (sigla: string | null | undefined) => {
+    if (!sigla) return null;
+    const t = tipos.find((x) => x.sigla === sigla);
+    return t ? `${t.nome} (${t.sigla})` : sigla;
+  };
 
   const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -204,7 +218,7 @@ function Page() {
       )}
 
       <FluxoPassos
-        steps={["Ordem", "Confirmar"]}
+        steps={["Escolher saída", "Conferir caixas", "Confirmar"]}
         current={saidaSel ? 2 : 1}
       />
 
@@ -230,7 +244,7 @@ function Page() {
                 </span>
                 <div className="flex items-center gap-1.5">
                   <StatusOrdemBadge status="em_transito" />
-                  <span className="chip chip-muted">{s.total_caixas} cx</span>
+                  <ChipLabel label="Caixas" value={s.total_caixas} />
                 </div>
               </div>
               <div className="text-sm text-ink flex items-center gap-1 mt-0.5">
@@ -279,7 +293,8 @@ function Page() {
             <div className="text-sm text-ink">{saidaSel.clientes?.nome}</div>
             <div className="text-xs text-muted-foreground">
               {saidaSel.clientes?.cnpj ? `CNPJ ${saidaSel.clientes.cnpj} · ` : ""}
-              {emTransito.length} caixa(s) no caminhão
+              <NumeroRotulo label="Caixas" value={emTransito.length} />
+              {" no caminhão"}
             </div>
           </div>
 
@@ -301,9 +316,11 @@ function Page() {
                           .join(" · ") || "Caixa vazia"}
                       </div>
                     </div>
-                    {cx.tipo_caixa_sigla && (
-                      <span className="chip chip-muted shrink-0">{cx.tipo_caixa_sigla}</span>
-                    )}
+                    <ChipLabel
+                      label="Tipo"
+                      value={tipoLabel(cx.tipo_caixa_sigla)}
+                      className="shrink-0"
+                    />
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
@@ -333,7 +350,7 @@ function Page() {
                     ))}
                   </div>
 
-                  {st !== "entregue" && (
+                  {st === "recusada" && (
                     <Input
                       className="h-11"
                       placeholder="Motivo da recusa (obrigatório)"
@@ -353,12 +370,12 @@ function Page() {
 
           <div className="card-base p-4 space-y-3">
             <h3 className="text-sm font-semibold text-navy flex items-center gap-2">
-              <Undo2 size={14} /> Vazias retiradas na loja
+              <Undo2 size={14} /> Caixas vazias
             </h3>
             {tipos.map((t) => (
               <div key={t.id} className="flex items-center justify-between gap-3">
                 <span className="text-sm">
-                  {t.sigla} · <span className="text-muted-foreground">{t.nome}</span>
+                  {t.nome} ({t.sigla})
                 </span>
                 <NumberStepper
                   value={vazias[t.sigla] ?? 0}
@@ -432,7 +449,8 @@ function Page() {
             disabled={confirmar.isPending || emTransito.length === 0}
             onClick={enviar}
           >
-            <Check size={16} /> Confirmar entrega · {entregues.length}/{emTransito.length} cx
+            <Check size={16} />{" "}
+            {confirmar.isPending ? "Confirmando…" : "Confirmar entrega"}
           </Button>
         </div>
       )}

@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
-  Plus,
   Save,
   CheckCircle2,
   Camera,
@@ -14,11 +13,14 @@ import {
   Pencil,
   History,
   X,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
-import { TableWrapper } from "@/components/table-wrapper";
 import { NumberStepper } from "@/components/number-stepper";
+import { FluxoPassos } from "@/components/fluxo-passos";
+import { HeaderAcoes, ChipLabel } from "@/components/ui-galpao";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +28,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,7 +49,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { usePedidosDia, usePedido, useConfigValor, useSaldoItensPedido } from "@/hooks/use-pedidos";
+import {
+  usePedidosDia,
+  usePedido,
+  useConfigValor,
+  useSaldoItensPedido,
+  useRegistrarHoraChegada,
+} from "@/hooks/use-pedidos";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { useRegistrarEntradaGalpao } from "@/hooks/use-ledger";
 import {
@@ -54,17 +69,18 @@ import {
 } from "@/hooks/use-conferencia";
 import { useProdutos } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
-import { formatTime, formatDateBRT } from "@/lib/utils-date";
+import { formatTime, formatDateBRT, dateKeyBRT } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useCreateVale, useValesConferente, uploadValeFoto } from "@/hooks/use-vales";
-import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
+import { useSugestaoCaixas, type SugestaoItemMap } from "@/hooks/use-sugestao-caixas";
 import { CaixasItemEditor, type CaixaItemEntry } from "@/components/caixas-item-editor";
 import { useCaixasItemConferencia } from "@/hooks/use-caixas-item";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { isAguardandoVinculo } from "@/lib/seletor-cadastro";
 import { SemConversaoSelo } from "@/components/sem-conversao-selo";
+import type { TipoCaixa } from "@/lib/caixas-map";
 import {
   useRegistrarChegadaSaida,
   useSaidaRocaPedido,
@@ -176,7 +192,7 @@ function Page() {
   );
 }
 
-/** NOP-298 — seleção multi-fornecedor (SeletorCadastro) + cards individuais. */
+/** Card por fornecedor + seleção por toque + barra fixa (lista de chegadas). */
 function SelecaoMultiFornecedor({
   pendentes,
   loading,
@@ -193,49 +209,182 @@ function SelecaoMultiFornecedor({
     itens_pedido?: unknown[];
   }[];
   loading: boolean;
-  saidaPorPedido: Map<string, {
-    pedido_id: string;
-    registrado_em: string;
-    total_caixas: number;
-    motorista_nome: string | null;
-    veiculo_fornecedor: boolean;
-  }>;
+  saidaPorPedido: Map<
+    string,
+    {
+      pedido_id: string;
+      registrado_em: string;
+      total_caixas: number;
+      motorista_nome: string | null;
+      veiculo_fornecedor: boolean;
+    }
+  >;
   onIniciar: (pedidoIds: string[]) => void;
 }) {
-  const [fornIds, setFornIds] = useState<string[]>([]);
+  const [selectedPedidoIds, setSelectedPedidoIds] = useState<Set<string>>(() => new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const registrarHora = useRegistrarHoraChegada();
+  const [iniciando, setIniciando] = useState(false);
 
-  const fornecedoresComPedido = useMemo(() => {
-    const map = new Map<string, { id: string; nome: string; codigo?: string }>();
+  type GrupoForn = {
+    fornecedorId: string;
+    nome: string;
+    pedidos: typeof pendentes;
+    itensTotal: number;
+    emTransito: boolean;
+    saidaResumo: string | null;
+    horaChegada: string | null;
+  };
+
+  const grupos = useMemo((): GrupoForn[] => {
+    const map = new Map<string, GrupoForn>();
     for (const p of pendentes) {
-      if (!p.fornecedor_id || map.has(p.fornecedor_id)) continue;
-      const nome = one(p.fornecedores)?.nome;
-      map.set(p.fornecedor_id, {
-        id: p.fornecedor_id,
-        nome: !nome || isAguardandoVinculo(nome) ? p.codigo : nome,
-        codigo: p.codigo,
-      });
+      if (!p.fornecedor_id) continue;
+      const nomeRaw = one(p.fornecedores)?.nome;
+      const nome =
+        !nomeRaw || isAguardandoVinculo(nomeRaw) ? p.codigo : nomeRaw;
+      let g = map.get(p.fornecedor_id);
+      if (!g) {
+        g = {
+          fornecedorId: p.fornecedor_id,
+          nome,
+          pedidos: [],
+          itensTotal: 0,
+          emTransito: false,
+          saidaResumo: null,
+          horaChegada: null,
+        };
+        map.set(p.fornecedor_id, g);
+      }
+      g.pedidos.push(p);
+      g.itensTotal += p.itens_pedido?.length ?? 0;
+      const saida = saidaPorPedido.get(p.id);
+      if (saida) {
+        g.emTransito = true;
+        if (!g.saidaResumo) {
+          const quem = saida.veiculo_fornecedor
+            ? "veículo do fornecedor"
+            : (saida.motorista_nome ?? "motorista");
+          g.saidaResumo = `Saiu da roça ${formatTime(saida.registrado_em)} · ${quem}`;
+        }
+      }
+      if (p.hora_chegada && (!g.horaChegada || p.hora_chegada < g.horaChegada)) {
+        g.horaChegada = p.hora_chegada;
+      }
     }
-    return [...map.values()];
-  }, [pendentes]);
+    return [...map.values()].sort((a, b) => {
+      if (a.emTransito !== b.emTransito) return a.emTransito ? -1 : 1;
+      return a.nome.localeCompare(b.nome, "pt-BR");
+    });
+  }, [pendentes, saidaPorPedido]);
 
-  const pedidosSelecionados = useMemo(
-    () => pendentes.filter((p) => fornIds.includes(p.fornecedor_id)),
-    [pendentes, fornIds],
+  const fornecedoresComPedido = useMemo(
+    () =>
+      grupos.map((g) => ({
+        id: g.fornecedorId,
+        nome: g.nome,
+        codigo: g.pedidos[0]?.codigo,
+      })),
+    [grupos],
   );
 
-  const iniciarMulti = () => {
-    if (pedidosSelecionados.length === 0) {
-      toast.error("Selecione ao menos um fornecedor com pedido aberto");
+  const fornIdsSelecionados = useMemo(() => {
+    const ids: string[] = [];
+    for (const g of grupos) {
+      if (g.pedidos.some((p) => selectedPedidoIds.has(p.id))) ids.push(g.fornecedorId);
+    }
+    return ids;
+  }, [grupos, selectedPedidoIds]);
+
+  const pedidosSelecionados = useMemo(
+    () => pendentes.filter((p) => selectedPedidoIds.has(p.id)),
+    [pendentes, selectedPedidoIds],
+  );
+
+  const fornCount = fornIdsSelecionados.length;
+  const temEmTransito = grupos.some((g) => g.emTransito);
+
+  const toggleForn = (g: GrupoForn) => {
+    setSelectedPedidoIds((prev) => {
+      const next = new Set(prev);
+      const allOn = g.pedidos.every((p) => next.has(p.id));
+      if (allOn) {
+        for (const p of g.pedidos) next.delete(p.id);
+      } else {
+        for (const p of g.pedidos) next.add(p.id);
+      }
+      return next;
+    });
+  };
+
+  const togglePedido = (pedidoId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedPedidoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(pedidoId)) next.delete(pedidoId);
+      else next.add(pedidoId);
+      return next;
+    });
+  };
+
+  const abrirPedidoSo = async (pedidoId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await registrarHora.mutateAsync({ pedidoIds: [pedidoId], onlyIfNull: true });
+    } catch {
+      /* segue mesmo se falhar — conferência ainda abre */
+    }
+    onIniciar([pedidoId]);
+  };
+
+  const onSeletorChange = (ids: string[]) => {
+    setSelectedPedidoIds((prev) => {
+      const next = new Set(prev);
+      const idSet = new Set(ids);
+      for (const g of grupos) {
+        if (idSet.has(g.fornecedorId)) {
+          for (const p of g.pedidos) next.add(p.id);
+        } else {
+          for (const p of g.pedidos) next.delete(p.id);
+        }
+      }
+      return next;
+    });
+  };
+
+  const selecionarTodosEmTransito = () => {
+    setSelectedPedidoIds((prev) => {
+      const next = new Set(prev);
+      for (const g of grupos) {
+        if (!g.emTransito) continue;
+        for (const p of g.pedidos) next.add(p.id);
+      }
+      return next;
+    });
+  };
+
+  const iniciarMulti = async () => {
+    const ids = [...selectedPedidoIds];
+    if (ids.length === 0) {
+      toast.error("Selecione ao menos um fornecedor");
       return;
     }
-    onIniciar(pedidosSelecionados.map((p) => p.id));
+    setIniciando(true);
+    try {
+      await registrarHora.mutateAsync({ pedidoIds: ids, onlyIfNull: true });
+      onIniciar(ids);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao registrar chegada");
+    } finally {
+      setIniciando(false);
+    }
   };
 
   return (
-    <div>
+    <div className="pb-28">
       <PageHeader
         title="Conferir chegada"
-        subtitle="Selecione um ou mais fornecedores — a conferência inicia na hora"
+        subtitle="Toque nos cards para selecionar — um card por fornecedor"
         actions={
           <Link
             to="/recebimento"
@@ -245,89 +394,211 @@ function SelecaoMultiFornecedor({
           </Link>
         }
       />
-      <div className="bg-primary-soft border border-primary/20 rounded-lg p-3 mb-5 flex gap-2 text-xs text-primary-dark">
-        <Info size={14} className="mt-0.5" />
+      <FluxoPassos
+        steps={["Escolher pedidos", "Conferir itens", "Finalizar"]}
+        current={1}
+      />
+      <div className="bg-primary-soft border border-primary/20 rounded-lg p-3 mb-4 flex gap-2 text-xs text-primary-dark">
+        <Info size={14} className="mt-0.5 shrink-0" />
         <span>
           O recebimento é <strong>sempre aceito</strong>. Divergências não bloqueiam: viram
-          registro no <strong>Relatório de Faltas</strong>. Com vários fornecedores no mesmo
-          caminhão, selecione todos e confira na mesma tela — cada pedido grava separado.
+          registro no <strong>Relatório de Faltas</strong>. Selecione todos os fornecedores do
+          caminhão — a hora de chegada grava uma vez.
         </span>
       </div>
 
-      <div className="card-base p-4 mb-5 space-y-3">
+      <div className="mb-4 space-y-2">
         <SeletorCadastro
           tipo="fornecedor"
-          label="Fornecedores desta chegada"
+          label="Buscar fornecedor"
           multiple
           items={fornecedoresComPedido}
-          values={fornIds}
-          onChangeMultiple={(ids) => setFornIds(ids)}
-          placeholder="Selecionar fornecedores…"
+          values={fornIdsSelecionados}
+          onChangeMultiple={(ids) => onSeletorChange(ids)}
+          placeholder="Buscar fornecedor…"
         />
-        {pedidosSelecionados.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {pedidosSelecionados.length} pedido(s) em aberto ·{" "}
-            {fornIds.length} fornecedor(es)
-          </p>
+        {temEmTransito && (
+          <button
+            type="button"
+            onClick={selecionarTodosEmTransito}
+            className="text-sm font-semibold text-primary-dark hover:underline"
+          >
+            Selecionar todos em trânsito
+          </button>
         )}
-        <Button
-          type="button"
-          className="w-full sm:w-auto min-h-11"
-          disabled={pedidosSelecionados.length === 0}
-          onClick={iniciarMulti}
-        >
-          <CheckCircle2 size={16} className="mr-1.5" />
-          Iniciar conferência
-          {pedidosSelecionados.length > 1 ? ` (${pedidosSelecionados.length})` : ""}
-        </Button>
       </div>
 
       {loading && <p className="text-sm text-muted-foreground">Carregando pedidos…</p>}
-      {!loading && pendentes.length === 0 && (
+      {!loading && grupos.length === 0 && (
         <p className="text-sm text-muted-foreground">Nenhum pedido pendente hoje.</p>
       )}
-      {!loading && pendentes.length > 0 && (
-        <>
-          <h2 className="text-sm font-semibold text-navy mb-3">Ou abra um pedido só</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {pendentes.map((p) => {
-              const itensCount = p.itens_pedido?.length ?? 0;
-              const saida = saidaPorPedido.get(p.id);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => onIniciar([p.id])}
-                  className="card-base p-4 text-left hover:border-primary hover:shadow-sm transition-all block"
+
+      <div className="grid grid-cols-1 gap-3">
+        {grupos.map((g) => {
+          const selecionadosNoGrupo = g.pedidos.filter((p) => selectedPedidoIds.has(p.id));
+          const marcado = selecionadosNoGrupo.length > 0;
+          const todosMarcados = selecionadosNoGrupo.length === g.pedidos.length;
+          const isExpanded = expanded.has(g.fornecedorId);
+          return (
+            <div
+              key={g.fornecedorId}
+              className={[
+                "card-base overflow-hidden transition-all",
+                marcado
+                  ? "border-primary ring-2 ring-primary/25 bg-primary-soft/40"
+                  : "hover:border-primary/40",
+              ].join(" ")}
+            >
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleForn(g)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggleForn(g);
+                  }
+                }}
+                className="w-full text-left p-4 flex gap-3 items-start cursor-pointer"
+              >
+                <span
+                  className={[
+                    "mt-0.5 h-6 w-6 shrink-0 rounded-md border-2 flex items-center justify-center",
+                    marcado
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card",
+                  ].join(" ")}
+                  aria-hidden
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="chip chip-info">Chegou {formatTime(p.hora_chegada)}</span>
-                    <span className={`chip ${saida ? "chip-info" : "chip-warn"}`}>
-                      {saida ? "Em trânsito" : "Pendente"}
+                  {marcado && <Check size={14} strokeWidth={3} />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-bold text-navy text-base truncate">{g.nome}</div>
+                    <span className={`chip shrink-0 ${g.emTransito ? "chip-info" : "chip-warn"}`}>
+                      {g.emTransito ? "Em trânsito" : "Pendente"}
                     </span>
                   </div>
-                  <div className="text-base font-bold text-navy">
-                    {one(p.fornecedores)?.nome ?? p.codigo}
+                  <div className="text-sm text-muted-foreground mt-0.5">
+                    {g.pedidos.length} pedido{g.pedidos.length !== 1 ? "s" : ""} · {g.itensTotal}{" "}
+                    itens
+                    {!todosMarcados && marcado
+                      ? ` · ${selecionadosNoGrupo.length} selecionado${selecionadosNoGrupo.length !== 1 ? "s" : ""}`
+                      : ""}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {p.codigo} · {itensCount} itens no pedido
+                  <div className="flex flex-wrap gap-x-2 gap-y-1 mt-2 text-sm">
+                    {g.pedidos.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={(e) => void abrirPedidoSo(p.id, e)}
+                        className="font-semibold text-primary-dark underline-offset-2 hover:underline"
+                        title="Abrir só este pedido"
+                      >
+                        {p.codigo}
+                      </button>
+                    ))}
                   </div>
-                  {saida && (
-                    <div className="text-xs text-primary-dark font-semibold mt-1">
-                      {resumoSaida(saida)}
+                  {g.saidaResumo && (
+                    <div className="text-xs text-primary-dark font-semibold mt-2">{g.saidaResumo}</div>
+                  )}
+                  {g.horaChegada && (
+                    <div className="mt-2">
+                      <span className="chip chip-info">Chegou {formatTime(g.horaChegada)}</span>
                     </div>
                   )}
+                </div>
+              </div>
+
+              <div className="border-t border-border/60 px-4 py-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpanded((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(g.fornecedorId)) next.delete(g.fornecedorId);
+                      else next.add(g.fornecedorId);
+                      return next;
+                    })
+                  }
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-navy"
+                >
+                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {isExpanded ? "Ocultar pedidos" : "Incluir ou excluir pedidos"}
                 </button>
-              );
-            })}
-          </div>
-        </>
-      )}
+              </div>
+
+              {isExpanded && (
+                <ul className="border-t border-border/60 divide-y divide-border/60 bg-card/50">
+                  {g.pedidos.map((p) => {
+                    const on = selectedPedidoIds.has(p.id);
+                    const itens = p.itens_pedido?.length ?? 0;
+                    return (
+                      <li key={p.id} className="flex items-center gap-2 px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={(e) => togglePedido(p.id, e)}
+                          className="flex-1 flex items-center gap-3 text-left hover:opacity-90 min-w-0"
+                        >
+                          <span
+                            className={[
+                              "h-5 w-5 shrink-0 rounded border-2 flex items-center justify-center",
+                              on
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border",
+                            ].join(" ")}
+                          >
+                            {on && <Check size={12} strokeWidth={3} />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="font-semibold text-navy">{p.codigo}</span>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              {itens} itens
+                            </span>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => void abrirPedidoSo(p.id, e)}
+                          className="text-xs font-semibold text-primary-dark hover:underline shrink-0"
+                        >
+                          Só este
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur-md px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <p className="text-sm text-muted-foreground flex-1 text-center sm:text-left">
+            <span className="font-semibold text-navy">{fornCount}</span> fornecedor
+            {fornCount !== 1 ? "es" : ""} ·{" "}
+            <span className="font-semibold text-navy">{pedidosSelecionados.length}</span> pedido
+            {pedidosSelecionados.length !== 1 ? "s" : ""} selecionado
+            {pedidosSelecionados.length !== 1 ? "s" : ""}
+          </p>
+          <Button
+            type="button"
+            className="w-full sm:w-auto min-h-12 sm:min-h-11"
+            disabled={pedidosSelecionados.length === 0 || iniciando}
+            onClick={() => void iniciarMulti()}
+          >
+            <CheckCircle2 size={16} className="mr-1.5" />
+            {iniciando ? "Abrindo…" : "Iniciar conferência"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
 
-/** NOP-298 — sessão com vários pedidos; cada bloco salva/finaliza o seu. */
+/** Sessão multi: seções por fornecedor; hora única; Encerrar chegada no fim. */
 function SessaoMultiFornecedor({
   pedidoIds,
   pedidos,
@@ -339,12 +610,31 @@ function SessaoMultiFornecedor({
     id: string;
     codigo: string;
     fornecedor_id: string;
+    hora_chegada?: string | null;
     fornecedores?: { nome: string } | { nome: string }[] | null;
   }[];
   onChangePedidoIds: (ids: string[]) => void;
   onAllDone: () => void;
 }) {
   const [finalizados, setFinalizados] = useState<Set<string>>(() => new Set());
+  const registrarHora = useRegistrarHoraChegada();
+  const [horaEdit, setHoraEdit] = useState("");
+
+  const horaChegadaSessao = useMemo(() => {
+    const times = pedidoIds
+      .map((id) => pedidos.find((p) => p.id === id)?.hora_chegada)
+      .filter((t): t is string => !!t);
+    if (times.length === 0) return null;
+    return times.sort()[0];
+  }, [pedidoIds, pedidos]);
+
+  useEffect(() => {
+    if (!horaChegadaSessao) {
+      setHoraEdit("");
+      return;
+    }
+    setHoraEdit(formatTime(horaChegadaSessao));
+  }, [horaChegadaSessao]);
 
   const grupos = useMemo(() => {
     const byForn = new Map<
@@ -371,18 +661,48 @@ function SessaoMultiFornecedor({
     setFinalizados((prev) => {
       const next = new Set(prev);
       next.add(id);
-      if (next.size >= pedidoIds.length) {
-        queueMicrotask(onAllDone);
-      }
       return next;
     });
   };
 
+  const todosProntos =
+    pedidoIds.length > 0 && pedidoIds.every((id) => finalizados.has(id));
+
+  const salvarHoraEdit = async () => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(horaEdit.trim());
+    if (!m) {
+      toast.error("Use o formato HH:mm");
+      return;
+    }
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if (hh > 23 || mm > 59) {
+      toast.error("Hora inválida");
+      return;
+    }
+    const day =
+      dateKeyBRT(horaChegadaSessao) ||
+      dateKeyBRT(new Date().toISOString());
+    const isoGuess = new Date(
+      `${day}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00-03:00`,
+    ).toISOString();
+    try {
+      await registrarHora.mutateAsync({
+        pedidoIds,
+        horaChegada: isoGuess,
+        onlyIfNull: false,
+      });
+      toast.success("Hora de chegada atualizada");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar hora");
+    }
+  };
+
   return (
-    <div>
+    <div className={todosProntos ? "pb-24" : undefined}>
       <PageHeader
         title="Conferência conjunta"
-        subtitle={`${grupos.length} fornecedor(es) · ${pedidoIds.length} pedido(s) — cada um grava separado`}
+        subtitle={`${grupos.length} fornecedor(es) · ${pedidoIds.length} pedido(s)`}
         actions={
           <button
             type="button"
@@ -393,61 +713,101 @@ function SessaoMultiFornecedor({
           </button>
         }
       />
+      <FluxoPassos
+        steps={["Escolher pedidos", "Conferir itens", "Finalizar"]}
+        current={todosProntos ? 3 : 2}
+      />
 
-      <div className="flex flex-wrap gap-1.5 mb-5">
-        {grupos.map((g) => (
-          <span
-            key={g.fornecedorId}
-            className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-primary-soft text-primary-dark text-xs font-semibold"
-          >
-            {g.nome}
-            <button
-              type="button"
-              aria-label={`Remover ${g.nome}`}
-              onClick={() => {
-                const ids = new Set(g.pedidoIds);
-                onChangePedidoIds(pedidoIds.filter((id) => !ids.has(id)));
-              }}
-              className="h-5 w-5 rounded-full flex items-center justify-center hover:bg-primary/15"
-            >
-              <X size={12} />
-            </button>
+      <div className="card-base p-3 mb-5 flex flex-wrap items-end gap-3">
+        <div className="space-y-1.5 flex-1 min-w-[8rem]">
+          <Label htmlFor="hora-chegada-sessao">Hora de chegada</Label>
+          <Input
+            id="hora-chegada-sessao"
+            value={horaEdit}
+            onChange={(e) => setHoraEdit(e.target.value)}
+            placeholder="HH:mm"
+            className="max-w-[8rem]"
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="min-h-11"
+          onClick={() => void salvarHoraEdit()}
+          disabled={registrarHora.isPending}
+        >
+          Salvar hora
+        </Button>
+        {horaChegadaSessao && (
+          <span className="chip chip-info self-center">
+            Chegou {formatTime(horaChegadaSessao)}
           </span>
-        ))}
+        )}
       </div>
 
       <div className="space-y-8">
-        {pedidoIds.map((id) => {
-          if (finalizados.has(id)) {
-            const p = pedidos.find((x) => x.id === id);
-            return (
-              <div
-                key={id}
-                className="rounded-xl border border-success/30 bg-success/5 p-4 flex items-center gap-2 text-sm text-navy"
-              >
-                <CheckCircle2 size={18} className="text-success shrink-0" />
-                <span>
-                  <strong>{one(p?.fornecedores)?.nome ?? p?.codigo ?? id}</strong> finalizado
+        {grupos.map((g) => {
+          const grupoDone = g.pedidoIds.every((id) => finalizados.has(id));
+          return (
+            <section key={g.fornecedorId} className="space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h2 className="text-base font-bold text-navy">{g.nome}</h2>
+                <span className={`chip ${grupoDone ? "chip-ok" : "chip-info"}`}>
+                  {grupoDone
+                    ? "Finalizado"
+                    : `${g.pedidoIds.length} pedido${g.pedidoIds.length !== 1 ? "s" : ""}`}
                 </span>
               </div>
-            );
-          }
-          return (
-            <div key={id} className="rounded-xl border border-border p-3 sm:p-4">
-              <ConferenciaItens
-                pedidoId={id}
-                embedded
-                onBack={() => removerPedido(id)}
-                onFinished={() => onPedidoFinalizado(id)}
-                onTrocar={(nextId) => {
-                  const next = pedidoIds.map((x) => (x === id ? nextId : x));
-                  onChangePedidoIds([...new Set(next)]);
-                }}
-              />
-            </div>
+              {g.pedidoIds.map((id) => {
+                if (finalizados.has(id)) {
+                  const p = pedidos.find((x) => x.id === id);
+                  return (
+                    <div
+                      key={id}
+                      className="rounded-xl border border-success/30 bg-success/5 p-4 flex items-center gap-2 text-sm text-navy"
+                    >
+                      <CheckCircle2 size={18} className="text-success shrink-0" />
+                      <span>
+                        Pedido <strong>{p?.codigo ?? id}</strong> finalizado
+                      </span>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={id} className="rounded-xl border border-border p-3 sm:p-4">
+                    <ConferenciaItens
+                      pedidoId={id}
+                      embedded
+                      onBack={() => removerPedido(id)}
+                      onFinished={() => onPedidoFinalizado(id)}
+                      onTrocar={(nextId) => {
+                        const next = pedidoIds.map((x) => (x === id ? nextId : x));
+                        onChangePedidoIds([...new Set(next)]);
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </section>
           );
         })}
       </div>
+
+      {todosProntos && (
+        <div className="fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur-md px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="max-w-5xl mx-auto">
+            <Button
+              type="button"
+              className="w-full min-h-12"
+              onClick={onAllDone}
+            >
+              <CheckCircle2 size={16} className="mr-1.5" />
+              Encerrar chegada
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -739,6 +1099,7 @@ function ConferenciaItens({
   const [confirmFinal, setConfirmFinal] = useState(false);
   const stepperRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const focusedRef = useRef(false);
+  const [itemSheetIdx, setItemSheetIdx] = useState<number | null>(null);
 
   const startedRef = useRef<string | null>(null);
   const fotoRef = useRef<HTMLInputElement>(null);
@@ -1514,7 +1875,7 @@ function ConferenciaItens({
       {!embedded && (
         <PageHeader
           title={fornecedorNome}
-          subtitle={`Pedido ${codigo}${wiseId ? ` · Wise ${wiseId}` : ""} · Entrega ${entregaAtual || 1} de ${entregaTotal} · Chegou às ${formatTime(horaChegada)} · Conferente: ${conferenteNome}`}
+          subtitle={`Pedido ${codigo}${wiseId ? ` · Wise ${wiseId}` : ""} · Entrega ${entregaAtual || 1} de ${entregaTotal}${horaChegada ? ` · Chegou às ${formatTime(horaChegada)}` : ""} · Conferente: ${conferenteNome}`}
           actions={
             <button
               type="button"
@@ -1574,13 +1935,15 @@ function ConferenciaItens({
               <span className="chip chip-warn ml-2">editada</span>
             )}
           </div>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={iniciarEdicao}
-            className="inline-flex items-center gap-1.5 min-h-10 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+            className="gap-1.5"
           >
             <Pencil size={14} /> Editar conferência
-          </button>
+          </Button>
         </div>
       )}
 
@@ -1679,6 +2042,19 @@ function ConferenciaItens({
         </div>
       )}
 
+      {!embedded && (
+        <FluxoPassos
+          steps={["Escolher pedidos", "Conferir itens", "Finalizar"]}
+          current={
+            readOnly && !editando
+              ? 3
+              : stats.faltantes === 0 && stats.total > 0
+                ? 3
+                : 2
+          }
+        />
+      )}
+
       <div
         className="card-base p-4 mb-4 flex items-center justify-between border-l-4"
         style={{
@@ -1711,20 +2087,18 @@ function ConferenciaItens({
         <Info size={14} className="mt-0.5" />
         <span>
           Recebimento sempre aceito. Divergências alimentam o Relatório de Faltas — não interrompem
-          o lançamento.
+          o lançamento. Toque num item para conferir quantidade e caixas.
         </span>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-3 gap-3 mb-5">
         <MiniStat label="Itens" value={stats.total.toString()} />
         <MiniStat label="Conferidos" value={`${stats.conferidos}/${stats.total}`} tone="ok" />
         <MiniStat label="Divergências" value={stats.divergencias.toString()} tone="danger" />
-        <MiniStat label="Itens com saldo" value={stats.comSaldo.toString()} tone="warn" />
-        <MiniStat label="Progresso" value={`${stats.progresso}%`} tone="info" />
       </div>
 
-      {/* Mobile + tablet: card view (tabela só em desktop ≥1024) */}
-      <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+      {/* Lista compacta — steppers só no sheet do item */}
+      <div className="card-base divide-y divide-border mb-5">
         {itens.map((it, idx) => {
           const saldoRow = (
             saldosItem as {
@@ -1735,375 +2109,84 @@ function ConferenciaItens({
           ).find((s) => s.item_pedido_id === it.itemPedidoId);
           const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
           const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
-          const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
           const itemCaixas = caixasItem[it.id] ?? [];
-          const nestaEntr = nestaEntradaCaixas(it, itemCaixas);
           const gap = gapVsPedido(it, itemCaixas, jaRecebido);
           const pendente = !it.conferido;
           const saldoZero = saldo <= 0;
-          const qtyLocked = itemQtyLocked(it);
-
-          const statusClass =
-            saldoZero || (!pendente && gap === 0)
-              ? "item-status-ok"
-              : it.qualidade || (!pendente && gap > 0)
-                ? "item-status-danger"
-                : (!pendente && gap < 0) || pendente
-                  ? "item-status-warn"
-                  : "";
+          const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
 
           return (
-            <div key={it.id} className={`mobile-item-card ${statusClass}`}>
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-navy text-sm leading-tight">{it.produto}</div>
-                  {it.aVincular && <span className="chip chip-warn mt-1">a vincular</span>}
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => setItemSheetIdx(idx)}
+              className="w-full text-left px-3 py-3 sm:px-4 hover:bg-secondary/40 transition-colors flex items-start justify-between gap-3"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-navy text-sm leading-tight truncate">
+                  {it.produto}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Pedido · <span className="font-semibold tabular-nums text-navy">{it.pedido}</span>
+                  {it.cliente ? ` · ${it.cliente}` : ""}
+                </div>
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {it.aVincular && <ChipLabel value="a vincular" tone="warn" />}
                   {sugestaoItem?.sem_conversao && (
-                    <span className="mt-1 inline-block">
-                      <SemConversaoSelo faltaFornecedor />
+                    <span className="inline-flex">
+                      <SemConversaoSelo faltaFornecedor compact />
                     </span>
                   )}
-                </div>
-                <div className="flex flex-wrap gap-1 shrink-0">
-                  {saldoZero && <span className="chip chip-ok">Completo</span>}
-                  {!saldoZero && pendente && <span className="chip chip-muted">Pendente</span>}
-                  {!saldoZero && !pendente && gap === 0 && <span className="chip chip-ok">OK</span>}
+                  {saldoZero && <ChipLabel value="Completo" tone="ok" />}
+                  {!saldoZero && pendente && <ChipLabel value="Pendente" tone="muted" />}
+                  {!saldoZero && !pendente && gap === 0 && <ChipLabel value="OK" tone="ok" />}
                   {!saldoZero && !pendente && gap < 0 && (
-                    <span className="chip chip-warn">Diferença {Math.abs(gap)}</span>
+                    <ChipLabel label="Diferença" value={Math.abs(gap)} tone="warn" />
                   )}
                   {!saldoZero && !pendente && gap > 0 && (
-                    <span className="chip chip-danger">Sobra {gap}</span>
+                    <ChipLabel label="Sobra" value={gap} tone="danger" />
                   )}
-                  {it.qualidade && (
-                    <span
-                      className="chip"
-                      style={{ background: "rgba(240,169,43,0.15)", color: "var(--warning)" }}
-                    >
-                      Qual.
-                    </span>
-                  )}
+                  {it.qualidade && <ChipLabel value="Qualidade" tone="warn" />}
+                  {it.foto_url && <ChipLabel value="Foto" tone="info" />}
+                  {itemJaSolicitouVale(it.id) && <ChipLabel value="Vale pendente" tone="info" />}
                 </div>
               </div>
-
-              <div className="mb-3 rounded-lg bg-secondary/50 divide-y divide-border sm:grid sm:grid-cols-3 sm:gap-2 sm:bg-transparent sm:divide-y-0">
-                <div className="flex items-center justify-between gap-2 px-3 py-2.5 sm:flex-col sm:gap-0 sm:rounded-lg sm:bg-secondary/50 sm:px-2 sm:py-2 sm:text-center">
-                  <span className="text-xs text-muted-foreground">Pedido</span>
-                  <span className="font-bold text-navy tabular-nums">{it.pedido}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 px-3 py-2.5 sm:flex-col sm:gap-0 sm:rounded-lg sm:bg-secondary/50 sm:px-2 sm:py-2 sm:text-center">
-                  <span className="text-xs text-muted-foreground">Já receb.</span>
-                  <span className="font-bold text-muted-foreground tabular-nums">{jaRecebido}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 px-3 py-2.5 sm:flex-col sm:gap-0 sm:rounded-lg sm:bg-secondary/50 sm:px-2 sm:py-2 sm:text-center">
-                  <span className="text-xs text-muted-foreground">Saldo</span>
-                  <span
-                    className="font-bold tabular-nums"
-                    style={{ color: saldo > 0 ? "var(--warning)" : "var(--success)" }}
-                  >
-                    {saldo}
-                  </span>
-                </div>
-              </div>
-
-              {!qtyLocked && !it.aVincular && !saldoZero && (
-                <div className="mb-3">
-                  <div className="text-xs text-muted-foreground mb-1.5">Nesta entrega (cx)</div>
-                  <NumberStepper
-                    value={nestaEntr}
-                    onChange={(v) => update(idx, v)}
-                    inputMode="numeric"
-                    inputRef={(el) => {
-                      stepperRefs.current[idx] = el;
-                    }}
-                    onKeyDown={handleStepperKeyDown(idx)}
-                  />
-                </div>
-              )}
-
-              {(qtyLocked || it.aVincular || saldoZero) && (
-                <div className="mb-3 text-sm">
-                  <span className="text-muted-foreground">Nesta entrega: </span>
-                  <span className="font-semibold">
-                    {it.aVincular ? "—" : nestaEntr} cx
-                  </span>
-                  {it.conferido && (
-                    <span className="chip chip-ok ml-2 text-xs">Travado</span>
-                  )}
-                </div>
-              )}
-
-              {(() => {
-                const t = saldoTransporte(
-                  it,
-                  itemCaixas,
-                  it.itemPedidoId ? caixasSaidaPorItem.get(it.itemPedidoId) : undefined,
-                );
-                if (!t) return null;
-                return (
-                  <div className="mb-3 text-xs">
-                    <span className="text-muted-foreground">Saída na roça: </span>
-                    <span className="font-semibold">{t.saida} cx</span>
-                    {t.dif !== 0 && (
-                      <span className="chip chip-danger ml-2">
-                        Transporte {t.dif > 0 ? "+" : ""}
-                        {t.dif} cx
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {itemCaixas.length > 0 && (
-                <div className="mb-3">
-                  <div className="text-xs text-muted-foreground mb-1.5">Caixas</div>
-                  <CaixasItemEditor
-                    entries={itemCaixas}
-                    onChange={(entries) => updateCaixasItem(it.id, entries)}
-                    tipos={tipos}
-                    sugestao={sugestaoItem}
-                    readOnly={qtyLocked || it.aVincular}
-                  />
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-                {!readOnly && pendente && !it.aVincular && !saldoZero && (
-                  <button
-                    type="button"
-                    onClick={() => void conferirIgualPedido(idx)}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
-                  >
-                    <Check size={16} /> Conferir
-                  </button>
-                )}
-                {!readOnly && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => toggleQualidade(idx)}
-                      className={`h-11 w-11 rounded-lg border flex items-center justify-center transition-colors ${
-                        it.qualidade
-                          ? "border-transparent bg-[rgba(240,169,43,0.15)] text-[var(--warning)]"
-                          : "border-border text-muted-foreground active:bg-secondary"
-                      }`}
-                      aria-label="Marcar problema de qualidade"
-                    >
-                      <AlertTriangle size={18} />
-                    </button>
-                    <button
-                      type="button"
-                      className="h-11 w-11 rounded-lg border border-border text-muted-foreground active:bg-secondary flex items-center justify-center"
-                      aria-label="Adicionar foto"
-                      onClick={() => {
-                        setFotoItemId(it.id);
-                        fotoRef.current?.click();
-                      }}
-                    >
-                      <Camera size={18} />
-                    </button>
-                  </>
-                )}
-                {gap < 0 && !itemJaSolicitouVale(it.id) && !readOnly && nestaEntr > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => openValeDialog(it, jaRecebido, itemCaixas)}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-sm font-semibold active:scale-[0.98] transition-transform"
-                  >
-                    <Receipt size={16} /> Vale
-                  </button>
-                )}
-                {itemJaSolicitouVale(it.id) && (
-                  <span className="chip chip-info text-xs">Vale pendente</span>
-                )}
-              </div>
-            </div>
+              <ChevronRight size={16} className="text-muted-foreground shrink-0 mt-1" />
+            </button>
           );
         })}
+        {itens.length === 0 && (
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">Nenhum item</p>
+        )}
       </div>
 
-      {/* Desktop: Table view (≥1024) */}
-      <div className="hidden lg:block card-base">
-        <TableWrapper stickyFirstColumn>
-          <table className="w-full text-sm">
-            <thead className="bg-secondary/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                <th className="text-left px-4 py-3 whitespace-nowrap">Produto</th>
-                <th className="text-left px-4 py-3 whitespace-nowrap">Un.</th>
-                <th className="text-right px-4 py-3 whitespace-nowrap">Pedido</th>
-                <th className="text-left px-4 py-3 whitespace-nowrap">Caixas</th>
-                <th className="text-right px-4 py-3 whitespace-nowrap">Já receb.</th>
-                <th className="text-center px-4 py-3 whitespace-nowrap">Nesta entr. (cx)</th>
-                <th className="text-right px-4 py-3 whitespace-nowrap">Saldo</th>
-                <th className="text-left px-4 py-3 whitespace-nowrap">Status</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-          <tbody>
-            {itens.map((it, idx) => {
-              const saldoRow = (
-                saldosItem as {
-                  item_pedido_id: string;
-                  recebido_acumulado: number;
-                  saldo: number;
-                }[]
-              ).find((s) => s.item_pedido_id === it.itemPedidoId);
-              const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
-              const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
-              const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
-              const itemCaixas = caixasItem[it.id] ?? [];
-              const nestaEntr = nestaEntradaCaixas(it, itemCaixas);
-              const gap = gapVsPedido(it, itemCaixas, jaRecebido);
-              const pendente = !it.conferido;
-              const saldoZero = saldo <= 0;
-              const qtyLocked = itemQtyLocked(it);
-              return (
-                <tr key={it.id} className="border-t border-border">
-                  <td className="px-4 py-3 font-semibold text-navy">
-                    {it.produto}
-                    {it.aVincular && (
-                      <span className="ml-2 chip chip-warn">produto a vincular</span>
-                    )}
-                    {sugestaoItem?.sem_conversao && (
-                      <span className="ml-2 inline-flex align-middle">
-                        <SemConversaoSelo faltaFornecedor compact />
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{it.unid}</td>
-                  <td className="px-4 py-3 text-right text-ink">{it.pedido}</td>
-                  <td className="px-4 py-3">
-                    <CaixasItemEditor
-                      entries={itemCaixas}
-                      onChange={(entries) => updateCaixasItem(it.id, entries)}
-                      tipos={tipos}
-                      sugestao={sugestaoItem}
-                      readOnly={qtyLocked || it.aVincular}
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-right text-muted-foreground">{jaRecebido}</td>
-                  <td className="px-4 py-3">
-                    {qtyLocked || it.aVincular || saldoZero ? (
-                      <span className="font-semibold tabular-nums">
-                        {it.aVincular ? "—" : nestaEntr}
-                        {it.conferido && (
-                          <span className="chip chip-ok ml-1 text-[10px]">Travado</span>
-                        )}
-                      </span>
-                    ) : (
-                      <NumberStepper
-                        value={nestaEntr}
-                        onChange={(v) => update(idx, v)}
-                        inputMode="numeric"
-                        inputRef={(el) => {
-                          stepperRefs.current[idx] = el;
-                        }}
-                        onKeyDown={handleStepperKeyDown(idx)}
-                      />
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold">{saldo}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {saldoZero && <span className="chip chip-ok">Completo</span>}
-                      {!saldoZero && pendente && <span className="chip chip-muted">Pendente</span>}
-                      {!saldoZero && !pendente && gap === 0 && <span className="chip chip-ok">OK</span>}
-                      {!saldoZero && !pendente && gap < 0 && (
-                        <span className="chip chip-warn">Diferença {Math.abs(gap)}</span>
-                      )}
-                      {!saldoZero && !pendente && gap > 0 && (
-                        <span className="chip chip-danger">Sobra {gap}</span>
-                      )}
-                      {it.qualidade && (
-                        <span
-                          className="chip"
-                          style={{ background: "rgba(240,169,43,0.15)", color: "var(--warning)" }}
-                        >
-                          Qualidade
-                        </span>
-                      )}
-                      {it.foto_url && <span className="chip chip-info">Foto</span>}
-                      {(() => {
-                        const t = saldoTransporte(
-                          it,
-                          itemCaixas,
-                          it.itemPedidoId ? caixasSaidaPorItem.get(it.itemPedidoId) : undefined,
-                        );
-                        if (!t) return null;
-                        return (
-                          <>
-                            <span className="chip chip-muted">Saída {t.saida} cx</span>
-                            {t.dif !== 0 && (
-                              <span className="chip chip-danger">
-                                Transporte {t.dif > 0 ? "+" : ""}
-                                {t.dif} cx
-                              </span>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {!readOnly && pendente && !it.aVincular && !saldoZero && (
-                        <button
-                          type="button"
-                          onClick={() => void conferirIgualPedido(idx)}
-                          className="inline-flex items-center gap-1 min-h-11 px-3 rounded-md bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
-                          title="Conferir e creditar caixas no galpão"
-                        >
-                          <Check size={12} /> Conferir
-                        </button>
-                      )}
-                      {!readOnly && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => toggleQualidade(idx)}
-                            className={`h-11 w-11 rounded-md border flex items-center justify-center transition-colors ${
-                              it.qualidade
-                                ? "border-transparent bg-[rgba(240,169,43,0.15)] text-[var(--warning)]"
-                                : "border-border text-muted-foreground hover:text-navy hover:bg-secondary"
-                            }`}
-                            title="Marcar problema de qualidade"
-                          >
-                            <AlertTriangle size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            className="h-11 w-11 rounded-md border border-border text-muted-foreground hover:text-navy hover:bg-secondary flex items-center justify-center"
-                            title="Adicionar foto"
-                            onClick={() => {
-                              setFotoItemId(it.id);
-                              fotoRef.current?.click();
-                            }}
-                          >
-                            <Camera size={13} />
-                          </button>
-                        </>
-                      )}
-                      {gap < 0 && !itemJaSolicitouVale(it.id) && !readOnly && nestaEntr > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => openValeDialog(it, jaRecebido, itemCaixas)}
-                          className="inline-flex items-center gap-1 min-h-11 px-3 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold hover:bg-amber-100 transition-colors"
-                          title="Solicitar vale/desconto ao ADM"
-                        >
-                          <Receipt size={12} /> Vale
-                        </button>
-                      )}
-                      {itemJaSolicitouVale(it.id) && (
-                        <span className="chip chip-info text-xs">Vale pendente</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            </tbody>
-          </table>
-        </TableWrapper>
-      </div>
+      <ItemConferirSheet
+        open={itemSheetIdx != null}
+        onOpenChange={(o) => !o && setItemSheetIdx(null)}
+        idx={itemSheetIdx}
+        itens={itens}
+        saldosItem={saldosItem as { item_pedido_id: string; recebido_acumulado: number; saldo: number }[]}
+        caixasItem={caixasItem}
+        sugestoesCaixas={sugestoesCaixas}
+        tipos={tipos}
+        caixasSaidaPorItem={caixasSaidaPorItem}
+        readOnly={readOnly}
+        editando={editando}
+        itemQtyLocked={itemQtyLocked}
+        update={update}
+        updateCaixasItem={updateCaixasItem}
+        conferirIgualPedido={conferirIgualPedido}
+        toggleQualidade={toggleQualidade}
+        onFoto={(id) => {
+          setFotoItemId(id);
+          fotoRef.current?.click();
+        }}
+        openValeDialog={openValeDialog}
+        itemJaSolicitouVale={itemJaSolicitouVale}
+        handleStepperKeyDown={handleStepperKeyDown}
+        stepperRefs={stepperRefs}
+        onClose={() => setItemSheetIdx(null)}
+      />
 
       {tipos.length > 0 && (
         <div className="mt-5 rounded-xl border p-4 space-y-3">
@@ -2171,63 +2254,66 @@ function ConferenciaItens({
 
       {(!readOnly || editando) && (
         <>
-          {/* Espaço para a barra fixa no mobile/tablet */}
-          <div className="h-40 lg:hidden" aria-hidden />
+          <div className="h-28 lg:hidden" aria-hidden />
           <div
             className={[
-              "space-y-3 lg:space-y-0 lg:flex lg:flex-wrap lg:items-center lg:gap-3 lg:mt-5",
+              "lg:mt-5",
               "fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md p-3 md:p-4",
               "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
               "lg:static lg:inset-auto lg:z-auto lg:border-0 lg:bg-transparent lg:backdrop-blur-none lg:p-0 lg:pb-0",
             ].join(" ")}
           >
             {editando ? (
-              <>
-                <div className="text-xs text-muted-foreground flex-1 text-center lg:text-left">
-                  Motivo: <span className="font-semibold text-navy">{editMotivo}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void salvarEdicao()}
-                  disabled={editMut.isPending}
-                  className="w-full lg:w-auto inline-flex items-center justify-center gap-2 min-h-12 lg:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
-                >
-                  <Save size={16} /> Salvar edição
-                </button>
-              </>
+              <HeaderAcoes
+                className="w-full justify-between"
+                primary={
+                  <button
+                    type="button"
+                    onClick={() => void salvarEdicao()}
+                    disabled={editMut.isPending}
+                    className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-12 lg:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+                  >
+                    <Save size={16} /> Salvar edição
+                  </button>
+                }
+                detalhes={[
+                  {
+                    label: "Cancelar edição",
+                    onClick: () => {
+                      setEditando(false);
+                      itensHydratedRef.current = null;
+                    },
+                  },
+                ]}
+              />
             ) : (
-              <>
-                <div className="flex gap-2 lg:contents">
-                  <button
-                    type="button"
-                    onClick={() => setAvulsoOpen(true)}
-                    className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
-                  >
-                    <Plus size={14} /> <span className="hidden md:inline">Item </span>avulso
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => salvar("parcial")}
-                    disabled={saveMut.isPending}
-                    className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
-                  >
-                    <Save size={14} /> <span className="hidden md:inline">Salvar </span>parcial
-                  </button>
-                </div>
-                <div className="hidden lg:block lg:flex-1" />
-                <div className="text-xs text-muted-foreground text-center lg:text-left">
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground text-center lg:text-left lg:mb-0">
                   Assinatura: <span className="font-semibold text-navy">{conferenteNome}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={finalizar}
-                  disabled={saveMut.isPending}
-                  className="w-full lg:w-auto inline-flex items-center justify-center gap-2 min-h-12 lg:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
-                >
-                  <CheckCircle2 size={16} />{" "}
-                  {embedded ? "Finalizar este fornecedor" : "Finalizar entrega"}
-                </button>
-              </>
+                <HeaderAcoes
+                  className="w-full justify-between"
+                  primary={
+                    <button
+                      type="button"
+                      onClick={finalizar}
+                      disabled={saveMut.isPending}
+                      className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-12 lg:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+                    >
+                      <CheckCircle2 size={16} />{" "}
+                      {embedded ? "Finalizar entrega" : "Finalizar"}
+                    </button>
+                  }
+                  detalhes={[
+                    {
+                      label: "Salvar parcial",
+                      onClick: () => salvar("parcial"),
+                      disabled: saveMut.isPending,
+                    },
+                    { label: "Item avulso", onClick: () => setAvulsoOpen(true) },
+                  ]}
+                />
+              </div>
             )}
           </div>
         </>
@@ -2511,6 +2597,225 @@ function ConferenciaItens({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function ItemConferirSheet({
+  open,
+  onOpenChange,
+  idx,
+  itens,
+  saldosItem,
+  caixasItem,
+  sugestoesCaixas,
+  tipos,
+  caixasSaidaPorItem,
+  readOnly,
+  editando,
+  itemQtyLocked,
+  update,
+  updateCaixasItem,
+  conferirIgualPedido,
+  toggleQualidade,
+  onFoto,
+  openValeDialog,
+  itemJaSolicitouVale,
+  handleStepperKeyDown,
+  stepperRefs,
+  onClose,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  idx: number | null;
+  itens: LinhaItem[];
+  saldosItem: { item_pedido_id: string; recebido_acumulado: number; saldo: number }[];
+  caixasItem: Record<string, CaixaItemEntry[]>;
+  sugestoesCaixas?: SugestaoItemMap | null;
+  tipos: TipoCaixa[];
+  caixasSaidaPorItem: Map<string, { entries: CaixaItemEntry[]; total: number }>;
+  readOnly: boolean;
+  editando: boolean;
+  itemQtyLocked: (it: LinhaItem) => boolean;
+  update: (idx: number, v: number) => void;
+  updateCaixasItem: (itemId: string, entries: CaixaItemEntry[]) => void;
+  conferirIgualPedido: (idx: number) => Promise<void>;
+  toggleQualidade: (idx: number) => void;
+  onFoto: (itemId: string) => void;
+  openValeDialog: (it: LinhaItem, jaRecebido: number, entries: CaixaItemEntry[]) => void;
+  itemJaSolicitouVale: (itemId: string) => boolean;
+  handleStepperKeyDown: (idx: number) => (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  stepperRefs: React.MutableRefObject<Record<number, HTMLInputElement | null>>;
+  onClose: () => void;
+}) {
+  const it = idx != null ? itens[idx] : undefined;
+  if (!it || idx == null) {
+    return <Sheet open={false} onOpenChange={onOpenChange} />;
+  }
+  const saldoRow = saldosItem.find((s) => s.item_pedido_id === it.itemPedidoId);
+  const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
+  const saldo = Number(saldoRow?.saldo ?? it.pedido - jaRecebido);
+  const sugestaoItem = it.produtoId ? sugestoesCaixas?.get(it.produtoId) : undefined;
+  const itemCaixas = caixasItem[it.id] ?? [];
+  const nestaEntr = nestaEntradaCaixas(it, itemCaixas);
+  const gap = gapVsPedido(it, itemCaixas, jaRecebido);
+  const pendente = !it.conferido;
+  const saldoZero = saldo <= 0;
+  const qtyLocked = itemQtyLocked(it);
+  const transporte = saldoTransporte(
+    it,
+    itemCaixas,
+    it.itemPedidoId ? caixasSaidaPorItem.get(it.itemPedidoId) : undefined,
+  );
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-xl px-4 pb-6">
+        <SheetHeader className="text-left mb-3">
+          <SheetTitle className="pr-8">{it.produto}</SheetTitle>
+          <p className="text-xs text-muted-foreground">
+            Pedido · {it.pedido} {it.unid}
+            {it.cliente ? ` · ${it.cliente}` : ""}
+          </p>
+          <div className="flex flex-wrap gap-1 pt-1">
+            {saldoZero && <ChipLabel value="Completo" tone="ok" />}
+            {!saldoZero && pendente && <ChipLabel value="Pendente" tone="muted" />}
+            {!saldoZero && !pendente && gap === 0 && <ChipLabel value="OK" tone="ok" />}
+            {!saldoZero && !pendente && gap < 0 && (
+              <ChipLabel label="Diferença" value={Math.abs(gap)} tone="warn" />
+            )}
+            {!saldoZero && !pendente && gap > 0 && (
+              <ChipLabel label="Sobra" value={gap} tone="danger" />
+            )}
+            {it.qualidade && <ChipLabel value="Qualidade" tone="warn" />}
+          </div>
+        </SheetHeader>
+
+        <div className="mb-4 rounded-lg bg-secondary/50 divide-y divide-border grid grid-cols-3 gap-0 sm:gap-2 sm:bg-transparent sm:divide-y-0">
+          <div className="flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 sm:rounded-lg sm:bg-secondary/50">
+            <span className="text-xs text-muted-foreground">Pedido</span>
+            <span className="font-bold text-navy tabular-nums">{it.pedido}</span>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 sm:rounded-lg sm:bg-secondary/50">
+            <span className="text-xs text-muted-foreground">Já receb.</span>
+            <span className="font-bold text-muted-foreground tabular-nums">{jaRecebido}</span>
+          </div>
+          <div className="flex flex-col items-center justify-center gap-0.5 px-2 py-2.5 sm:rounded-lg sm:bg-secondary/50">
+            <span className="text-xs text-muted-foreground">Saldo</span>
+            <span
+              className="font-bold tabular-nums"
+              style={{ color: saldo > 0 ? "var(--warning)" : "var(--success)" }}
+            >
+              {saldo}
+            </span>
+          </div>
+        </div>
+
+        {!qtyLocked && !it.aVincular && !saldoZero && (
+          <div className="mb-4">
+            <div className="text-xs text-muted-foreground mb-1.5">Nesta entrega (cx)</div>
+            <NumberStepper
+              value={nestaEntr}
+              onChange={(v) => update(idx, v)}
+              inputMode="numeric"
+              inputRef={(el) => {
+                stepperRefs.current[idx] = el;
+              }}
+              onKeyDown={handleStepperKeyDown(idx)}
+            />
+          </div>
+        )}
+
+        {(qtyLocked || it.aVincular || saldoZero) && (
+          <div className="mb-4 text-sm">
+            <span className="text-muted-foreground">Nesta entrega: </span>
+            <span className="font-semibold">{it.aVincular ? "—" : nestaEntr} cx</span>
+            {it.conferido && <ChipLabel value="Travado" tone="ok" className="ml-2" />}
+          </div>
+        )}
+
+        {transporte && (
+          <div className="mb-4 text-xs flex flex-wrap items-center gap-1.5">
+            <span className="text-muted-foreground">Saída na roça:</span>
+            <span className="font-semibold">{transporte.saida} cx</span>
+            {transporte.dif !== 0 && (
+              <ChipLabel
+                label="Transporte"
+                value={`${transporte.dif > 0 ? "+" : ""}${transporte.dif} cx`}
+                tone="danger"
+              />
+            )}
+          </div>
+        )}
+
+        {itemCaixas.length > 0 && (
+          <div className="mb-4">
+            <div className="text-xs text-muted-foreground mb-1.5">Caixas</div>
+            <CaixasItemEditor
+              entries={itemCaixas}
+              onChange={(entries) => updateCaixasItem(it.id, entries)}
+              tipos={tipos}
+              sugestao={sugestaoItem}
+              readOnly={qtyLocked || !!it.aVincular}
+            />
+          </div>
+        )}
+
+        <SheetFooter className="flex-col gap-2 sm:flex-col">
+          <div className="flex flex-wrap gap-2 w-full">
+            {!readOnly && pendente && !it.aVincular && !saldoZero && (
+              <Button
+                type="button"
+                className="flex-1 min-h-11"
+                onClick={() => {
+                  void conferirIgualPedido(idx).then(onClose);
+                }}
+              >
+                <Check size={16} className="mr-1.5" /> Conferir
+              </Button>
+            )}
+            {(!readOnly || editando) && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className={`h-11 w-11 ${
+                    it.qualidade
+                      ? "border-transparent bg-[rgba(240,169,43,0.15)] text-[var(--warning)]"
+                      : ""
+                  }`}
+                  aria-label="Marcar problema de qualidade"
+                  onClick={() => toggleQualidade(idx)}
+                >
+                  <AlertTriangle size={18} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11"
+                  aria-label="Adicionar foto"
+                  onClick={() => onFoto(it.id)}
+                >
+                  <Camera size={18} />
+                </Button>
+              </>
+            )}
+            {gap < 0 && !itemJaSolicitouVale(it.id) && !readOnly && nestaEntr > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 min-h-11 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                onClick={() => openValeDialog(it, jaRecebido, itemCaixas)}
+              >
+                <Receipt size={16} className="mr-1.5" /> Vale
+              </Button>
+            )}
+          </div>
+          {itemJaSolicitouVale(it.id) && <ChipLabel value="Vale pendente" tone="info" />}
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 

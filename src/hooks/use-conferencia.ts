@@ -99,7 +99,14 @@ export function useStartConferencia() {
         .in("status", ["em_andamento", "parcial"])
         .maybeSingle();
 
-      if (existing) return existing;
+      if (existing) {
+        await supabase
+          .from("pedidos_recebimento")
+          .update({ hora_chegada: nowISO() })
+          .eq("id", pedidoId)
+          .is("hora_chegada", null);
+        return existing;
+      }
 
       const { data: pedido } = await supabase
         .from("pedidos_recebimento")
@@ -139,6 +146,12 @@ export function useStartConferencia() {
         throw cErr;
       }
 
+      await supabase
+        .from("pedidos_recebimento")
+        .update({ hora_chegada: nowISO() })
+        .eq("id", pedidoId)
+        .is("hora_chegada", null);
+
       const itens = pedido?.itens_pedido ?? [];
       if (itens.length) {
         const { error: iErr } = await supabase.from("itens_conferencia").insert(
@@ -154,7 +167,10 @@ export function useStartConferencia() {
 
       return conf;
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ["conferencia", v.pedidoId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["conferencia", v.pedidoId] });
+      qc.invalidateQueries({ queryKey: ["pedidos"] });
+    },
   });
 }
 

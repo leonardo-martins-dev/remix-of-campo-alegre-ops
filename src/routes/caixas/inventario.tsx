@@ -119,20 +119,20 @@ function Page() {
               onClick={() => setView("painel")}
               className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "painel" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
             >
-              Contagem
+              Contar
             </button>
             <button
               type="button"
               onClick={() => setView("campo")}
               className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "campo" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
             >
-              Modo campo
+              Campo
             </button>
           </div>
         }
       />
       <FluxoPassos
-        steps={["Visão geral", "Contagem", "Modo campo"]}
+        steps={["Visão geral", "Contar", "Campo"]}
         current={view === "visao_geral" ? 1 : view === "painel" ? 2 : 3}
       />
       {view === "visao_geral" ? (
@@ -208,8 +208,8 @@ function VisaoGeralInventario() {
           positiveIsGood={false}
         />
         <KpiCard
-          label="Fornec. abaixo do mínimo"
-          value={abaixoMinimo.length.toString()}
+          label="Abaixo mínimo"
+          value={String(abaixoMinimo.length)}
           icon={AlertTriangle}
           positiveIsGood={false}
         />
@@ -748,7 +748,9 @@ function PainelInventario({ initialTipo }: { initialTipo?: string }) {
             </p>
             {s.tipos.map((t) => (
               <div key={t.id} className="flex items-center justify-between gap-3">
-                <span className="font-medium">{t.nome} ({t.sigla})</span>
+                <span className="font-medium">
+                  {t.nome} · {t.sigla}
+                </span>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground">
                     Esperado: {s.calculado[t.sigla] ?? 0}
@@ -761,7 +763,7 @@ function PainelInventario({ initialTipo }: { initialTipo?: string }) {
               </div>
             ))}
             <Button className="min-h-11 w-full" onClick={s.handleRegistrar} disabled={s.registrar.isPending || !s.posicaoId}>
-              Registrar contagem
+              Registrar
             </Button>
             {s.submitted && (
               <div className="text-sm space-y-1 p-3 bg-secondary/50 rounded-lg">
@@ -877,7 +879,9 @@ function CampoInventario({ initialTipo }: { initialTipo?: string }) {
                 {s.tipos.map((t) => (
                   <div key={t.id} className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.06)" }}>
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs uppercase tracking-wider opacity-60">{t.nome}</span>
+                      <span className="text-xs uppercase tracking-wider opacity-60">
+                        {t.nome} · {t.sigla}
+                      </span>
                       <span className="text-xs opacity-50">Esperado: {s.calculado[t.sigla] ?? 0}</span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -903,7 +907,7 @@ function CampoInventario({ initialTipo }: { initialTipo?: string }) {
                   </div>
                 ))}
                 <Button className="min-h-12 w-full" onClick={s.handleRegistrar} disabled={s.registrar.isPending || !s.posicaoId}>
-                  Registrar {s.parceiroNome || "contagem"}
+                  Registrar
                 </Button>
                 {s.submitted && (
                   <div className="text-xs opacity-70 space-y-1">

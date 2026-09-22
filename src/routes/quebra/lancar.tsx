@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { FluxoPassos } from "@/components/fluxo-passos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { useProdutos } from "@/hooks/use-cadastros";
 import { useConfigValor } from "@/hooks/use-pedidos";
@@ -246,7 +247,7 @@ function Page() {
           onChange={(e) => setObs(e.target.value)}
         />
         <Button className="min-h-11" onClick={handleSave} disabled={saving || registrar.isPending}>
-          {saving ? "Registrando…" : "Registrar ocorrência"}
+          {saving ? "Registrando…" : "Registrar"}
         </Button>
         {lancados.length > 0 && (
           <div className="text-xs text-muted-foreground space-y-1">
@@ -300,6 +301,7 @@ function ProdutoLinha({
     item.qtd > 0 ? produto.id : null,
   );
   const hasQtd = item.qtd > 0;
+  const qtdId = `qtd-${produto.id}`;
 
   return (
     <div
@@ -307,14 +309,20 @@ function ProdutoLinha({
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="flex-1 text-sm font-medium">{produto.nome}</span>
-        <Input
-          className="w-24"
-          type="number"
-          min={0}
-          value={item.qtd || ""}
-          placeholder="un"
-          onChange={(e) => onUpdate({ qtd: Number(e.target.value) || 0 })}
-        />
+        <div className="space-y-1">
+          <Label htmlFor={qtdId} className="text-xs">
+            Quantidade
+          </Label>
+          <Input
+            id={qtdId}
+            className="w-24"
+            type="number"
+            min={0}
+            value={item.qtd || ""}
+            placeholder="un"
+            onChange={(e) => onUpdate({ qtd: Number(e.target.value) || 0 })}
+          />
+        </div>
       </div>
       {hasQtd && (
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">

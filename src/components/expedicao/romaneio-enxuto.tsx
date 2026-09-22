@@ -55,7 +55,8 @@ function StatusChip({ it }: { it: RomaneioLinha }) {
   if (it.status === "ok") return <span className="chip chip-ok">OK</span>;
   if (it.status === "corrigido") {
     const d = it.real - it.romaneio;
-    return <span className="chip chip-warn">{d > 0 ? `+${d}` : `${d}`}</span>;
+    const delta = d > 0 ? `+${d}` : `${d}`;
+    return <span className="chip chip-warn">Corrigido · {delta}</span>;
   }
   return <span className="chip chip-muted">Pendente</span>;
 }

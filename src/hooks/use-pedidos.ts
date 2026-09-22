@@ -410,6 +410,37 @@ export function useUpdatePedidoAdmin() {
   });
 }
 
+/** Registra a mesma hora de chegada em vários pedidos (chegada única multi-fornecedor). */
+export function useRegistrarHoraChegada() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pedidoIds,
+      horaChegada,
+      onlyIfNull = true,
+    }: {
+      pedidoIds: string[];
+      horaChegada?: string;
+      /** Se true, só preenche pedidos sem hora (padrão ao iniciar). */
+      onlyIfNull?: boolean;
+    }) => {
+      if (pedidoIds.length === 0) return;
+      const iso = horaChegada ?? new Date().toISOString();
+      let q = supabase
+        .from("pedidos_recebimento")
+        .update({ hora_chegada: iso })
+        .in("id", pedidoIds);
+      if (onlyIfNull) q = q.is("hora_chegada", null);
+      const { error } = await q;
+      if (error) throw error;
+      return iso;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pedidos"] });
+    },
+  });
+}
+
 export function useFillRate(period: "today" | "week" | "month" = "week") {
   const { from, to } = dateRangeBRT(period);
   return useQuery({

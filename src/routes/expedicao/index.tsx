@@ -1,25 +1,19 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Truck,
   Clock,
   CheckCircle2,
-  Tv,
-  FileSpreadsheet,
-  Download,
   Play,
   Package,
   RefreshCw,
   HelpCircle,
-  ShoppingCart,
-  Store,
-  Search,
   AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { HeaderAcoes, ChipLabel } from "@/components/ui-galpao";
 import { StatStrip } from "@/components/stat-strip";
-import { useWiseSyncStatus } from "@/hooks/use-wise-pedidos";
 import { ProgressRing } from "@/components/charts";
 import { NumberStepper } from "@/components/number-stepper";
 import {
@@ -63,7 +57,6 @@ import {
   isWiseExportacaoFormat,
   matchProdutosFromWiseExport,
   downloadExpedicaoTemplate,
-  EXPEDICAO_EXCEL_COLUNAS,
 } from "@/lib/excel-expedicao";
 import {
   isRelatorioVendaHtml,
@@ -160,8 +153,10 @@ function computeStatus(romaneio: number, real: number): RomaneioItemView["status
 }
 
 function Page() {
+  const navigate = useNavigate();
   const { cargaId: cargaIdSearch } = Route.useSearch();
   const { user } = useAuth();
+  const [ajustarCaixas, setAjustarCaixas] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const wiseFileRef = useRef<HTMLInputElement>(null);
   const vendaFileRef = useRef<HTMLInputElement>(null);
@@ -179,7 +174,6 @@ function Page() {
   const importRelatorioVenda = useImportRelatorioVenda();
   const wiseFetch = useWiseCarregamentos();
   const importWise = useImportWiseCarregamento();
-  const { data: wiseSyncStatus } = useWiseSyncStatus();
   const iniciar = useIniciarCarga();
   const conferirPedido = useConferirPedido();
   const [selectedId, setSelectedId] = useState<string | null>(cargaIdSearch ?? null);
@@ -638,71 +632,40 @@ function Page() {
     </>
   );
 
-  const btnAction =
-    "inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50";
-
-  const importHeaderActions = (
-    <div className="header-actions-mobile">
-      <button
-        type="button"
-        onClick={() => downloadExpedicaoTemplate()}
-        className={btnAction}
-        title={`Colunas: ${EXPEDICAO_EXCEL_COLUNAS.join(", ")}`}
-      >
-        <Download size={14} /> <span className="lg:hidden">Modelo</span><span className="hidden lg:inline">Baixar modelo</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => vendaFileRef.current?.click()}
-        disabled={importRelatorioVenda.isPending}
-        className={btnAction}
-        title="Relatório de pedidos de venda (Nr. Ped. + itens por loja)"
-      >
-        <ShoppingCart size={14} /> <span className="lg:hidden">Venda</span><span className="hidden lg:inline">Pedido de venda</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => fileRef.current?.click()}
-        className={btnAction}
-      >
-        <FileSpreadsheet size={14} /> <span className="lg:hidden">Excel</span><span className="hidden lg:inline">Importar Excel</span>
-      </button>
-      <button
-        type="button"
-        onClick={openWiseImport}
-        disabled={wiseFetch.isPending}
-        className={btnAction}
-      >
-        <RefreshCw size={14} /> Wise
-      </button>
-      <button
-        type="button"
-        onClick={() => wiseFileRef.current?.click()}
-        disabled={importRomaneio.isPending}
-        className={btnAction}
-        title="Exportação Wise: Código, Descrição, Unidade, Qtde → carga selecionada"
-      >
-        <FileSpreadsheet size={14} /> <span className="lg:hidden">Exp. Wise</span><span className="hidden lg:inline">Importar exportação Wise</span>
-      </button>
-      <Link
-        to="/expedicao/saida"
-        search={{ cargaId: undefined, clienteId: undefined }}
-        className={btnAction}
-      >
-        <Truck size={14} /> <span className="lg:hidden">Saída</span>
-        <span className="hidden lg:inline">Saída para a loja</span>
-      </Link>
-      <Link to="/expedicao/entrega" search={{ cargaId: undefined }} className={btnAction}>
-        <Store size={14} /> Entrega
-      </Link>
-      <Link to="/expedicao/rastreio" className={btnAction}>
-        <Search size={14} /> Rastreio
-      </Link>
-      <Link to="/expedicao/tv" className={btnAction}>
-        <Tv size={14} /> <span className="lg:hidden">TV</span><span className="hidden lg:inline">Modo TV</span>
-      </Link>
-    </div>
+  const buildHeaderActions = (primary?: React.ReactNode) => (
+    <HeaderAcoes
+      primary={primary}
+      detalhes={[
+        { label: "Baixar modelo Excel", onClick: () => downloadExpedicaoTemplate() },
+        {
+          label: "Pedido de venda",
+          onClick: () => vendaFileRef.current?.click(),
+          disabled: importRelatorioVenda.isPending,
+        },
+        { label: "Importar Excel", onClick: () => fileRef.current?.click() },
+        { label: "Consultar Wise", onClick: () => void openWiseImport(), disabled: wiseFetch.isPending },
+        {
+          label: "Importar exportação Wise",
+          onClick: () => wiseFileRef.current?.click(),
+          disabled: importRomaneio.isPending,
+        },
+        { separator: true, label: "" },
+        {
+          label: "Saída para a loja",
+          onClick: () =>
+            navigate({ to: "/expedicao/saida", search: { cargaId: undefined, clienteId: undefined } }),
+        },
+        {
+          label: "Entrega na loja",
+          onClick: () => navigate({ to: "/expedicao/entrega", search: { cargaId: undefined } }),
+        },
+        { label: "Rastreio", onClick: () => navigate({ to: "/expedicao/rastreio" }) },
+        { label: "Modo TV", onClick: () => navigate({ to: "/expedicao/tv" }) },
+      ]}
+    />
   );
+
+  const importHeaderActions = buildHeaderActions();
 
   if (loadingCargas) {
     return <Loading message="Carregando cargas do dia..." />;
@@ -785,7 +748,27 @@ function Page() {
       <PageHeader
         title="Painel de Carga"
         subtitle="Abastecimento e conferência por loja"
-        actions={importHeaderActions}
+        actions={buildHeaderActions(
+          podeConferir ? (
+            <Button
+              size="sm"
+              className="min-h-11 lg:min-h-9"
+              disabled={conferirPedido.isPending || saidaBloqueada}
+              onClick={handleConferirPedido}
+            >
+              <CheckCircle2 size={14} className="mr-1" /> Conferir pedido
+            </Button>
+          ) : detail?.status !== "concluida" && !saidaBloqueada ? (
+            <Button
+              size="sm"
+              className="min-h-11 lg:min-h-9"
+              disabled={finalizar.isPending}
+              onClick={handleFinalizar}
+            >
+              <Package size={14} className="mr-1" /> Finalizar carga
+            </Button>
+          ) : undefined,
+        )}
       />
 
       {fila.length > 0 && (
@@ -860,21 +843,9 @@ function Page() {
             tone: "ok",
           },
           {
-            label: "Itens conferidos",
-            value: totalItens ? `${progresso}%` : "—",
+            label: "Conferido",
+            value: totalItens ? `${progresso}%` : "0%",
             tone: "ok",
-          },
-          {
-            label: "Wise atualizado",
-            value: wiseSyncStatus?.ultima_venda
-              ? new Date(wiseSyncStatus.ultima_venda).toLocaleString("pt-BR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "—",
-            tone: "info",
           },
         ]}
       />
@@ -894,38 +865,38 @@ function Page() {
                   <h2 className="text-base sm:text-lg font-bold text-navy">{clienteNome}</h2>
                   {statusOrdem ? (
                     <StatusOrdemBadge status={statusOrdem} />
-                  ) : (
+                  ) : statusLabel ? (
                     <span className="chip chip-info">{statusLabel}</span>
-                  )}
+                  ) : null}
                   {activeId && (
-                    <Link
-                      to="/expedicao/rotas"
-                      search={{ cargaId: activeId }}
-                      className="ml-auto inline-flex items-center gap-1 min-h-9 px-3 rounded-lg bg-primary-soft text-primary-dark text-xs font-semibold hover:bg-primary/15"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate({ to: "/expedicao/rotas", search: { cargaId: activeId } })
+                      }
+                      className="ml-auto inline-flex items-center gap-1 min-h-9 px-3 rounded-lg border border-border text-xs font-semibold text-navy hover:bg-secondary"
                     >
                       <Package size={12} /> Ordem de separação
-                    </Link>
+                    </button>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
-                  {numeroOrdem && (
-                    <span className="chip chip-muted text-xs tabular-nums">OS {numeroOrdem}</span>
-                  )}
-                  {placa && placa !== "—" && (
-                    <span className="chip chip-muted text-xs">Placa {placa}</span>
-                  )}
-                  {motorista && motorista !== "—" && (
-                    <span className="chip chip-muted text-xs">Motorista {motorista}</span>
-                  )}
-                  {rota && rota !== "—" && (
-                    <span className="chip chip-muted text-xs hidden sm:inline-flex">Rota {rota}</span>
-                  )}
+                  <ChipLabel label="OS" value={numeroOrdem} />
+                  <ChipLabel label="Placa" value={placa && placa !== "—" ? placa : null} />
+                  <ChipLabel
+                    label="Motorista"
+                    value={motorista && motorista !== "—" ? motorista : null}
+                  />
+                  <ChipLabel
+                    label="Rota"
+                    value={rota && rota !== "—" ? rota : null}
+                    className="hidden sm:inline-flex"
+                  />
                   {detail?.hora_inicio && (
-                    <span className="chip chip-muted text-xs">Início {formatTime(detail.hora_inicio)}</span>
+                    <ChipLabel label="Início" value={formatTime(detail.hora_inicio)} />
                   )}
-                  <span className="chip chip-teal text-xs">
-                    {totalItens} itens · {totalRealCx} cx
-                  </span>
+                  <ChipLabel label="Itens" value={totalItens} tone="teal" />
+                  <ChipLabel label="Caixas" value={totalRealCx} tone="teal" />
                 </div>
                 {statusOrdem && <FluxoOrdemStepper status={statusOrdem} compact />}
                 {activeId && (
@@ -935,16 +906,6 @@ function Page() {
                     clienteId={detail?.cliente_id}
                   />
                 )}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    className="min-h-11 lg:min-h-9"
-                    disabled={!podeConferir || conferirPedido.isPending || saidaBloqueada}
-                    onClick={handleConferirPedido}
-                  >
-                    <CheckCircle2 size={14} className="mr-1" /> Conferir pedido
-                  </Button>
-                </div>
                 {itensSemFator.length > 0 && (
                   <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
                     <strong>Sem conversão ({itensSemFator.length})</strong>
@@ -1029,91 +990,116 @@ function Page() {
               <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Caixas — sugerido × real
               </div>
-              {realTouched && (
+              <div className="flex items-center gap-2">
+                {realTouched && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRealTouched(false);
+                      setRealCaixas(sugCaixas);
+                      persistResumo(sugCaixas);
+                    }}
+                    className="text-xs font-semibold text-primary-dark hover:underline"
+                  >
+                    Resetar
+                  </button>
+                )}
                 <button
-                  onClick={() => {
-                    setRealTouched(false);
-                    setRealCaixas(sugCaixas);
-                    persistResumo(sugCaixas);
-                  }}
+                  type="button"
+                  onClick={() => setAjustarCaixas((v) => !v)}
                   className="text-xs font-semibold text-primary-dark hover:underline"
                 >
-                  Resetar
+                  {ajustarCaixas ? "Ocultar ajuste" : "Ajustar caixas"}
                 </button>
-              )}
+              </div>
             </div>
             <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground uppercase">
                 <tr>
                   <th className="text-left py-1">Tipo</th>
-                  <th className="text-right py-1">Sug.</th>
-                  <th className="text-center py-1">Real (enviado)</th>
-                  <th className="text-right py-1 w-12">Δ</th>
+                  <th className="text-right py-1">Sugerido</th>
+                  <th className="text-right py-1">Real</th>
+                  <th className="text-right py-1 w-16">Diferença</th>
                 </tr>
               </thead>
               <tbody>
-                {(tiposCx.length ? tiposCx : [{ sigla: "G", nome: "Grande" }, { sigla: "I", nome: "Isopor" }, { sigla: "P", nome: "Plástica" }]).map((t) => {
+                {(tiposCx.length
+                  ? tiposCx
+                  : [
+                      { sigla: "G", nome: "Grande" },
+                      { sigla: "I", nome: "Isopor" },
+                      { sigla: "P", nome: "Plástica" },
+                    ]
+                ).map((t) => {
                   const k = t.sigla;
                   const diff = safeNum(realCaixas[k]) - safeNum(sugCaixas[k]);
                   return (
                     <tr key={k} className="border-t border-border">
                       <td className="py-2 font-semibold text-navy">
-                        {t.nome}
+                        {t.nome} · {k}
                       </td>
-                      <td className="py-2 text-right text-muted-foreground">{safeNum(sugCaixas[k])}</td>
-                      <td className="py-2">
-                        <NumberStepper
-                          size="sm"
-                          value={safeNum(realCaixas[k])}
-                          onChange={(v) => {
-                            setRealTouched(true);
-                            const next = { ...realCaixas, [k]: safeNum(v) };
-                            setRealCaixas(next);
-                            persistResumo(next);
-                          }}
-                        />
+                      <td className="py-2 text-right text-muted-foreground tabular-nums">
+                        {safeNum(sugCaixas[k])}
+                      </td>
+                      <td className="py-2 text-right">
+                        {ajustarCaixas ? (
+                          <NumberStepper
+                            size="sm"
+                            value={safeNum(realCaixas[k])}
+                            onChange={(v) => {
+                              setRealTouched(true);
+                              const next = { ...realCaixas, [k]: safeNum(v) };
+                              setRealCaixas(next);
+                              persistResumo(next);
+                            }}
+                          />
+                        ) : (
+                          <span className="font-semibold tabular-nums text-navy">
+                            {safeNum(realCaixas[k])}
+                          </span>
+                        )}
                       </td>
                       <td
-                        className="py-2 text-right font-bold tabular-nums"
+                        className="py-2 text-right font-bold tabular-nums text-xs"
                         style={{
                           color:
-                            diff === 0 ? "var(--muted-foreground)" : diff > 0 ? "var(--info)" : "var(--danger)",
+                            diff === 0
+                              ? "var(--muted-foreground)"
+                              : diff > 0
+                                ? "var(--info)"
+                                : "var(--danger)",
                         }}
                       >
-                        {diff === 0 ? "—" : diff > 0 ? `+${diff}` : `${diff}`}
+                        {diff === 0 ? "—" : `Diferença · ${diff > 0 ? `+${diff}` : diff}`}
                       </td>
                     </tr>
                   );
                 })}
                 <tr className="border-t border-border bg-secondary/30">
                   <td className="py-2 font-bold text-navy">Total</td>
-                  <td className="py-2 text-right text-muted-foreground">
-                    {totalSugCx}
-                  </td>
-                  <td className="py-2 text-center font-bold text-navy">
-                    {totalRealCx}
-                  </td>
+                  <td className="py-2 text-right text-muted-foreground tabular-nums">{totalSugCx}</td>
+                  <td className="py-2 text-right font-bold text-navy tabular-nums">{totalRealCx}</td>
                   <td className="py-2 text-right" />
                 </tr>
               </tbody>
             </table>
           </div>
           <button
-            onClick={handleConferirPedido}
-            disabled={!podeConferir || conferirPedido.isPending || saidaBloqueada}
-            className="mt-5 w-full inline-flex items-center justify-center gap-2 h-11 rounded-lg border border-primary text-primary font-bold hover:bg-primary-soft active:scale-[0.99] transition disabled:opacity-50"
-          >
-            <CheckCircle2 size={16} /> Conferir pedido
-          </button>
-          <button
             onClick={handleFinalizar}
-            disabled={finalizar.isPending || detail?.status === "concluida" || saidaBloqueada}
-            className="mt-2 w-full inline-flex items-center justify-center gap-2 h-11 rounded-lg bg-primary text-primary-foreground font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+            disabled={
+              finalizar.isPending ||
+              detail?.status === "concluida" ||
+              saidaBloqueada ||
+              podeConferir
+            }
+            className="mt-5 w-full inline-flex items-center justify-center gap-2 h-11 rounded-lg bg-primary text-primary-foreground font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
           >
             <Package size={16} /> Finalizar carga
           </button>
           <p className="text-xs text-muted-foreground text-center mt-2">
-            Conferir preenche real = romaneio e caixas por fator. Finalizar promove a Em carga.
+            {podeConferir
+              ? "Use Conferir pedido no topo. Depois finalize para Em carga."
+              : "Finalizar promove a Em carga para a saída."}
           </p>
         </div>
       </div>
@@ -1122,7 +1108,7 @@ function Page() {
         <div className="flex flex-col gap-3 mb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <h3 className="text-sm font-bold text-navy flex items-center gap-2">
-              <Truck size={14} /> Outras cargas hoje
+              <Truck size={14} /> Cargas do dia
             </h3>
             <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary/50 overflow-x-auto">
               {(
@@ -1202,13 +1188,18 @@ function Page() {
                 </div>
                 <div className="font-bold text-navy text-sm">{nome}</div>
                 <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                  {rotaNome && <div>Rota {rotaNome}</div>}
-                  {mot && <div>Motorista {mot}</div>}
+                  {rotaNome && <div>Rota · {rotaNome}</div>}
+                  {mot && <div>Motorista · {mot}</div>}
                   <div>
-                    {Number(c.total_linhas ?? 0)} itens · {Number(c.total_caixas ?? 0)} cx
+                    Itens · {Number(c.total_linhas ?? 0)}
+                    {" · "}
+                    Caixas · {Number(c.total_caixas ?? 0)}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-wide">
+                    Conferido · {Number(c.progresso ?? 0)}%
                   </div>
                 </div>
-                <div className="mt-3 h-1.5 rounded-full bg-secondary overflow-hidden">
+                <div className="mt-3 h-1.5 rounded-full bg-secondary overflow-hidden" title={`Conferido · ${Number(c.progresso ?? 0)}%`}>
                   <div
                     className="h-full rounded-full"
                     style={{ width: `${Number(c.progresso ?? 0)}%`, background: "var(--primary)" }}

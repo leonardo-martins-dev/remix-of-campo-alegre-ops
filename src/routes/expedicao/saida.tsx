@@ -7,6 +7,7 @@ import { FluxoPassos } from "@/components/fluxo-passos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
+import { ChipLabel, NumeroRotulo } from "@/components/ui-galpao";
 import { useAuth } from "@/lib/auth";
 import { useMotoristas } from "@/hooks/use-cadastros";
 import { formatDateBRT } from "@/lib/utils-date";
@@ -275,6 +276,7 @@ function Page() {
               />
               <Button
                 size="sm"
+                variant="outline"
                 disabled={!linkClienteId || vincular.isPending}
                 onClick={() => void vincularLoja()}
               >
@@ -317,9 +319,10 @@ function Page() {
                     {STATUS_ORDEM_LABEL[o.status_ordem as StatusOrdem] ?? "Em carga"}
                   </span>
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {o.caixas_separadas} caixa(s) · {Number(o.total_itens)} itens ·{" "}
-                  {formatDateBRT(o.data_carga)}
+                <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <NumeroRotulo label="Caixas" value={o.caixas_separadas} />
+                  <NumeroRotulo label="Itens" value={Number(o.total_itens)} />
+                  <span>{formatDateBRT(o.data_carga)}</span>
                 </div>
                 {o.separado_por_nome && (
                   <div className="text-xs text-muted-foreground">
@@ -340,7 +343,7 @@ function Page() {
               <span className="font-bold text-navy text-lg tabular-nums">
                 {ordemSel.numero_ordem}
               </span>
-              <span className="chip chip-info">{selecionadas.length} cx</span>
+              <ChipLabel label="Caixas" value={selecionadas.length} tone="info" />
             </div>
             <div className="text-sm text-ink">{ordemSel.cliente_nome}</div>
             <div className="text-xs text-muted-foreground">
@@ -348,8 +351,9 @@ function Page() {
               Motorista {motoristaNome}
             </div>
             {ordemSel.qtde_caixas_wise != null && (
-              <div className="text-xs text-muted-foreground mt-1">
-                Wise: {ordemSel.qtde_caixas_wise} cx · separadas: {ordemSel.caixas_separadas} cx
+              <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                <NumeroRotulo label="Wise" value={ordemSel.qtde_caixas_wise} />
+                <NumeroRotulo label="Separadas" value={ordemSel.caixas_separadas} />
               </div>
             )}
           </div>
@@ -407,7 +411,9 @@ function Page() {
             disabled={confirmar.isPending || selecionadas.length === 0}
             onClick={() => void enviar()}
           >
-            {confirmar.isPending ? "Confirmando…" : `Confirmar saída · ${selecionadas.length} cx`}
+            {confirmar.isPending
+              ? "Confirmando…"
+              : `Confirmar saída · Caixas · ${selecionadas.length}`}
           </Button>
         </div>
       )}

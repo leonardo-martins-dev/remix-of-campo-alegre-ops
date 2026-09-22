@@ -54,12 +54,9 @@ function Page() {
         subtitle="Contagem semanal no Packing — fecha toda sexta-feira. Sem esperado × contado: a variação entre semanas é o consumo aparente."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link
-              to="/embalagens/saldo"
-              className="inline-flex items-center h-9 px-3 rounded-md text-xs font-semibold text-muted-foreground hover:bg-secondary"
-            >
-              Ver saldo
-            </Link>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/embalagens/saldo">Ver saldo</Link>
+            </Button>
             <div className="flex gap-1">
               <button
                 type="button"
@@ -73,7 +70,7 @@ function Page() {
                 onClick={() => setView("historico")}
                 className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "historico" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
               >
-                Histórico e ajustes
+                Histórico
               </button>
             </div>
           </div>

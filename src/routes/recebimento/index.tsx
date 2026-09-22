@@ -1,10 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert, RefreshCw, Ban, Receipt, Truck, PackageCheck } from "lucide-react";
+import { Plus, ChevronRight, Trash2, Pencil, Ban, PackageCheck, MoreHorizontal, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { useContarValesPendentes } from "@/hooks/use-vales";
 import { StatStrip } from "@/components/stat-strip";
+import { HeaderAcoes, ChipLabel } from "@/components/ui-galpao";
 import {
   Dialog,
   DialogClose,
@@ -13,6 +14,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -20,7 +27,6 @@ import {
   usePedidosDia,
   usePedidosRealtime,
   useCreatePedidoManual,
-  useFillRate,
   useAliases,
   useUpdatePedidoAdmin,
   useEncerrarPedido,
@@ -29,7 +35,7 @@ import { useFornecedores, useProdutos, useDestinatarios, useClientes } from "@/h
 import { useAuth } from "@/lib/auth";
 import { resolveIsAdmin } from "@/lib/roles";
 import { downloadWiseModelo, type AliasRow } from "@/lib/excel-wise-pedidos";
-import { useConfirmWiseImport, usePreviewWiseImport, useSyncWisePedidos, useWiseSyncStatus, type ImportPreview, type ImportWiseResult } from "@/hooks/use-wise-pedidos";
+import { useConfirmWiseImport, usePreviewWiseImport, useSyncWisePedidos, type ImportPreview, type ImportWiseResult } from "@/hooks/use-wise-pedidos";
 import { ImportacaoWiseDialog } from "@/components/importacao-wise-dialog";
 import { ImportacoesPanel } from "@/components/importacoes-panel";
 import { TableWrapper } from "@/components/table-wrapper";
@@ -95,36 +101,59 @@ const statusChip = (s: string) => {
 };
 
 function pedidoActionLink(p: PedidoDia) {
-  if (p.status === "pendente" || p.status === "parcial" || p.status === "em_transito") {
-    return (
-      <Link
-        to="/recebimento/conferir"
-        search={{ pedidoId: p.id }}
-        className="inline-flex items-center gap-1 text-primary-dark text-xs font-semibold hover:underline"
-      >
-        Conferir <ChevronRight size={12} />
-      </Link>
-    );
-  }
-  if (p.status === "aguardando_liberacao" || p.status === "divergencia") {
-    return (
-      <Link
-        to="/recebimento/conferir"
-        search={{ pedidoId: p.id }}
-        className="inline-flex items-center gap-1 text-warning text-xs font-semibold hover:underline"
-      >
-        Ver <ChevronRight size={12} />
-      </Link>
-    );
-  }
+  const isConferir =
+    p.status === "pendente" || p.status === "parcial" || p.status === "em_transito";
   return (
     <Link
       to="/recebimento/conferir"
       search={{ pedidoId: p.id }}
-      className="inline-flex items-center gap-1 text-muted-foreground text-xs font-semibold hover:underline"
+      className={
+        isConferir
+          ? "inline-flex items-center gap-1 text-primary-dark text-xs font-semibold hover:underline"
+          : "inline-flex items-center gap-1 text-muted-foreground text-xs font-semibold hover:underline"
+      }
     >
-      Ver <ChevronRight size={12} />
+      {isConferir ? "Conferir" : "Ver"} <ChevronRight size={12} />
     </Link>
+  );
+}
+
+function PedidoRowAdminMenu({
+  p,
+  canAdmin,
+  onEncerrar,
+  onEditar,
+}: {
+  p: PedidoDia;
+  canAdmin: boolean;
+  onEncerrar: () => void;
+  onEditar: () => void;
+}) {
+  const canEncerrar = canAdmin && p.status === "parcial";
+  const canEditar =
+    canAdmin && (p.status === "conferido" || p.status === "pendente" || p.status === "parcial");
+  if (!canEncerrar && !canEditar) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="outline" size="sm" className="h-8 gap-1 px-2">
+          <MoreHorizontal size={14} />
+          <span className="sr-only sm:not-sr-only sm:inline">Detalhes</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {canEditar && (
+          <DropdownMenuItem onSelect={onEditar}>
+            <Pencil size={12} className="mr-2" /> Editar
+          </DropdownMenuItem>
+        )}
+        {canEncerrar && (
+          <DropdownMenuItem onSelect={onEncerrar} className="text-destructive focus:text-destructive">
+            <Ban size={12} className="mr-2" /> Encerrar
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -144,8 +173,19 @@ function origemLabel(o: string) {
   return o;
 }
 
+type TabKey =
+  | "todos"
+  | "pendente"
+  | "divergencia"
+  | "aguardando_vinculo"
+  | "outros"
+  | "importacoes";
+
+const OUTROS_STATUS = new Set(["parcial", "em_transito", "conferido", "encerrado", "recebido"]);
+
 function Page() {
-  const [tab, setTab] = useState<"todos" | "pendente" | "parcial" | "em_transito" | "conferido" | "divergencia" | "aguardando_liberacao" | "aguardando_vinculo" | "encerrado" | "importacoes">("todos");
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<TabKey>("todos");
   const [dataFiltro, setDataFiltro] = useState(todayBRT());
   const [busca, setBusca] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
@@ -161,7 +201,6 @@ function Page() {
   const { user, profile, isAdmin } = useAuth();
   usePedidosRealtime();
   const { data: pedidos = [], isLoading, error } = usePedidosDia(dataFiltro);
-  const { data: fillRateData = [] } = useFillRate("today");
   const { data: fornecedores = [] } = useFornecedores();
   const { data: produtos = [] } = useProdutos();
   const { data: destinatarios = [] } = useDestinatarios();
@@ -170,7 +209,6 @@ function Page() {
   const previewMut = usePreviewWiseImport();
   const confirmMut = useConfirmWiseImport();
   const syncWise = useSyncWisePedidos();
-  const { data: wiseSyncStatus } = useWiseSyncStatus();
   const { data: aliases = [] } = useAliases();
   const { data: pendencias = [] } = usePendenciasVinculo();
   const updatePedido = useUpdatePedidoAdmin();
@@ -192,7 +230,16 @@ function Page() {
     itens_pedido: (p.itens_pedido ?? []) as ItemPedido[],
   }));
   const filtered = typedPedidos.filter((p) => {
-    if (tab !== "todos" && p.status !== tab) return false;
+    if (tab === "pendente" && p.status !== "pendente") return false;
+    if (tab === "aguardando_vinculo" && p.status !== "aguardando_vinculo") return false;
+    if (
+      tab === "divergencia" &&
+      p.status !== "divergencia" &&
+      p.status !== "aguardando_liberacao"
+    ) {
+      return false;
+    }
+    if (tab === "outros" && !OUTROS_STATUS.has(p.status)) return false;
     const q = busca.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -203,19 +250,38 @@ function Page() {
   });
 
   const stats = useMemo(() => {
-    const totalItens = typedPedidos.reduce((a, p) => a + (p.itens_pedido?.length ?? 0), 0);
-    const itensPendentes = typedPedidos
-      .filter((p) => p.status === "pendente")
-      .reduce((a, p) => a + (p.itens_pedido?.length ?? 0), 0);
+    const pendentes = typedPedidos.filter((p) => p.status === "pendente").length;
+    const emConferencia = typedPedidos.filter((p) => p.status === "parcial").length;
     const divergencias = typedPedidos.filter(
-      (p) => p.status === "divergencia" || p.status === "aguardando_liberacao"
+      (p) => p.status === "divergencia" || p.status === "aguardando_liberacao",
     ).length;
-    const fillAvg =
-      fillRateData.length > 0
-        ? fillRateData.reduce((a, f) => a + (Number(f.fill_rate) || 0), 0) / fillRateData.length
-        : 0;
-    return { totalItens, itensPendentes, divergencias, fillAvg };
-  }, [typedPedidos, fillRateData]);
+    const conferidos = typedPedidos.filter(
+      (p) => p.status === "conferido" || p.status === "recebido",
+    ).length;
+    return { pendentes, emConferencia, divergencias, conferidos };
+  }, [typedPedidos]);
+
+  const syncWiseAction = async () => {
+    if (!user?.id) return;
+    try {
+      const result = await syncWise.mutateAsync({
+        created_by: user.id,
+        fornecedores,
+        produtos,
+        destinatarios,
+        clientes,
+      });
+      if (!result.novos && !result.atualizados) {
+        toast.info(result.message ?? "Nenhum pedido na API. Use a importação por arquivo.");
+      } else {
+        toast.success(
+          `${result.novos} novos · ${result.atualizados} atualizados · ${result.pendencias} pendências`,
+        );
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao sincronizar Wise");
+    }
+  };
 
   const handleExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -290,92 +356,49 @@ function Page() {
         title="Conferência de Mercadoria"
         subtitle="Pedidos a conferir do dia · recebimento sempre aceito"
         actions={
-          <div className="header-actions-mobile">
-            <Link
-              to="/recebimento/conferir"
-              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary-dark"
-            >
-              <PackageCheck size={14} /> Conferir
-            </Link>
-            <Link
-              to="/recebimento/saida-roca"
-              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-primary/30 bg-primary-soft text-sm font-semibold text-primary-dark hover:bg-primary/15"
-            >
-              <Truck size={14} /> <span className="hidden md:inline">Saída na </span>roça
-              {emTransito.length > 0 && (
-                <span className="chip chip-info ml-1">{emTransito.length} em trânsito</span>
-              )}
-            </Link>
-            {canAdmin && (
-              <>
-                <Link
-                  to="/recebimento/vales"
-                  className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-amber-300/50 bg-amber-50 text-sm font-semibold text-amber-800 hover:bg-amber-100 relative"
-                >
-                  <Receipt size={14} /> Vales
-                  {valesPendentes > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">
-                      {valesPendentes > 99 ? "99+" : valesPendentes}
-                    </span>
-                  )}
-                </Link>
-                <Link
-                  to="/recebimento/liberacoes"
-                  className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-warning/40 bg-warning/10 text-sm font-semibold text-navy hover:bg-warning/20"
-                >
-                  <ShieldAlert size={14} /> <span className="hidden md:inline">Liberações</span><span className="md:hidden">Lib.</span>
-                </Link>
-              </>
-            )}
-            <button
-              type="button"
-              disabled={syncWise.isPending}
-              onClick={async () => {
-                if (!user?.id) return;
-                try {
-                  const result = await syncWise.mutateAsync({
-                    created_by: user.id,
-                    fornecedores,
-                    produtos,
-                    destinatarios,
-                    clientes,
-                  });
-                  if (!result.novos && !result.atualizados) {
-                    toast.info(result.message ?? "Nenhum pedido na API. Use a importação por arquivo.");
-                  } else {
-                    toast.success(`${result.novos} novos · ${result.atualizados} atualizados · ${result.pendencias} pendências`);
-                  }
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Erro ao sincronizar Wise");
-                }
-              }}
-              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
-            >
-              <RefreshCw size={14} /> <span className="hidden lg:inline">Sincronizar </span>Wise
-            </button>
-            <button
-              type="button"
-              disabled={previewMut.isPending}
-              onClick={() => fileRef.current?.click()}
-              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary disabled:opacity-50"
-            >
-              <FileSpreadsheet size={14} /> <span className="lg:hidden">Planilha</span><span className="hidden lg:inline">Importar planilha</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => downloadWiseModelo()}
-              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
-            >
-              <span className="lg:hidden">Modelo</span><span className="hidden lg:inline">Baixar modelo</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setManualOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary-dark col-span-2 md:col-span-1 lg:col-span-1"
-            >
-              <Plus size={14} /> <span className="lg:hidden">Lançar</span><span className="hidden lg:inline">Lançar pedido manual</span>
-            </button>
-          </div>
+          <HeaderAcoes
+            primary={
+              <Link
+                to="/recebimento/conferir"
+                className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary-dark"
+              >
+                <PackageCheck size={14} /> Conferir
+              </Link>
+            }
+            detalhes={[
+              {
+                label: "Sincronizar Wise",
+                onClick: () => void syncWiseAction(),
+                disabled: syncWise.isPending,
+              },
+              {
+                label: "Importar planilha",
+                onClick: () => fileRef.current?.click(),
+                disabled: previewMut.isPending,
+              },
+              { label: "Baixar modelo", onClick: () => downloadWiseModelo() },
+              { label: "Lançar pedido manual", onClick: () => setManualOpen(true) },
+              { separator: true, label: "" },
+              {
+                label: emTransito.length > 0 ? `Saída na roça (${emTransito.length})` : "Saída na roça",
+                onClick: () => navigate({ to: "/recebimento/saida-roca" }),
+              },
+              ...(canAdmin
+                ? [
+                    {
+                      label: valesPendentes > 0 ? `Vales (${valesPendentes})` : "Vales",
+                      onClick: () => navigate({ to: "/recebimento/vales" }),
+                    },
+                    {
+                      label: "Liberações",
+                      onClick: () => navigate({ to: "/recebimento/liberacoes" }),
+                    },
+                  ]
+                : []),
+              { separator: true, label: "" },
+              { label: "Importações", onClick: () => setTab("importacoes") },
+            ]}
+          />
         }
       />
       <input
@@ -388,20 +411,14 @@ function Page() {
 
       <StatStrip
         items={[
-          { label: `Pedidos em ${formatDateBRT(dataFiltro)}`, value: isLoading ? "…" : String(typedPedidos.length) },
           {
-            label: "Itens a conferir",
-            value: isLoading ? "…" : String(stats.itensPendentes),
+            label: "Pendentes",
+            value: isLoading ? "…" : String(stats.pendentes),
             tone: "warn",
           },
           {
-            label: "Fill rate hoje",
-            value: isLoading ? "…" : `${stats.fillAvg.toFixed(1)}%`,
-            tone: "ok",
-          },
-          {
-            label: "Em trânsito",
-            value: String(emTransito.length),
+            label: "Em conferência",
+            value: isLoading ? "…" : String(stats.emConferencia),
             tone: "info",
           },
           {
@@ -410,19 +427,20 @@ function Page() {
             tone: "danger",
           },
           {
-            label: "Wise atualizado",
-            value: wiseSyncStatus?.ultima_compra
-              ? new Date(wiseSyncStatus.ultima_compra).toLocaleString("pt-BR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "—",
-            tone: "info",
+            label: "Conferidos",
+            value: isLoading ? "…" : String(stats.conferidos),
+            tone: "ok",
           },
         ]}
       />
+
+      {canAdmin && valesPendentes > 0 && (
+        <div className="mb-3">
+          <Link to="/recebimento/vales" className="inline-flex">
+            <ChipLabel label="Vales" value={valesPendentes} tone="warn" />
+          </Link>
+        </div>
+      )}
 
       {emTransito.length > 0 && (
         <div className="card-base p-3 md:p-4 mb-4">
@@ -496,19 +514,15 @@ function Page() {
           {(
             [
               ["todos", "Todos"],
-              ["pendente", "Conferir"],
-              ["parcial", "Parcial"],
-              ["em_transito", "Trânsito"],
+              ["pendente", "Pendentes"],
+              ["divergencia", "Divergência"],
               ["aguardando_vinculo", "Vínculo"],
-              ["conferido", "Recebidos"],
-              ["aguardando_liberacao", "Aguard."],
-              ["divergencia", "Diverg."],
-              ["encerrado", "Encerr."],
-              ["importacoes", "Import."],
+              ["outros", "Outros"],
             ] as const
           ).map(([k, l]) => (
             <button
               key={k}
+              type="button"
               onClick={() => setTab(k)}
               className={`px-3 min-h-10 lg:min-h-8 lg:h-8 rounded-md text-xs md:text-sm font-semibold whitespace-nowrap transition-colors ${tab === k ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
             >
@@ -547,7 +561,9 @@ function Page() {
                 </div>
                 <div className="flex items-center justify-between gap-2 py-2 sm:block sm:py-0">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide">Chegada</span>
-                  <span className="block font-semibold text-navy">{formatTime(p.hora_chegada)}</span>
+                  <span className="block font-semibold text-navy">
+                    {p.hora_chegada ? formatTime(p.hora_chegada) : ""}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between gap-2 py-2 sm:block sm:py-0">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide">Prevista</span>
@@ -573,31 +589,19 @@ function Page() {
                 <div className="flex-1 min-w-[7rem] [&_a]:inline-flex [&_a]:items-center [&_a]:justify-center [&_a]:min-h-11 [&_a]:px-3 [&_a]:rounded-lg [&_a]:bg-primary [&_a]:text-primary-foreground [&_a]:text-sm [&_a]:font-semibold [&_a]:no-underline">
                   {pedidoActionLink(p)}
                 </div>
-                {canAdmin && p.status === "parcial" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEncerrarId(p.id);
-                      setEncerrarMotivo("");
-                    }}
-                    className="inline-flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg border border-destructive/30 text-destructive text-sm font-semibold"
-                  >
-                    <Ban size={14} /> Encerrar
-                  </button>
-                )}
-                {canAdmin && (p.status === "conferido" || p.status === "pendente" || p.status === "parcial") && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditPedido(p);
-                      setEditCodigo(p.codigo);
-                      setEditPrevista(p.data_prevista ?? "");
-                    }}
-                    className="inline-flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg border border-border text-navy text-sm font-semibold"
-                  >
-                    <Pencil size={14} /> Editar
-                  </button>
-                )}
+                <PedidoRowAdminMenu
+                  p={p}
+                  canAdmin={canAdmin}
+                  onEncerrar={() => {
+                    setEncerrarId(p.id);
+                    setEncerrarMotivo("");
+                  }}
+                  onEditar={() => {
+                    setEditPedido(p);
+                    setEditCodigo(p.codigo);
+                    setEditPrevista(p.data_prevista ?? "");
+                  }}
+                />
               </div>
             </div>
           ))}
@@ -658,37 +662,27 @@ function Page() {
                       {origemLabel(p.origem)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-ink whitespace-nowrap">{formatTime(p.hora_chegada)}</td>
+                  <td className="px-4 py-3 text-ink whitespace-nowrap">
+                    {p.hora_chegada ? formatTime(p.hora_chegada) : ""}
+                  </td>
                   <td className="px-4 py-3 text-ink whitespace-nowrap">{formatDateBRT(p.data_prevista)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{statusChip(p.status)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                       {pedidoActionLink(p)}
-                      {canAdmin && p.status === "parcial" && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEncerrarId(p.id);
-                            setEncerrarMotivo("");
-                          }}
-                          className="inline-flex items-center gap-1 text-xs text-destructive hover:underline"
-                        >
-                          <Ban size={12} /> Encerrar
-                        </button>
-                      )}
-                      {canAdmin && (p.status === "conferido" || p.status === "pendente" || p.status === "parcial") && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditPedido(p);
-                            setEditCodigo(p.codigo);
-                            setEditPrevista(p.data_prevista ?? "");
-                          }}
-                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-navy"
-                        >
-                          <Pencil size={12} /> Editar
-                        </button>
-                      )}
+                      <PedidoRowAdminMenu
+                        p={p}
+                        canAdmin={canAdmin}
+                        onEncerrar={() => {
+                          setEncerrarId(p.id);
+                          setEncerrarMotivo("");
+                        }}
+                        onEditar={() => {
+                          setEditPedido(p);
+                          setEditCodigo(p.codigo);
+                          setEditPrevista(p.data_prevista ?? "");
+                        }}
+                      />
                     </div>
                   </td>
                 </tr>
