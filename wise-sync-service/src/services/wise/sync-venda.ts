@@ -24,7 +24,7 @@ SELECT
   v.DATA_EMISSAO,
   v.EMPRESA,
   CAST(v.ENTIDADE AS varchar(50)) AS cliente_wise,
-  e.RAZAO AS cliente_nome,
+  COALESCE(NULLIF(LTRIM(RTRIM(e.FANTASIA)), ''), e.RAZAO) AS cliente_nome,
   CAST(e.CODIGO AS varchar(50)) AS cliente_codigo,
   v.CANCELADO,
   CAST(i.CODIGO AS varchar(50)) AS produto_wise,
