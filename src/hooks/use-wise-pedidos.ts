@@ -53,7 +53,11 @@ export function mapsFromCadastros(
     const limpo = normalizeNomeCadastro(f.nome);
     if (limpo && !fornecedorByName.has(limpo)) fornecedorByName.set(limpo, f.id);
     const codigo = (f as { codigo_wise?: string | null }).codigo_wise;
-    if (codigo) fornecedorByCode.set(normalizeKey(codigo), f.id);
+    if (codigo) {
+      fornecedorByCode.set(normalizeKey(codigo), f.id);
+      const digitos = String(codigo).replace(/\D/g, "");
+      if (digitos.length >= 8) fornecedorByCode.set(digitos, f.id);
+    }
   }
   const produtoByName = new Map(produtos.map((p) => [normalizeKey(p.nome), p.id]));
   const produtoByCode = new Map(
@@ -393,10 +397,15 @@ export function useResolverPendencia() {
       clienteId?: string;
       motivo?: string;
       userId: string;
+      /** Confirmação explícita do ADM para criar fornecedor novo (NOP-306). */
+      confirmarCriacaoAdm?: boolean;
     }) => {
       let entidadeId = payload.entidadeId ?? null;
 
       if (payload.acao === "criar") {
+        if (payload.tipo === "fornecedor" && !payload.confirmarCriacaoAdm) {
+          throw new Error("Criação de fornecedor exige confirmação do administrador");
+        }
         const table =
           payload.tipo === "fornecedor"
             ? "fornecedores"
@@ -407,6 +416,9 @@ export function useResolverPendencia() {
         if (payload.tipo === "produto") {
           row.unidade = "UN";
           if (payload.codigoExterno) row.codigo = payload.codigoExterno;
+        }
+        if (payload.tipo === "fornecedor" && payload.codigoExterno) {
+          row.codigo_wise = payload.codigoExterno;
         }
         const { data, error } = await supabase.from(table).insert(row).select("id").single();
         if (error) throw error;
@@ -497,6 +509,33 @@ export function useResolverPendencia() {
           }
         }
       }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pendencias-vinculo"] });
+      qc.invalidateQueries({ queryKey: ["aliases"] });
+      qc.invalidateQueries({ queryKey: ["pedidos"] });
+      qc.invalidateQueries({ queryKey: ["cadastros"] });
+      qc.invalidateQueries({ queryKey: ["conferencia"] });
+    },
+  });
+}
+
+export type ResolverFornecedorResult = {
+  vinculados: number;
+  aliases_criados: number;
+  pedidos_fornecedor: number;
+  pedidos_status_pendente: number;
+  sem_match: number;
+};
+
+/** NOP-306 — revincula pendências de fornecedor por CNPJ / código Wise / nome / ID:EMPRESA. */
+export function useResolverPendenciasFornecedorCertas() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc("resolver_pendencias_fornecedor_certas");
+      if (error) throw new Error(error.message);
+      return data as ResolverFornecedorResult;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pendencias-vinculo"] });

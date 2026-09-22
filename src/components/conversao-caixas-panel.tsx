@@ -24,6 +24,7 @@ import {
   useToggleConversaoProduto,
   useToggleConversaoFornecedor,
   useSaveImportacaoConversao,
+  useProdutosSemConversao,
   type ConversaoProduto,
   type ConversaoFornecedor,
   type ImportConversaoResult,
@@ -98,6 +99,8 @@ export function ConversaoCaixasPanel() {
 
 function ConversaoProdutoTab() {
   const { data: conversoes = [], isLoading } = useConversoesProduto(true);
+  const { data: semConversao = [] } = useProdutosSemConversao();
+  const semSaida = semConversao.filter((p) => p.falta_saida);
   const { data: produtos = [] } = useProdutos();
   const { data: tiposCaixa = [] } = useTiposCaixa(true);
   const save = useSaveConversaoProduto();
@@ -106,7 +109,8 @@ function ConversaoProdutoTab() {
   const [form, setForm] = useState<FormProduto>(EMPTY_FORM_PRODUTO);
   const [formOpen, setFormOpen] = useState(false);
   const [busca, setBusca] = useState("");
-  
+  const [mostrarSem, setMostrarSem] = useState(false);
+
   const filtered = useMemo(() => {
     const q = normalizeKey(busca);
     if (!q) return conversoes;
@@ -117,12 +121,14 @@ function ConversaoProdutoTab() {
         normalizeKey(c.tipo_caixa_sigla).includes(q)
     );
   }, [conversoes, busca]);
-  
-  const openCreate = () => {
-    setForm(EMPTY_FORM_PRODUTO);
+
+  const openCreateFor = (produtoId?: string) => {
+    setForm({ ...EMPTY_FORM_PRODUTO, produto_id: produtoId ?? "" });
     setFormOpen(true);
   };
-  
+
+  const openCreate = () => openCreateFor();
+
   const openEdit = (row: ConversaoProduto) => {
     setForm({
       id: row.id,
@@ -132,7 +138,7 @@ function ConversaoProdutoTab() {
     });
     setFormOpen(true);
   };
-  
+
   const handleSave = () => {
     const fator = Number(form.fator);
     if (!form.produto_id || !form.tipo_caixa_id || !fator || fator <= 0) {
@@ -150,7 +156,7 @@ function ConversaoProdutoTab() {
       }
     );
   };
-  
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2 items-center">
@@ -160,11 +166,47 @@ function ConversaoProdutoTab() {
           onChange={(e) => setBusca(e.target.value)}
           className="max-w-xs"
         />
+        <Button
+          type="button"
+          size="sm"
+          variant={mostrarSem ? "default" : "outline"}
+          onClick={() => setMostrarSem((v) => !v)}
+        >
+          Sem conversão ({semSaida.length})
+        </Button>
         <Button type="button" size="sm" onClick={openCreate}>
           Nova conversão
         </Button>
       </div>
-      
+
+      {mostrarSem && semSaida.length > 0 && (
+        <div className="rounded-lg border border-warning/40 bg-warning/5 p-3 space-y-2">
+          <p className="text-xs font-semibold text-warning">
+            Produtos sem fator de saída — ordenados por uso recente em pedidos
+          </p>
+          <ul className="text-sm max-h-48 overflow-y-auto divide-y">
+            {semSaida.map((p) => (
+              <li key={p.produto_id} className="flex justify-between items-center py-1.5 gap-2">
+                <span>
+                  <span className="font-medium">{p.produto_nome}</span>
+                  {p.produto_codigo && (
+                    <span className="text-muted-foreground"> · {p.produto_codigo}</span>
+                  )}
+                  {p.falta_fornecedor && (
+                    <span className="chip chip-muted text-[10px] ml-1">
+                      forn. × tipo ({p.qtd_fornecedores_sem_fator})
+                    </span>
+                  )}
+                </span>
+                <Button type="button" size="sm" variant="outline" onClick={() => openCreateFor(p.produto_id)}>
+                  Cadastrar
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {isLoading ? (
         <p className="text-xs text-muted-foreground">Carregando...</p>
       ) : (

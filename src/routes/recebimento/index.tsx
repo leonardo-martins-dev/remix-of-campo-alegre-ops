@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
-import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert, RefreshCw, Ban, Receipt, Truck } from "lucide-react";
+import { FileSpreadsheet, Plus, ChevronRight, Trash2, Pencil, ShieldAlert, RefreshCw, Ban, Receipt, Truck, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { useContarValesPendentes } from "@/hooks/use-vales";
@@ -292,12 +292,18 @@ function Page() {
         actions={
           <div className="header-actions-mobile">
             <Link
+              to="/recebimento/conferir"
+              className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary-dark"
+            >
+              <PackageCheck size={14} /> Conferir
+            </Link>
+            <Link
               to="/recebimento/saida-roca"
               className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg border border-primary/30 bg-primary-soft text-sm font-semibold text-primary-dark hover:bg-primary/15"
             >
               <Truck size={14} /> <span className="hidden md:inline">Saída na </span>roça
               {emTransito.length > 0 && (
-                <span className="chip chip-info ml-1">{emTransito.length}</span>
+                <span className="chip chip-info ml-1">{emTransito.length} em trânsito</span>
               )}
             </Link>
             {canAdmin && (

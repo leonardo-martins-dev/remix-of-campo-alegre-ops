@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { ArrowLeft, Boxes, Check, ChevronLeft } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ArrowLeft, Boxes, Check, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { FluxoPassos } from "@/components/fluxo-passos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
@@ -13,36 +14,75 @@ import {
   useCaixasDaSaida,
   useConfirmarSaidaExpedicao,
   useSupermercadosDoDia,
+  useVincularClienteCarga,
 } from "@/hooks/use-saida-expedicao";
-import { useOrdensExpedicao, type OrdemExpedicao } from "@/hooks/use-ordem-expedicao";
+import {
+  useOrdensExpedicao,
+  useOrdemExpedicao,
+  STATUS_ORDEM_LABEL,
+  type OrdemExpedicao,
+  type StatusOrdem,
+} from "@/hooks/use-ordem-expedicao";
 
 export const Route = createFileRoute("/expedicao/saida")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    cargaId: typeof search.cargaId === "string" ? search.cargaId : undefined,
+    clienteId: typeof search.clienteId === "string" ? search.clienteId : undefined,
+  }),
   component: Page,
   head: () => ({ meta: [{ title: "Saída para a loja · Campo Alegre" }] }),
 });
 
 function Page() {
+  const { cargaId: cargaIdSearch, clienteId: clienteIdSearch } = Route.useSearch();
   const { profile, isAdmin } = useAuth();
   const motoristaDoPerfil = profile?.motorista_id ?? null;
 
   const { data: motoristas = [] } = useMotoristas();
   const { data: supermercados = [], isLoading: loadingLojas } = useSupermercadosDoDia();
   const confirmar = useConfirmarSaidaExpedicao();
+  const vincular = useVincularClienteCarga();
 
   const [motoristaId, setMotoristaId] = useState<string>(motoristaDoPerfil ?? "");
-  const [clienteId, setClienteId] = useState<string | null>(null);
+  const [clienteId, setClienteId] = useState<string | null>(clienteIdSearch ?? null);
   const [ordemSel, setOrdemSel] = useState<OrdemExpedicao | null>(null);
   const [obs, setObs] = useState("");
+  const [linkClienteId, setLinkClienteId] = useState<string | null>(null);
+
+  const selectedSm = supermercados.find((s) => s.id === clienteId) ?? null;
+  const isOrfao = !!selectedSm?.orfao;
+  const cargaOrfaId = isOrfao ? selectedSm?.cargasOrfas[0]?.carga_id ?? null : null;
 
   const { data: ordens = [], isLoading: loadingOrdens } = useOrdensExpedicao({
-    clienteId,
+    clienteId: isOrfao ? null : clienteId,
     status: ["separada"],
   });
+  const { data: ordemOrfa } = useOrdemExpedicao(isOrfao ? cargaOrfaId : null);
+  const { data: ordemFromSearch } = useOrdemExpedicao(cargaIdSearch ?? null);
+
+  const ordensVisiveis = useMemo(() => {
+    if (!isOrfao) return ordens;
+    if (!ordemOrfa) return [];
+    return ordemOrfa.status_ordem === "separada" ? [ordemOrfa] : [];
+  }, [isOrfao, ordens, ordemOrfa]);
+
+  useEffect(() => {
+    if (clienteIdSearch) setClienteId(clienteIdSearch);
+  }, [clienteIdSearch]);
+
+  useEffect(() => {
+    if (!ordemFromSearch || ordemSel) return;
+    if (ordemFromSearch.status_ordem !== "separada") return;
+    if (ordemFromSearch.cliente_id) setClienteId(ordemFromSearch.cliente_id);
+    setOrdemSel(ordemFromSearch);
+  }, [ordemFromSearch, ordemSel]);
+
   const { data: caixas = [] } = useCaixasDaSaida(ordemSel?.carga_id ?? null);
   const [excluidas, setExcluidas] = useState<Record<string, boolean>>({});
 
   const motoristaNome = motoristas.find((m) => m.id === motoristaId)?.nome ?? null;
-  const clienteNome = supermercados.find((s) => s.id === clienteId)?.nome ?? null;
+  const clienteNome = selectedSm?.nome ?? null;
+  const orfasCount = supermercados.filter((s) => s.orfao).length;
 
   const caixasSeparadas = useMemo(() => caixas.filter((c) => c.status === "separada"), [caixas]);
   const selecionadas = caixasSeparadas.filter((c) => !excluidas[c.id]);
@@ -57,6 +97,7 @@ function Page() {
     }
     if (clienteId) {
       setClienteId(null);
+      setLinkClienteId(null);
       return;
     }
     if (motoristaId && (isAdmin || !motoristaDoPerfil)) setMotoristaId("");
@@ -64,6 +105,10 @@ function Page() {
 
   const enviar = async () => {
     if (!ordemSel || !motoristaId) return;
+    if (!ordemSel.cliente_id) {
+      toast.error("Vincule a loja antes de confirmar a saída");
+      return;
+    }
     if (selecionadas.length === 0) {
       toast.error("Nenhuma caixa marcada para sair");
       return;
@@ -78,12 +123,38 @@ function Page() {
       });
       toast.success("Saída confirmada · ordem em trânsito", {
         description: `${res.total_caixas} caixa(s) com ${motoristaNome ?? "o motorista"}.`,
+        action: {
+          label: "Ir para entrega",
+          onClick: () => {
+            window.location.assign(
+              `/expedicao/entrega?cargaId=${ordemSel.carga_id}`,
+            );
+          },
+        },
       });
       setOrdemSel(null);
       setExcluidas({});
       setObs("");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao confirmar saída");
+    }
+  };
+
+  const vincularLoja = async () => {
+    if (!cargaOrfaId || !linkClienteId) {
+      toast.error("Escolha o supermercado para vincular");
+      return;
+    }
+    try {
+      const res = await vincular.mutateAsync({
+        carga_id: cargaOrfaId,
+        cliente_id: linkClienteId,
+      });
+      toast.success(`Loja vinculada: ${res.cliente_nome}`);
+      setClienteId(linkClienteId);
+      setLinkClienteId(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao vincular loja");
     }
   };
 
@@ -102,20 +173,10 @@ function Page() {
         }
       />
 
-      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
-        {["Motorista", "Supermercado", "Ordem", "Confirmar"].map((label, i) => (
-          <span key={label} className="flex items-center gap-1">
-            {i > 0 && <span className="mx-0.5">›</span>}
-            <span
-              className={
-                step > i + 1 ? "text-primary" : step === i + 1 ? "text-primary font-bold" : ""
-              }
-            >
-              {label}
-            </span>
-          </span>
-        ))}
-      </div>
+      <FluxoPassos
+        steps={["Motorista", "Supermercado", "Ordem", "Confirmar"]}
+        current={step}
+      />
 
       {step > 1 && (
         <button
@@ -150,6 +211,15 @@ function Page() {
             Motorista: <span className="font-semibold text-navy">{motoristaNome}</span>
           </div>
           <h2 className="text-lg font-bold text-navy">Para qual supermercado?</h2>
+          {orfasCount > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 flex gap-2">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+              <div>
+                <strong>{orfasCount} ordem(ns) sem loja</strong>
+                {" — "}aparecem no topo da lista. Vincule o supermercado antes de confirmar a saída.
+              </div>
+            </div>
+          )}
           {loadingLojas && <p className="text-sm text-muted-foreground">Carregando lojas…</p>}
           {!loadingLojas && supermercados.length === 0 && (
             <p className="text-sm text-muted-foreground">
@@ -159,42 +229,93 @@ function Page() {
           <SeletorCadastro
             tipo="cliente"
             value={clienteId}
-            onChange={(id) => setClienteId(id || null)}
+            onChange={(id) => {
+              setClienteId(id || null);
+              setLinkClienteId(null);
+            }}
             items={supermercados.map((sm) => ({
               id: sm.id,
               nome: sm.nome,
               cnpj: sm.cnpj,
-              meta: { rota: `${sm.separadas} separada(s)` },
+              meta: {
+                rota: sm.orfao
+                  ? "sem loja · vincular"
+                  : `${sm.separadas} separada(s)`,
+              },
             }))}
             placeholder="Escolher supermercado…"
           />
         </div>
       )}
 
-      {/* 3 · ordens separadas da loja */}
+      {/* 3 · ordens separadas da loja (ou vínculo manual se órfã) */}
       {step === 3 && (
         <div className="space-y-3">
           <div className="text-xs text-muted-foreground">
             {motoristaNome} · <span className="font-semibold text-navy">{clienteNome}</span>
           </div>
+
+          {isOrfao && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+              <div className="flex gap-2 text-sm text-amber-950">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                <div>
+                  <strong>Ordem sem supermercado</strong>
+                  <p className="text-xs mt-1">
+                    A importação não identificou a loja. Vincule manualmente para liberar a saída.
+                    {selectedSm?.cnpj ? ` CNPJ na ordem: ${selectedSm.cnpj}` : null}
+                  </p>
+                </div>
+              </div>
+              <SeletorCadastro
+                tipo="cliente"
+                value={linkClienteId}
+                onChange={(id) => setLinkClienteId(id || null)}
+                placeholder="Vincular a supermercado…"
+              />
+              <Button
+                size="sm"
+                disabled={!linkClienteId || vincular.isPending}
+                onClick={() => void vincularLoja()}
+              >
+                {vincular.isPending ? "Vinculando…" : "Vincular loja"}
+              </Button>
+            </div>
+          )}
+
           <h2 className="text-lg font-bold text-navy">Ordens separadas</h2>
-          {loadingOrdens && <p className="text-sm text-muted-foreground">Carregando ordens…</p>}
-          {!loadingOrdens && ordens.length === 0 && (
+          {loadingOrdens && !isOrfao && (
+            <p className="text-sm text-muted-foreground">Carregando ordens…</p>
+          )}
+          {!loadingOrdens && !isOrfao && ordensVisiveis.length === 0 && (
             <p className="text-sm text-muted-foreground">
               Nenhuma ordem separada para esta loja hoje. Separe a ordem em Expedição por Rota.
             </p>
           )}
+          {isOrfao && ordensVisiveis.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Vincule a loja acima. Depois de vincular, se a ordem estiver separada ela aparece aqui.
+            </p>
+          )}
           <div className="grid grid-cols-1 gap-2">
-            {ordens.map((o) => (
+            {ordensVisiveis.map((o) => (
               <button
                 key={o.carga_id}
                 type="button"
-                onClick={() => setOrdemSel(o)}
+                onClick={() => {
+                  if (!o.cliente_id) {
+                    toast.error("Vincule a loja antes de seguir");
+                    return;
+                  }
+                  setOrdemSel(o);
+                }}
                 className="card-base p-4 text-left active:scale-[0.99] transition-transform"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-bold text-navy tabular-nums">{o.numero_ordem}</span>
-                  <span className="chip chip-warn">Separada</span>
+                  <span className="chip chip-warn">
+                    {STATUS_ORDEM_LABEL[o.status_ordem as StatusOrdem] ?? "Em carga"}
+                  </span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {o.caixas_separadas} caixa(s) · {Number(o.total_itens)} itens ·{" "}
@@ -248,52 +369,45 @@ function Page() {
                     type="checkbox"
                     className="mt-1 h-5 w-5"
                     checked={!fora}
-                    onChange={(e) =>
-                      setExcluidas((prev) => ({ ...prev, [cx.id]: !e.target.checked }))
+                    onChange={() =>
+                      setExcluidas((prev) => {
+                        const next = { ...prev };
+                        if (fora) delete next[cx.id];
+                        else next[cx.id] = true;
+                        return next;
+                      })
                     }
                   />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-bold text-navy tabular-nums">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-navy">
+                      Cx {cx.numero}
+                      {cx.tipo_caixa_sigla ? ` · ${cx.tipo_caixa_sigla}` : ""}
+                    </div>
+                    <div className="text-xs text-muted-foreground tabular-nums">
                       {cx.codigo_etiqueta}
-                      {cx.tipo_caixa_sigla ? (
-                        <span className="chip chip-muted ml-2">{cx.tipo_caixa_sigla}</span>
-                      ) : null}
-                    </span>
-                    <span className="block text-xs text-muted-foreground mt-0.5">
-                      {(cx.itens_caixa_ordem ?? [])
-                        .map((i) => {
-                          const prod = Array.isArray(i.produtos) ? i.produtos[0] : i.produtos;
-                          return `${Number(i.quantidade)} ${prod?.nome ?? "produto"}`;
-                        })
-                        .join(" · ") || "Caixa vazia"}
-                    </span>
-                  </span>
+                    </div>
+                  </div>
+                  {!fora && <Check size={16} className="text-primary shrink-0 mt-1" />}
                 </label>
               );
             })}
-            {caixasSeparadas.length === 0 && (
-              <p className="text-sm text-muted-foreground">Esta ordem não tem caixas separadas.</p>
-            )}
           </div>
 
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-              Observação (opcional)
-            </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Observações</label>
             <Input
-              className="h-11"
-              placeholder="Alguma observação da saída…"
               value={obs}
               onChange={(e) => setObs(e.target.value)}
+              placeholder="Opcional"
             />
           </div>
 
           <Button
-            className="w-full min-h-12"
+            className="w-full"
             disabled={confirmar.isPending || selecionadas.length === 0}
-            onClick={enviar}
+            onClick={() => void enviar()}
           >
-            <Check size={16} /> Confirmar saída · {selecionadas.length} cx
+            {confirmar.isPending ? "Confirmando…" : `Confirmar saída · ${selecionadas.length} cx`}
           </Button>
         </div>
       )}

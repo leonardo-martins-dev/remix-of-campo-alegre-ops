@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { normalizeKey } from "./normalize";
 import { parseBrNumber } from "./parse-br-number";
+import { normalizeNomeCadastro } from "./mesclar-cadastro";
 
 export type WisePedidoRow = {
   pedido: string;
@@ -352,7 +353,11 @@ export function applyAliases(maps: CadastroMaps, aliases: AliasRow[]): CadastroM
     const code = a.codigo_externo ? normalizeKey(a.codigo_externo) : "";
     if (a.tipo === "fornecedor") {
       next.fornecedorByName.set(nome, a.entidade_id);
-      if (code) next.fornecedorByCode.set(code, a.entidade_id);
+      if (code) {
+        next.fornecedorByCode.set(code, a.entidade_id);
+        const digitos = code.replace(/\D/g, "");
+        if (digitos.length >= 8) next.fornecedorByCode.set(digitos, a.entidade_id);
+      }
     } else if (a.tipo === "produto") {
       next.produtoByName.set(nome, a.entidade_id);
       if (code) next.produtoByCode.set(code, a.entidade_id);
@@ -395,8 +400,14 @@ export function buildWisePedidos(rows: WisePedidoRow[], maps: CadastroMaps): Wis
 
   for (const row of rows) {
     if (!row.pedido) continue;
-    const fornCode = row.codigo_fornecedor ? maps.fornecedorByCode.get(normalizeKey(row.codigo_fornecedor)) : undefined;
-    const fornName = row.fornecedor ? maps.fornecedorByName.get(normalizeKey(row.fornecedor)) : undefined;
+    const fornCode = row.codigo_fornecedor
+      ? maps.fornecedorByCode.get(normalizeKey(row.codigo_fornecedor)) ??
+        maps.fornecedorByCode.get(row.codigo_fornecedor.replace(/\D/g, ""))
+      : undefined;
+    const fornName = row.fornecedor
+      ? maps.fornecedorByName.get(normalizeKey(row.fornecedor)) ??
+        maps.fornecedorByName.get(normalizeNomeCadastro(row.fornecedor))
+      : undefined;
     const fornecedor_id = fornCode ?? fornName ?? null;
 
     const prodCode = row.codigo_produto ? maps.produtoByCode.get(normalizeKey(row.codigo_produto)) : undefined;

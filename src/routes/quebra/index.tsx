@@ -13,6 +13,7 @@ import {
   useEditarQuebraItem,
   useQuebras,
   useAprovarQuebra,
+  useVincularFornecedorQuebra,
   TipoOcorrenciaQuebra,
 } from "@/hooks/use-quebra";
 import { supabase } from "@/lib/supabase";
@@ -39,6 +40,7 @@ function Page() {
   });
   const editar = useEditarQuebraItem();
   const aprovar = useAprovarQuebra();
+  const vincularForn = useVincularFornecedorQuebra();
   const [fotoModal, setFotoModal] = useState<string | null>(null);
   const { data: recebidos } = useQuery({
     queryKey: ["recebido-periodo", from, to, fornecedorId],
@@ -171,8 +173,10 @@ function Page() {
         {(
           laudos as {
             id: string;
+            status?: string;
             registrado_em: string;
             observacao: string | null;
+            fornecedor_id?: string | null;
             fornecedores: { nome: string } | null;
             profiles: { nome: string } | null;
             aprovador: { nome: string } | null;
@@ -193,14 +197,38 @@ function Page() {
           <div key={l.id} className="rounded-xl border p-3 text-sm">
             <div className="flex justify-between items-start">
               <div>
-                <strong>{l.fornecedores?.nome}</strong>
+                <strong>
+                  {l.fornecedores?.nome ??
+                    (l.status === "origem_nao_identificada" || !l.fornecedor_id
+                      ? "Origem não identificada"
+                      : "—")}
+                </strong>
                 <div className="flex flex-wrap gap-1 mt-1">
+                  {(l.status === "origem_nao_identificada" || !l.fornecedor_id) && (
+                    <span className="chip chip-warn">origem não identificada</span>
+                  )}
                   {l.quebra_itens?.some((i) => !i.conferencia_item_id) && (
                     <span className="chip chip-warn">sem vínculo</span>
                   )}
                   {l.aprovado_em && <span className="chip chip-ok">Aprovado</span>}
                   {!l.aprovado_em && <span className="chip chip-muted">Pendente aprovação</span>}
                 </div>
+                {isAdmin && !l.fornecedor_id && (
+                  <div className="mt-2 w-full max-w-xs">
+                    <SeletorCadastro
+                      tipo="fornecedor"
+                      placeholder="Vincular fornecedor…"
+                      value={null}
+                      onChange={(id) => {
+                        if (!id) return;
+                        vincularForn.mutate(
+                          { quebraId: l.id, fornecedorId: id },
+                          { onSuccess: () => toast.success("Fornecedor vinculado") },
+                        );
+                      }}
+                    />
+                  </div>
+                )}
               </div>
               <div className="text-right text-xs text-muted-foreground">
                 <div>{l.registrado_em.slice(0, 16)}</div>

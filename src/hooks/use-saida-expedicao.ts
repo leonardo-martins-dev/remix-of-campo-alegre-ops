@@ -10,38 +10,63 @@ import {
 } from "@/lib/offline-queue";
 import { invalidateOrdem, type CaixaOrdem } from "@/hooks/use-ordem-expedicao";
 
-/** Supermercados com ordem do dia — o destino da saída sai daqui. */
+/** Supermercados com ordem do dia — inclui órfãs (sem cliente_id). */
 export function useSupermercadosDoDia(data = todayBRT()) {
   return useQuery({
     queryKey: ["supermercados-dia", data],
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from("v_ordem_expedicao")
-        .select("cliente_id, cliente_nome, cliente_cnpj, status_ordem")
+        .select("carga_id, cliente_id, cliente_nome, cliente_cnpj, status_ordem, numero_ordem")
         .eq("data_carga", data);
       if (error) throw error;
 
       const map = new Map<
         string,
-        { id: string; nome: string; cnpj: string | null; separadas: number; total: number }
+        {
+          id: string;
+          nome: string;
+          cnpj: string | null;
+          separadas: number;
+          total: number;
+          orfao: boolean;
+          cargasOrfas: { carga_id: string; numero_ordem: string }[];
+        }
       >();
+
       for (const r of rows ?? []) {
-        const id = r.cliente_id as string;
+        const orfao = !r.cliente_id;
+        const id = orfao ? `__orfao__${r.carga_id}` : (r.cliente_id as string);
         const cur = map.get(id) ?? {
           id,
-          nome: (r.cliente_nome as string) ?? "Loja",
+          nome: orfao
+            ? `Sem loja · OS ${r.numero_ordem ?? "?"}`
+            : ((r.cliente_nome as string) ?? "Loja"),
           cnpj: (r.cliente_cnpj as string | null) ?? null,
           separadas: 0,
           total: 0,
+          orfao,
+          cargasOrfas: [],
         };
         cur.total += 1;
         if (r.status_ordem === "separada") cur.separadas += 1;
+        if (orfao) {
+          cur.cargasOrfas.push({
+            carga_id: r.carga_id as string,
+            numero_ordem: String(r.numero_ordem ?? ""),
+          });
+        }
         map.set(id, cur);
       }
-      return [...map.values()].sort((a, b) => a.nome.localeCompare(b.nome));
+      return [...map.values()].sort((a, b) => {
+        if (a.orfao !== b.orfao) return a.orfao ? -1 : 1;
+        return a.nome.localeCompare(b.nome);
+      });
     },
   });
 }
+
+export { useVincularClienteCarga } from "@/hooks/use-cargas";
 
 export type SaidaExpedicao = {
   id: string;

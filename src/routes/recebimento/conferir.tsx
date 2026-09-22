@@ -11,6 +11,9 @@ import {
   AlertTriangle,
   Receipt,
   Truck,
+  Pencil,
+  History,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -45,6 +48,8 @@ import {
   useStartConferencia,
   useSaveConferenciaItens,
   useAddItemAvulso,
+  useSalvarEdicaoConferencia,
+  useConferenciaEdicoes,
   uploadConferenciaFoto,
 } from "@/hooks/use-conferencia";
 import { useProdutos } from "@/hooks/use-cadastros";
@@ -59,16 +64,32 @@ import { CaixasItemEditor, type CaixaItemEntry } from "@/components/caixas-item-
 import { useCaixasItemConferencia } from "@/hooks/use-caixas-item";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { isAguardandoVinculo } from "@/lib/seletor-cadastro";
+import { SemConversaoSelo } from "@/components/sem-conversao-selo";
 import {
   useRegistrarChegadaSaida,
   useSaidaRocaPedido,
   useSaidasEmTransito,
 } from "@/hooks/use-saida-roca";
 
-type ConferirSearch = { pedidoId?: string };
+/** NOP-298: pedidoId (legado) ou pedidoIds CSV para sessão multi-fornecedor. */
+type ConferirSearch = { pedidoId?: string; pedidoIds?: string };
 
 /** Pedidos que ainda aceitam conferência — em_transito = saiu da roça (NOP-129). */
 const PEDIDO_ABERTO = ["pendente", "parcial", "em_transito"];
+
+function parsePedidoIds(search: ConferirSearch): string[] {
+  if (typeof search.pedidoIds === "string" && search.pedidoIds.trim()) {
+    return [...new Set(search.pedidoIds.split(",").map((s) => s.trim()).filter(Boolean))];
+  }
+  if (typeof search.pedidoId === "string" && search.pedidoId) return [search.pedidoId];
+  return [];
+}
+
+function searchFromPedidoIds(ids: string[]): ConferirSearch {
+  if (ids.length === 0) return {};
+  if (ids.length === 1) return { pedidoId: ids[0] };
+  return { pedidoIds: ids.join(",") };
+}
 
 /** "Saiu da roça às 07:40 · 32 cx · João" */
 function resumoSaida(saida: {
@@ -86,6 +107,7 @@ function resumoSaida(saida: {
 export const Route = createFileRoute("/recebimento/conferir")({
   validateSearch: (search: Record<string, unknown>): ConferirSearch => ({
     pedidoId: typeof search.pedidoId === "string" ? search.pedidoId : undefined,
+    pedidoIds: typeof search.pedidoIds === "string" ? search.pedidoIds : undefined,
   }),
   component: Page,
   head: () => ({ meta: [{ title: "Conferir chegada · Campo Alegre" }] }),
@@ -109,87 +131,324 @@ type LinhaItem = {
 };
 
 function Page() {
-  const { pedidoId } = Route.useSearch();
+  const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
+  const pedidoIds = parsePedidoIds(search);
 
   const { data: pedidos = [], isLoading: loadingPedidos } = usePedidosDia();
   const pendentes = pedidos.filter((p) => PEDIDO_ABERTO.includes(p.status));
   const { data: emTransito = [] } = useSaidasEmTransito();
   const saidaPorPedido = new Map(emTransito.map((s) => [s.pedido_id, s]));
 
-  const clearPedido = () => navigate({ search: {} });
-  const selectPedido = (id: string) => navigate({ search: { pedidoId: id } });
+  const clearPedidos = () => navigate({ search: {} });
+  const setPedidoIds = (ids: string[]) => navigate({ search: searchFromPedidoIds(ids) });
 
-  if (!pedidoId) {
+  if (pedidoIds.length === 0) {
     return (
-      <div>
-        <PageHeader
-          title="Conferir chegada"
-          subtitle="Selecione o pedido pendente — a conferência inicia na hora"
-          actions={
-            <Link
-              to="/recebimento"
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-navy"
-            >
-              <ArrowLeft size={14} /> Voltar
-            </Link>
-          }
-        />
-        <div className="bg-primary-soft border border-primary/20 rounded-lg p-3 mb-5 flex gap-2 text-xs text-primary-dark">
-          <Info size={14} className="mt-0.5" />
-          <span>
-            O recebimento é <strong>sempre aceito</strong>. Divergências não bloqueiam: viram
-            registro no <strong>Relatório de Faltas</strong>.
-          </span>
-        </div>
-        {loadingPedidos && <p className="text-sm text-muted-foreground">Carregando pedidos…</p>}
-        {!loadingPedidos && pendentes.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nenhum pedido pendente hoje.</p>
-        )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {pendentes.map((p) => {
-            const itensCount = (p as { itens_pedido?: unknown[] }).itens_pedido?.length ?? 0;
-            const saida = saidaPorPedido.get(p.id);
-            return (
-              <Link
-                key={p.id}
-                to="/recebimento/conferir"
-                search={{ pedidoId: p.id }}
-                className="card-base p-4 text-left hover:border-primary hover:shadow-sm transition-all block"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="chip chip-info">Chegou {formatTime(p.hora_chegada)}</span>
-                  <span className={`chip ${saida ? "chip-info" : "chip-warn"}`}>
-                    {saida ? "Em trânsito" : "Pendente"}
-                  </span>
-                </div>
-                <div className="text-base font-bold text-navy">
-                  {one(p.fornecedores)?.nome ?? p.codigo}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {p.codigo} · {itensCount} itens no pedido
-                </div>
-                {saida && (
-                  <div className="text-xs text-primary-dark font-semibold mt-1">
-                    {resumoSaida(saida)}
-                  </div>
-                )}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+      <SelecaoMultiFornecedor
+        pendentes={pendentes}
+        loading={loadingPedidos}
+        saidaPorPedido={saidaPorPedido}
+        onIniciar={setPedidoIds}
+      />
+    );
+  }
+
+  if (pedidoIds.length === 1) {
+    return (
+      <ConferenciaItens
+        key={pedidoIds[0]}
+        pedidoId={pedidoIds[0]}
+        onBack={clearPedidos}
+        onFinished={() => navigate({ to: "/recebimento" })}
+        onTrocar={(id) => setPedidoIds([id])}
+      />
     );
   }
 
   return (
-    <ConferenciaItens
-      key={pedidoId}
-      pedidoId={pedidoId}
-      onBack={clearPedido}
-      onFinished={() => navigate({ to: "/recebimento" })}
-      onTrocar={selectPedido}
+    <SessaoMultiFornecedor
+      pedidoIds={pedidoIds}
+      pedidos={pedidos}
+      onChangePedidoIds={setPedidoIds}
+      onAllDone={() => navigate({ to: "/recebimento" })}
     />
+  );
+}
+
+/** NOP-298 — seleção multi-fornecedor (SeletorCadastro) + cards individuais. */
+function SelecaoMultiFornecedor({
+  pendentes,
+  loading,
+  saidaPorPedido,
+  onIniciar,
+}: {
+  pendentes: {
+    id: string;
+    codigo: string;
+    fornecedor_id: string;
+    hora_chegada: string | null;
+    status: string;
+    fornecedores?: { nome: string } | { nome: string }[] | null;
+    itens_pedido?: unknown[];
+  }[];
+  loading: boolean;
+  saidaPorPedido: Map<string, {
+    pedido_id: string;
+    registrado_em: string;
+    total_caixas: number;
+    motorista_nome: string | null;
+    veiculo_fornecedor: boolean;
+  }>;
+  onIniciar: (pedidoIds: string[]) => void;
+}) {
+  const [fornIds, setFornIds] = useState<string[]>([]);
+
+  const fornecedoresComPedido = useMemo(() => {
+    const map = new Map<string, { id: string; nome: string; codigo?: string }>();
+    for (const p of pendentes) {
+      if (!p.fornecedor_id || map.has(p.fornecedor_id)) continue;
+      const nome = one(p.fornecedores)?.nome;
+      map.set(p.fornecedor_id, {
+        id: p.fornecedor_id,
+        nome: !nome || isAguardandoVinculo(nome) ? p.codigo : nome,
+        codigo: p.codigo,
+      });
+    }
+    return [...map.values()];
+  }, [pendentes]);
+
+  const pedidosSelecionados = useMemo(
+    () => pendentes.filter((p) => fornIds.includes(p.fornecedor_id)),
+    [pendentes, fornIds],
+  );
+
+  const iniciarMulti = () => {
+    if (pedidosSelecionados.length === 0) {
+      toast.error("Selecione ao menos um fornecedor com pedido aberto");
+      return;
+    }
+    onIniciar(pedidosSelecionados.map((p) => p.id));
+  };
+
+  return (
+    <div>
+      <PageHeader
+        title="Conferir chegada"
+        subtitle="Selecione um ou mais fornecedores — a conferência inicia na hora"
+        actions={
+          <Link
+            to="/recebimento"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-navy"
+          >
+            <ArrowLeft size={14} /> Voltar
+          </Link>
+        }
+      />
+      <div className="bg-primary-soft border border-primary/20 rounded-lg p-3 mb-5 flex gap-2 text-xs text-primary-dark">
+        <Info size={14} className="mt-0.5" />
+        <span>
+          O recebimento é <strong>sempre aceito</strong>. Divergências não bloqueiam: viram
+          registro no <strong>Relatório de Faltas</strong>. Com vários fornecedores no mesmo
+          caminhão, selecione todos e confira na mesma tela — cada pedido grava separado.
+        </span>
+      </div>
+
+      <div className="card-base p-4 mb-5 space-y-3">
+        <SeletorCadastro
+          tipo="fornecedor"
+          label="Fornecedores desta chegada"
+          multiple
+          items={fornecedoresComPedido}
+          values={fornIds}
+          onChangeMultiple={(ids) => setFornIds(ids)}
+          placeholder="Selecionar fornecedores…"
+        />
+        {pedidosSelecionados.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {pedidosSelecionados.length} pedido(s) em aberto ·{" "}
+            {fornIds.length} fornecedor(es)
+          </p>
+        )}
+        <Button
+          type="button"
+          className="w-full sm:w-auto min-h-11"
+          disabled={pedidosSelecionados.length === 0}
+          onClick={iniciarMulti}
+        >
+          <CheckCircle2 size={16} className="mr-1.5" />
+          Iniciar conferência
+          {pedidosSelecionados.length > 1 ? ` (${pedidosSelecionados.length})` : ""}
+        </Button>
+      </div>
+
+      {loading && <p className="text-sm text-muted-foreground">Carregando pedidos…</p>}
+      {!loading && pendentes.length === 0 && (
+        <p className="text-sm text-muted-foreground">Nenhum pedido pendente hoje.</p>
+      )}
+      {!loading && pendentes.length > 0 && (
+        <>
+          <h2 className="text-sm font-semibold text-navy mb-3">Ou abra um pedido só</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {pendentes.map((p) => {
+              const itensCount = p.itens_pedido?.length ?? 0;
+              const saida = saidaPorPedido.get(p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => onIniciar([p.id])}
+                  className="card-base p-4 text-left hover:border-primary hover:shadow-sm transition-all block"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="chip chip-info">Chegou {formatTime(p.hora_chegada)}</span>
+                    <span className={`chip ${saida ? "chip-info" : "chip-warn"}`}>
+                      {saida ? "Em trânsito" : "Pendente"}
+                    </span>
+                  </div>
+                  <div className="text-base font-bold text-navy">
+                    {one(p.fornecedores)?.nome ?? p.codigo}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {p.codigo} · {itensCount} itens no pedido
+                  </div>
+                  {saida && (
+                    <div className="text-xs text-primary-dark font-semibold mt-1">
+                      {resumoSaida(saida)}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** NOP-298 — sessão com vários pedidos; cada bloco salva/finaliza o seu. */
+function SessaoMultiFornecedor({
+  pedidoIds,
+  pedidos,
+  onChangePedidoIds,
+  onAllDone,
+}: {
+  pedidoIds: string[];
+  pedidos: {
+    id: string;
+    codigo: string;
+    fornecedor_id: string;
+    fornecedores?: { nome: string } | { nome: string }[] | null;
+  }[];
+  onChangePedidoIds: (ids: string[]) => void;
+  onAllDone: () => void;
+}) {
+  const [finalizados, setFinalizados] = useState<Set<string>>(() => new Set());
+
+  const grupos = useMemo(() => {
+    const byForn = new Map<
+      string,
+      { fornecedorId: string; nome: string; pedidoIds: string[] }
+    >();
+    for (const id of pedidoIds) {
+      const p = pedidos.find((x) => x.id === id);
+      const fornId = p?.fornecedor_id ?? id;
+      const nome = one(p?.fornecedores)?.nome ?? p?.codigo ?? "Fornecedor";
+      const g = byForn.get(fornId) ?? { fornecedorId: fornId, nome, pedidoIds: [] };
+      g.pedidoIds.push(id);
+      byForn.set(fornId, g);
+    }
+    return [...byForn.values()];
+  }, [pedidoIds, pedidos]);
+
+  const removerPedido = (id: string) => {
+    const next = pedidoIds.filter((x) => x !== id);
+    onChangePedidoIds(next);
+  };
+
+  const onPedidoFinalizado = (id: string) => {
+    setFinalizados((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      if (next.size >= pedidoIds.length) {
+        queueMicrotask(onAllDone);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div>
+      <PageHeader
+        title="Conferência conjunta"
+        subtitle={`${grupos.length} fornecedor(es) · ${pedidoIds.length} pedido(s) — cada um grava separado`}
+        actions={
+          <button
+            type="button"
+            onClick={() => onChangePedidoIds([])}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-navy"
+          >
+            <ArrowLeft size={14} /> Trocar seleção
+          </button>
+        }
+      />
+
+      <div className="flex flex-wrap gap-1.5 mb-5">
+        {grupos.map((g) => (
+          <span
+            key={g.fornecedorId}
+            className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-primary-soft text-primary-dark text-xs font-semibold"
+          >
+            {g.nome}
+            <button
+              type="button"
+              aria-label={`Remover ${g.nome}`}
+              onClick={() => {
+                const ids = new Set(g.pedidoIds);
+                onChangePedidoIds(pedidoIds.filter((id) => !ids.has(id)));
+              }}
+              className="h-5 w-5 rounded-full flex items-center justify-center hover:bg-primary/15"
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+      </div>
+
+      <div className="space-y-8">
+        {pedidoIds.map((id) => {
+          if (finalizados.has(id)) {
+            const p = pedidos.find((x) => x.id === id);
+            return (
+              <div
+                key={id}
+                className="rounded-xl border border-success/30 bg-success/5 p-4 flex items-center gap-2 text-sm text-navy"
+              >
+                <CheckCircle2 size={18} className="text-success shrink-0" />
+                <span>
+                  <strong>{one(p?.fornecedores)?.nome ?? p?.codigo ?? id}</strong> finalizado
+                </span>
+              </div>
+            );
+          }
+          return (
+            <div key={id} className="rounded-xl border border-border p-3 sm:p-4">
+              <ConferenciaItens
+                pedidoId={id}
+                embedded
+                onBack={() => removerPedido(id)}
+                onFinished={() => onPedidoFinalizado(id)}
+                onTrocar={(nextId) => {
+                  const next = pedidoIds.map((x) => (x === id ? nextId : x));
+                  onChangePedidoIds([...new Set(next)]);
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -381,11 +640,14 @@ function ConferenciaItens({
   onBack,
   onFinished,
   onTrocar,
+  embedded = false,
 }: {
   pedidoId: string;
   onBack: () => void;
   onFinished: () => void;
   onTrocar: (id: string) => void;
+  /** NOP-298: bloco dentro da sessão multi — finaliza só este pedido. */
+  embedded?: boolean;
 }) {
   const { user, profile } = useAuth();
   const { data: pedidos = [] } = usePedidosDia();
@@ -393,7 +655,11 @@ function ConferenciaItens({
   const { data: conferencia, isLoading, error } = useConferencia(pedidoId);
   const startMut = useStartConferencia();
   const saveMut = useSaveConferenciaItens();
+  const editMut = useSalvarEdicaoConferencia();
   const addAvulso = useAddItemAvulso();
+  const { data: edicoes = [] } = useConferenciaEdicoes(
+    conferencia?.status === "finalizada" || conferencia?.editada ? (conferencia?.id ?? null) : null,
+  );
   const { data: produtos = [] } = useProdutos();
   const { data: tipos = [] } = useTiposCaixa();
   const { data: toleranciaPct = 5 } = useConfigValor("tolerancia_pct", 5);
@@ -483,6 +749,13 @@ function ConferenciaItens({
 
   const [itens, setItens] = useState<LinhaItem[]>([]);
 
+  // NOP-308 — edição de conferência concluída
+  const [editando, setEditando] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editMotivo, setEditMotivo] = useState("");
+  const [histOpen, setHistOpen] = useState(false);
+  const [valeWiseWarn, setValeWiseWarn] = useState(false);
+
   // Vale state
   const createVale = useCreateVale();
   const { data: meusVales = [] } = useValesConferente(user?.id ?? null);
@@ -522,7 +795,31 @@ function ConferenciaItens({
     pedidoStatus === "aguardando_liberacao" || pedidoStatus === "divergencia";
   const conferenciaAberta =
     conferencia?.status === "em_andamento" || conferencia?.status === "parcial";
-  const readOnly = conferencia?.status === "finalizada";
+  const conferenciaFinalizada = conferencia?.status === "finalizada";
+  const readOnly = conferenciaFinalizada && !editando;
+  const editada = !!(conferencia as { editada?: boolean } | null)?.editada;
+
+  const { data: valesLancadosPedido = [] } = useQuery({
+    queryKey: ["vales-lancados-pedido", pedidoId],
+    enabled: !!pedidoId && conferenciaFinalizada,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("solicitacoes_vale")
+        .select("id, item_conferencia_id, status")
+        .eq("pedido_id", pedidoId!)
+        .eq("status", "lancado");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const valesLancadosNaConf = useMemo(() => {
+    if (!conferencia?.itens_conferencia) return [];
+    const ids = new Set(conferencia.itens_conferencia.map((i: { id: string }) => i.id));
+    return valesLancadosPedido.filter(
+      (v) => v.item_conferencia_id && ids.has(v.item_conferencia_id),
+    );
+  }, [conferencia, valesLancadosPedido]);
 
   useEffect(() => {
     if (!pedidoId || !user?.id) return;
@@ -553,15 +850,19 @@ function ConferenciaItens({
 
   useEffect(() => {
     if (!conferencia?.itens_conferencia) return;
-    if (conferencia.status === "finalizada" && PEDIDO_ABERTO.includes(pedidoStatus ?? "")) {
+    // Não sobrescreve qty digitada em conf. aberta; em edição (NOP-308) rehidrata.
+    if (
+      conferencia.status === "finalizada" &&
+      PEDIDO_ABERTO.includes(pedidoStatus ?? "") &&
+      !editando
+    ) {
       return;
     }
-    // Só hidrata uma vez por conferência — refetch do React Query não pode
-    // apagar qty digitada e ainda não salva (resetava "Nesta entr." / status).
-    if (itensHydratedRef.current === conferencia.id) return;
-    itensHydratedRef.current = conferencia.id;
+    const hydrateKey = `${conferencia.id}:${editando ? "edit" : "view"}`;
+    if (itensHydratedRef.current === hydrateKey) return;
+    itensHydratedRef.current = hydrateKey;
     setItens(conferencia.itens_conferencia.map(mapToLinha));
-  }, [conferencia, pedidoStatus]);
+  }, [conferencia, pedidoStatus, editando]);
 
   useEffect(() => {
     if (!conferencia?.itens_conferencia || !tipos.length) return;
@@ -679,25 +980,32 @@ function ConferenciaItens({
     return meusVales.some((v) => v.item_conferencia_id === itemId && v.status === "pendente");
   };
 
-  const itemQtyLocked = (it: LinhaItem) =>
-    readOnly || it.conferido || itemJaSolicitouVale(it.id);
+  const itemQtyLocked = (it: LinhaItem) => {
+    if (editando) return false;
+    return readOnly || it.conferido || itemJaSolicitouVale(it.id);
+  };
 
   const updateCaixasItem = useCallback(
     (itemId: string, entries: CaixaItemEntry[]) => {
       const it = itens.find((x) => x.id === itemId);
-      if (it && (it.conferido || meusVales.some((v) => v.item_conferencia_id === itemId && v.status === "pendente"))) {
+      if (
+        it &&
+        !editando &&
+        (it.conferido || meusVales.some((v) => v.item_conferencia_id === itemId && v.status === "pendente"))
+      ) {
         return;
       }
       applyCaixasAndSyncQty(itemId, entries);
     },
-    [applyCaixasAndSyncQty, itens, meusVales],
+    [applyCaixasAndSyncQty, itens, meusVales, editando],
   );
 
   /** Nesta entr.: só mexe em recebido (cx) — não marca conferido nem altera Caixas. */
   const update = (idx: number, v: number) => {
-    if (readOnly) return;
+    if (readOnly && !editando) return;
     const it = itens[idx];
-    if (!it || it.conferido || itemJaSolicitouVale(it.id)) return;
+    if (!it) return;
+    if (!editando && (it.conferido || itemJaSolicitouVale(it.id))) return;
     const newVal = Math.max(0, Math.round(v));
     setItens((prev) =>
       prev.map((row, i) => (i === idx ? { ...row, recebido: newVal } : row)),
@@ -792,7 +1100,7 @@ function ConferenciaItens({
   };
 
   const toggleQualidade = (idx: number) => {
-    if (readOnly) return;
+    if (readOnly && !editando) return;
     setItens((prev) =>
       prev.map((it, i) =>
         i !== idx ? it : { ...it, qualidade: it.qualidade ? null : { ativo: true, qtd: 1 } },
@@ -935,7 +1243,173 @@ function ConferenciaItens({
     };
   };
 
+  const buildItensPayload = () =>
+    itens.map((it) => {
+      const saldoRow = (
+        saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
+      ).find((s) => s.item_pedido_id === it.itemPedidoId);
+      const entries = caixasItem[it.id] ?? [];
+      const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
+      const chegou = chegouEfetivo(it, entries);
+      const gap = gapVsPedido(it, entries, jaRecebido);
+      return {
+        ...buildSavePayload(
+          { ...it, recebido: chegou },
+          {
+            toleranciaPct: it.toleranciaPct ?? toleranciaPct,
+            toleranciaMin,
+            preco: it.preco,
+            fallback: fallbackPreco,
+            jaRecebido,
+            gap,
+          },
+        ),
+        ...divergenciaTransporteDoItem(it, entries),
+      };
+    });
+
+  const persistCaixasEMovimento = async (status: "parcial" | "finalizada" | "edicao") => {
+    const totaisCaixasReal: Record<string, number> = {};
+    for (const it of itens) {
+      const byTipo = caixasParaGalpaoItem(it, caixasItem[it.id] ?? []);
+      for (const [sigla, qty] of Object.entries(byTipo)) {
+        totaisCaixasReal[sigla] = (totaisCaixasReal[sigla] ?? 0) + qty;
+      }
+    }
+
+    if (conferencia?.id) {
+      for (const it of itens) {
+        const entries = caixasItem[it.id] ?? [];
+        await supabase.from("caixas_item_conferencia").delete().eq("item_conferencia_id", it.id);
+        const rows = entries
+          .filter((e) => e.sugerida > 0 || e.real > 0)
+          .map((e) => ({
+            item_conferencia_id: it.id,
+            tipo_caixa_id: e.tipo_caixa_id,
+            tipo_caixa_sigla: e.sigla,
+            qtd_sugerida: e.sugerida,
+            qtd_real: e.real,
+            fator_usado: e.fator,
+            registrado_por: user?.id ?? null,
+          }));
+        if (rows.length > 0) {
+          await supabase.from("caixas_item_conferencia").insert(rows);
+        }
+      }
+    }
+
+    if ((status === "finalizada" || status === "edicao") && conferencia?.id) {
+      await supabase.from("conferencia_caixas").delete().eq("conferencia_id", conferencia.id);
+      const caixaRows = tipos
+        .map((t) => ({
+          conferencia_id: conferencia.id,
+          tipo_caixa_sigla: t.sigla,
+          qtd_cheias: totaisCaixasReal[t.sigla] ?? 0,
+          qtd_vazias: 0,
+        }))
+        .filter((r) => r.qtd_cheias > 0);
+      if (caixaRows.length) {
+        await supabase.from("conferencia_caixas").insert(caixaRows);
+      }
+    }
+
+    // Recebimento só credita galpão. Packing → fornecedor é na movimentação (motorista).
+    // Em edição: apaga e regrava o ledger desta conferência (sem duplicar).
+    if ((status === "finalizada" || status === "edicao") && user && pedido?.fornecedor_id && conferencia?.id) {
+      await supabase
+        .from("movimentacoes_caixa")
+        .delete()
+        .eq("documento_id", conferencia.id)
+        .eq("documento_tipo", "entrega");
+
+      if (saida) {
+        await registrarChegada.mutateAsync({
+          saida_id: saida.id,
+          conferencia_id: conferencia.id,
+          caixas: totaisCaixasReal,
+        });
+      } else {
+        for (const t of tipos) {
+          const realQty = totaisCaixasReal[t.sigla] ?? 0;
+          if (realQty > 0) {
+            await entradaGalpao.mutateAsync({
+              tipo_caixa: t.sigla,
+              quantidade: realQty,
+              registrado_por: user.id,
+              fornecedor_id: pedido.fornecedor_id,
+              conferencia_id: conferencia.id,
+              observacoes: status === "edicao" ? "Entrada conferência (edição)" : "Entrada conferência",
+            });
+          }
+        }
+      }
+    }
+
+    return totaisCaixasReal;
+  };
+
+  const salvarEdicao = async () => {
+    if (!conferencia?.id || !editMotivo.trim()) {
+      toast.error("Informe o motivo da edição");
+      return;
+    }
+    try {
+      const result = await editMut.mutateAsync({
+        conferenciaId: conferencia.id,
+        pedidoId,
+        motivo: editMotivo.trim(),
+        itens: buildItensPayload(),
+      });
+      await persistCaixasEMovimento("edicao");
+      setEditando(false);
+      setEditDialogOpen(false);
+      setEditMotivo("");
+      toast.success("Conferência atualizada", {
+        description:
+          result.vales_revisao > 0
+            ? `${result.vales_revisao} vale(s) já no Wise foram marcados para revisão do ADM.`
+            : "Divergência, vale e caixas recalculados.",
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar edição");
+    }
+  };
+
+  const iniciarEdicao = () => {
+    if (valesLancadosNaConf.length > 0) {
+      setValeWiseWarn(true);
+      return;
+    }
+    setEditMotivo("");
+    setEditDialogOpen(true);
+  };
+
+  const confirmarInicioEdicao = () => {
+    setValeWiseWarn(false);
+    setEditMotivo("");
+    setEditDialogOpen(true);
+  };
+
+  const confirmarMotivoEEditar = () => {
+    if (!editMotivo.trim()) {
+      toast.error("Motivo obrigatório");
+      return;
+    }
+    setEditando(true);
+    setEditDialogOpen(false);
+    // Libera qty: desmarca conferido para permitir correção.
+    setItens((prev) => prev.map((row) => ({ ...row, conferido: false })));
+    caixasInitRef.current = null;
+    toast.message("Modo edição", {
+      description: "Corrija os itens e salve a edição.",
+    });
+  };
+
   const salvar = async (status: "parcial" | "finalizada") => {
+    if (editando) {
+      await salvarEdicao();
+      return;
+    }
     if (readOnly) return;
     if (!conferencia?.id) {
       toast.error("Conferência ainda não iniciada");
@@ -946,107 +1420,10 @@ function ConferenciaItens({
         conferenciaId: conferencia.id,
         pedidoId,
         status,
-        itens: itens.map((it) => {
-          const saldoRow = (
-            saldosItem as { item_pedido_id: string; recebido_acumulado: number }[]
-          ).find((s) => s.item_pedido_id === it.itemPedidoId);
-          const entries = caixasItem[it.id] ?? [];
-          const jaRecebido = Number(saldoRow?.recebido_acumulado ?? 0);
-          const chegou = chegouEfetivo(it, entries);
-          const gap = gapVsPedido(it, entries, jaRecebido);
-          return {
-            ...buildSavePayload(
-              { ...it, recebido: chegou },
-              {
-                toleranciaPct: it.toleranciaPct ?? toleranciaPct,
-                toleranciaMin,
-                preco: it.preco,
-                fallback: fallbackPreco,
-                jaRecebido,
-                gap,
-              },
-            ),
-            // Divergência de transporte é separada da divergência do pedido.
-            ...divergenciaTransporteDoItem(it, entries),
-          };
-        }),
+        itens: buildItensPayload(),
       });
 
-      const totaisCaixasReal: Record<string, number> = {};
-      for (const it of itens) {
-        const byTipo = caixasParaGalpaoItem(it, caixasItem[it.id] ?? []);
-        for (const [sigla, qty] of Object.entries(byTipo)) {
-          totaisCaixasReal[sigla] = (totaisCaixasReal[sigla] ?? 0) + qty;
-        }
-      }
-
-      if (conferencia?.id) {
-        for (const it of itens) {
-          const entries = caixasItem[it.id] ?? [];
-          await supabase.from("caixas_item_conferencia").delete().eq("item_conferencia_id", it.id);
-          const rows = entries
-            .filter((e) => e.sugerida > 0 || e.real > 0)
-            .map((e) => ({
-              item_conferencia_id: it.id,
-              tipo_caixa_id: e.tipo_caixa_id,
-              tipo_caixa_sigla: e.sigla,
-              qtd_sugerida: e.sugerida,
-              qtd_real: e.real,
-              fator_usado: e.fator,
-              registrado_por: user?.id ?? null,
-            }));
-          if (rows.length > 0) {
-            await supabase.from("caixas_item_conferencia").insert(rows);
-          }
-        }
-      }
-
-      if (status === "finalizada" && conferencia?.id) {
-        await supabase.from("conferencia_caixas").delete().eq("conferencia_id", conferencia.id);
-        const caixaRows = tipos
-          .map((t) => ({
-            conferencia_id: conferencia.id,
-            tipo_caixa_sigla: t.sigla,
-            qtd_cheias: totaisCaixasReal[t.sigla] ?? 0,
-            qtd_vazias: 0,
-          }))
-          .filter((r) => r.qtd_cheias > 0);
-        if (caixaRows.length) {
-          await supabase.from("conferencia_caixas").insert(caixaRows);
-        }
-      }
-
-      // Recebimento só credita galpão. Packing → fornecedor é na movimentação (motorista).
-      if (status === "finalizada" && user && pedido?.fornecedor_id) {
-        await supabase
-          .from("movimentacoes_caixa")
-          .delete()
-          .eq("documento_id", conferencia.id)
-          .eq("documento_tipo", "entrega");
-
-        if (saida) {
-          // Com saída na roça as caixas vêm do motorista, não do fornecedor.
-          await registrarChegada.mutateAsync({
-            saida_id: saida.id,
-            conferencia_id: conferencia.id,
-            caixas: totaisCaixasReal,
-          });
-        } else {
-          for (const t of tipos) {
-            const realQty = totaisCaixasReal[t.sigla] ?? 0;
-            if (realQty > 0) {
-              await entradaGalpao.mutateAsync({
-                tipo_caixa: t.sigla,
-                quantidade: realQty,
-                registrado_por: user.id,
-                fornecedor_id: pedido.fornecedor_id,
-                conferencia_id: conferencia.id,
-                observacoes: "Entrada conferência",
-              });
-            }
-          }
-        }
-      }
+      const totaisCaixasReal = await persistCaixasEMovimento(status);
       const cargas = result?.cargasGeradas ?? [];
       const movTxt = tipos
         .map((t) => {
@@ -1065,7 +1442,7 @@ function ConferenciaItens({
             : `${stats.conferidos} itens guardados.`,
       });
       if (status === "finalizada") onFinished();
-      else onBack();
+      else if (!embedded) onBack();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar conferência");
     }
@@ -1134,26 +1511,99 @@ function ConferenciaItens({
         onChange={handleFoto}
       />
 
-      <PageHeader
-        title={fornecedorNome}
-        subtitle={`Pedido ${codigo}${wiseId ? ` · Wise ${wiseId}` : ""} · Entrega ${entregaAtual || 1} de ${entregaTotal} · Chegou às ${formatTime(horaChegada)} · Conferente: ${conferenteNome}`}
-        actions={
+      {!embedded && (
+        <PageHeader
+          title={fornecedorNome}
+          subtitle={`Pedido ${codigo}${wiseId ? ` · Wise ${wiseId}` : ""} · Entrega ${entregaAtual || 1} de ${entregaTotal} · Chegou às ${formatTime(horaChegada)} · Conferente: ${conferenteNome}`}
+          actions={
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-navy"
+            >
+              <ArrowLeft size={14} /> {readOnly ? "Voltar" : "Trocar pedido"}
+            </button>
+          }
+        />
+      )}
+      {embedded && (
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg font-bold text-navy">{fornecedorNome}</h2>
+              {editada && <span className="chip chip-warn">editada</span>}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Pedido {codigo}
+              {wiseId ? ` · Wise ${wiseId}` : ""} · Entrega {entregaAtual || 1} de {entregaTotal}
+            </p>
+          </div>
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-navy"
+            className="text-xs text-muted-foreground hover:text-navy"
           >
-            <ArrowLeft size={14} /> {readOnly ? "Voltar" : "Trocar pedido"}
+            Remover da sessão
           </button>
-        }
-      />
+        </div>
+      )}
+
+      {(editada || edicoes.length > 0) && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {editada && <span className="chip chip-warn">Conferência editada</span>}
+          {edicoes.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setHistOpen(true)}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary-dark hover:underline"
+            >
+              <History size={12} /> Histórico ({edicoes.length})
+            </button>
+          )}
+        </div>
+      )}
 
       {readOnly && (
-        <div className="bg-secondary border border-border rounded-lg p-3 mb-4 text-sm text-muted-foreground">
-          <strong className="text-navy">Conferência encerrada.</strong>{" "}
-          {aguardandoLiberacao
-            ? "Pedido com divergência aguarda liberação do administrador para expedição."
-            : "Visualização somente leitura."}
+        <div className="bg-secondary border border-border rounded-lg p-3 mb-4 text-sm text-muted-foreground flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <strong className="text-navy">Conferência encerrada.</strong>{" "}
+            {aguardandoLiberacao
+              ? "Pedido com divergência aguarda liberação do administrador para expedição."
+              : "Visualização somente leitura."}
+            {editada && (
+              <span className="chip chip-warn ml-2">editada</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={iniciarEdicao}
+            className="inline-flex items-center gap-1.5 min-h-10 px-3 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary"
+          >
+            <Pencil size={14} /> Editar conferência
+          </button>
+        </div>
+      )}
+
+      {editando && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-950 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <strong>Editando conferência.</strong> Motivo: {editMotivo || "—"}
+            {valesLancadosNaConf.length > 0 && (
+              <span className="block text-xs mt-1">
+                {valesLancadosNaConf.length} vale(s) já no Wise serão enviados à revisão do ADM.
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEditando(false);
+              itensHydratedRef.current = null;
+            }}
+            className="text-xs font-semibold underline"
+          >
+            Cancelar edição
+          </button>
         </div>
       )}
 
@@ -1183,8 +1633,8 @@ function ConferenciaItens({
         if (!semFator) return null;
         return (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-950">
-            <strong>{semFator} produto(s) sem fator un/cx</strong>
-            {" — "}caixas não são sugeridas automaticamente. Cadastre o padrão em{" "}
+            <strong>{semFator} produto(s) sem conversão</strong>
+            {" — "}selo em cada item; cadastre o fator em{" "}
             <Link to="/gestao/produtos" className="underline font-medium">
               Produtos
             </Link>{" "}
@@ -1197,7 +1647,7 @@ function ConferenciaItens({
         );
       })()}
 
-      {!readOnly && pendentes.length > 1 && (
+      {!readOnly && !embedded && pendentes.length > 1 && (
         <div className="mb-4 lg:hidden">
           <SeletorCadastro
             tipo="fornecedor"
@@ -1210,7 +1660,7 @@ function ConferenciaItens({
         </div>
       )}
 
-      {!readOnly && (
+      {!readOnly && !embedded && (
         <div className="hidden lg:flex flex-wrap gap-2 mb-4">
           {pendentes.map((p) => (
             <button
@@ -1308,6 +1758,11 @@ function ConferenciaItens({
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-navy text-sm leading-tight">{it.produto}</div>
                   {it.aVincular && <span className="chip chip-warn mt-1">a vincular</span>}
+                  {sugestaoItem?.sem_conversao && (
+                    <span className="mt-1 inline-block">
+                      <SemConversaoSelo faltaFornecedor />
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-1 shrink-0">
                   {saldoZero && <span className="chip chip-ok">Completo</span>}
@@ -1507,6 +1962,11 @@ function ConferenciaItens({
                     {it.produto}
                     {it.aVincular && (
                       <span className="ml-2 chip chip-warn">produto a vincular</span>
+                    )}
+                    {sugestaoItem?.sem_conversao && (
+                      <span className="ml-2 inline-flex align-middle">
+                        <SemConversaoSelo faltaFornecedor compact />
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{it.unid}</td>
@@ -1709,7 +2169,7 @@ function ConferenciaItens({
         </div>
       )}
 
-      {!readOnly && (
+      {(!readOnly || editando) && (
         <>
           {/* Espaço para a barra fixa no mobile/tablet */}
           <div className="h-40 lg:hidden" aria-hidden />
@@ -1721,35 +2181,54 @@ function ConferenciaItens({
               "lg:static lg:inset-auto lg:z-auto lg:border-0 lg:bg-transparent lg:backdrop-blur-none lg:p-0 lg:pb-0",
             ].join(" ")}
           >
-            <div className="flex gap-2 lg:contents">
-              <button
-                type="button"
-                onClick={() => setAvulsoOpen(true)}
-                className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
-              >
-                <Plus size={14} /> <span className="hidden md:inline">Item </span>avulso
-              </button>
-              <button
-                type="button"
-                onClick={() => salvar("parcial")}
-                disabled={saveMut.isPending}
-                className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
-              >
-                <Save size={14} /> <span className="hidden md:inline">Salvar </span>parcial
-              </button>
-            </div>
-            <div className="hidden lg:block lg:flex-1" />
-            <div className="text-xs text-muted-foreground text-center lg:text-left">
-              Assinatura: <span className="font-semibold text-navy">{conferenteNome}</span>
-            </div>
-            <button
-              type="button"
-              onClick={finalizar}
-              disabled={saveMut.isPending}
-              className="w-full lg:w-auto inline-flex items-center justify-center gap-2 min-h-12 lg:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
-            >
-              <CheckCircle2 size={16} /> Finalizar entrega
-            </button>
+            {editando ? (
+              <>
+                <div className="text-xs text-muted-foreground flex-1 text-center lg:text-left">
+                  Motivo: <span className="font-semibold text-navy">{editMotivo}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void salvarEdicao()}
+                  disabled={editMut.isPending}
+                  className="w-full lg:w-auto inline-flex items-center justify-center gap-2 min-h-12 lg:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+                >
+                  <Save size={16} /> Salvar edição
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex gap-2 lg:contents">
+                  <button
+                    type="button"
+                    onClick={() => setAvulsoOpen(true)}
+                    className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80"
+                  >
+                    <Plus size={14} /> <span className="hidden md:inline">Item </span>avulso
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => salvar("parcial")}
+                    disabled={saveMut.isPending}
+                    className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-border bg-card text-sm font-semibold text-navy hover:bg-secondary active:bg-secondary/80 disabled:opacity-50"
+                  >
+                    <Save size={14} /> <span className="hidden md:inline">Salvar </span>parcial
+                  </button>
+                </div>
+                <div className="hidden lg:block lg:flex-1" />
+                <div className="text-xs text-muted-foreground text-center lg:text-left">
+                  Assinatura: <span className="font-semibold text-navy">{conferenteNome}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={finalizar}
+                  disabled={saveMut.isPending}
+                  className="w-full lg:w-auto inline-flex items-center justify-center gap-2 min-h-12 lg:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+                >
+                  <CheckCircle2 size={16} />{" "}
+                  {embedded ? "Finalizar este fornecedor" : "Finalizar entrega"}
+                </button>
+              </>
+            )}
           </div>
         </>
       )}
@@ -1935,6 +2414,98 @@ function ConferenciaItens({
             </Button>
             <Button onClick={submitVale} disabled={createVale.isPending || !valeItem}>
               {createVale.isPending ? "Enviando..." : "Solicitar vale"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={valeWiseWarn} onOpenChange={setValeWiseWarn}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Vale já lançado no Wise</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta conferência tem {valesLancadosNaConf.length} vale(s) já lançado(s) no Wise.
+              Ao editar, o(s) vale(s) não serão alterados automaticamente — o ADM precisará
+              revisar. Continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarInicioEdicao}>Continuar edição</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar conferência</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Informe o motivo da correção. Divergência, vale e movimento de caixas serão
+              recalculados ao salvar.
+            </p>
+            <div className="space-y-2">
+              <Label>Motivo (obrigatório)</Label>
+              <Textarea
+                value={editMotivo}
+                onChange={(e) => setEditMotivo(e.target.value)}
+                placeholder="Ex.: quantidade digitada errada no item X"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmarMotivoEEditar} disabled={!editMotivo.trim()}>
+              Abrir para edição
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={histOpen} onOpenChange={setHistOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Histórico de edições</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {edicoes.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhuma edição registrada.</p>
+            )}
+            {edicoes.map((ed) => (
+              <div key={ed.id} className="rounded-lg border border-border p-3 text-sm space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-navy">
+                    {ed.editor?.nome ?? "Usuário"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDateBRT(ed.editado_em)} {formatTime(ed.editado_em)}
+                  </span>
+                </div>
+                <p className="text-muted-foreground">
+                  Motivo: <span className="text-navy">{ed.motivo}</span>
+                </p>
+                {ed.vales_revisao > 0 && (
+                  <span className="chip chip-warn text-xs">
+                    {ed.vales_revisao} vale(s) p/ revisão ADM
+                  </span>
+                )}
+                <details className="text-xs text-muted-foreground">
+                  <summary className="cursor-pointer font-semibold">Antes → depois</summary>
+                  <pre className="mt-2 whitespace-pre-wrap break-all bg-secondary/40 p-2 rounded max-h-40 overflow-auto">
+                    {JSON.stringify({ antes: ed.antes, depois: ed.depois }, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistOpen(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

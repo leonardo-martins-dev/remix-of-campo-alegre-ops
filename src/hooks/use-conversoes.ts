@@ -150,11 +150,7 @@ export function useSaveConversaoProduto() {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["conversoes-produto"] });
-      qc.invalidateQueries({ queryKey: ["conversao-historico"] });
-      qc.invalidateQueries({ queryKey: ["sugestao-caixas"] });
-    },
+    onSuccess: () => invalidateConversaoQueries(qc),
   });
 }
 
@@ -196,11 +192,7 @@ export function useSaveConversaoFornecedor() {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["conversoes-fornecedor"] });
-      qc.invalidateQueries({ queryKey: ["conversao-historico"] });
-      qc.invalidateQueries({ queryKey: ["sugestao-caixas"] });
-    },
+    onSuccess: () => invalidateConversaoQueries(qc),
   });
 }
 
@@ -214,11 +206,7 @@ export function useToggleConversaoProduto() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["conversoes-produto"] });
-      qc.invalidateQueries({ queryKey: ["conversao-historico"] });
-      qc.invalidateQueries({ queryKey: ["sugestao-caixas"] });
-    },
+    onSuccess: () => invalidateConversaoQueries(qc),
   });
 }
 
@@ -232,11 +220,7 @@ export function useToggleConversaoFornecedor() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["conversoes-fornecedor"] });
-      qc.invalidateQueries({ queryKey: ["conversao-historico"] });
-      qc.invalidateQueries({ queryKey: ["sugestao-caixas"] });
-    },
+    onSuccess: () => invalidateConversaoQueries(qc),
   });
 }
 
@@ -250,10 +234,7 @@ export function useDeleteConversaoProduto() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["conversoes-produto"] });
-      qc.invalidateQueries({ queryKey: ["conversao-historico"] });
-    },
+    onSuccess: () => invalidateConversaoQueries(qc),
   });
 }
 
@@ -267,10 +248,7 @@ export function useDeleteConversaoFornecedor() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["conversoes-fornecedor"] });
-      qc.invalidateQueries({ queryKey: ["conversao-historico"] });
-    },
+    onSuccess: () => invalidateConversaoQueries(qc),
   });
 }
 
@@ -309,6 +287,51 @@ export function useSaveImportacaoConversao() {
       qc.invalidateQueries({ queryKey: ["conversoes-produto"] });
       qc.invalidateQueries({ queryKey: ["conversoes-fornecedor"] });
       qc.invalidateQueries({ queryKey: ["conversao-historico"] });
+      qc.invalidateQueries({ queryKey: ["produtos-sem-conversao"] });
     },
   });
+}
+
+/** NOP-309 — produtos sem fator de saída e/ou fornecedor×tipo, ordenados por uso recente. */
+export type ProdutoSemConversao = {
+  produto_id: string;
+  produto_nome: string;
+  produto_codigo: string | null;
+  unidade: string | null;
+  ativo: boolean;
+  falta_saida: boolean;
+  falta_fornecedor: boolean;
+  qtd_fornecedores_sem_fator: number;
+  fornecedores_sem_fator: { id: string; nome: string }[];
+  ultimo_pedido_em: string | null;
+  usos_recentes: number;
+};
+
+export function useProdutosSemConversao() {
+  return useQuery({
+    queryKey: ["produtos-sem-conversao"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("v_produtos_sem_conversao")
+        .select("*")
+        .order("usos_recentes", { ascending: false })
+        .order("ultimo_pedido_em", { ascending: false, nullsFirst: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        ...row,
+        fornecedores_sem_fator: Array.isArray(row.fornecedores_sem_fator)
+          ? (row.fornecedores_sem_fator as { id: string; nome: string }[])
+          : [],
+      })) as ProdutoSemConversao[];
+    },
+  });
+}
+
+function invalidateConversaoQueries(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["conversoes-produto"] });
+  qc.invalidateQueries({ queryKey: ["conversoes-fornecedor"] });
+  qc.invalidateQueries({ queryKey: ["conversao-historico"] });
+  qc.invalidateQueries({ queryKey: ["sugestao-caixas"] });
+  qc.invalidateQueries({ queryKey: ["produtos-sem-conversao"] });
+  qc.invalidateQueries({ queryKey: ["fatores-padrao-saida"] });
 }

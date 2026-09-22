@@ -2,6 +2,7 @@ import type { User } from "@supabase/supabase-js";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { ensureUserProfile } from "@/lib/ensure-profile";
+import { one } from "@/lib/embed";
 import { nowISO, todayBRT } from "@/lib/utils-date";
 
 const CONFERENCIA_SELECT = `
@@ -13,6 +14,40 @@ const CONFERENCIA_SELECT = `
     itens_pedido(id, quantidade_pedida, preco_unitario, unidade, cliente_id, nome_externo, codigo_externo, produto_id, clientes(nome), produtos(nome, unidade, tipo_caixa_padrao_id, tolerancia_pct))
   )
 `;
+
+export type ConferenciaEdicao = {
+  id: string;
+  conferencia_id: string;
+  editado_por: string;
+  editado_em: string;
+  motivo: string;
+  antes: unknown;
+  depois: unknown;
+  vales_revisao: number;
+  editor?: { nome: string } | null;
+};
+
+export function useConferenciaEdicoes(conferenciaId: string | null) {
+  return useQuery({
+    queryKey: ["conferencia-edicoes", conferenciaId],
+    enabled: !!conferenciaId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conferencia_edicoes")
+        .select(`
+          id, conferencia_id, editado_por, editado_em, motivo, antes, depois, vales_revisao,
+          editor:profiles!conferencia_edicoes_editado_por_fkey(nome)
+        `)
+        .eq("conferencia_id", conferenciaId!)
+        .order("editado_em", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({
+        ...row,
+        editor: one(row.editor as { nome: string } | { nome: string }[] | null),
+      })) as ConferenciaEdicao[];
+    },
+  });
+}
 
 export function useConferencia(pedidoId: string | null) {
   return useQuery({
@@ -293,4 +328,61 @@ export async function uploadConferenciaFoto(file: File, itemId: string) {
   const { error } = await supabase.from("itens_conferencia").update({ foto_url: urlData.publicUrl }).eq("id", itemId);
   if (error) throw error;
   return urlData.publicUrl;
+}
+
+/** Item payload compartilhado entre save e edição (NOP-308). */
+export type ItemConferenciaSave = {
+  id: string;
+  quantidade_recebida: number;
+  conferido: boolean;
+  divergencia: string | null;
+  quantidade_divergencia: number;
+  tem_problema_qualidade: boolean;
+  quantidade_qualidade: number;
+  dentro_tolerancia?: boolean | null;
+  valor_divergencia?: number | null;
+  estimado?: boolean;
+  tolerancia_pct_aplicada?: number | null;
+  qtd_saida_caixas?: number | null;
+  qtd_chegada_caixas?: number | null;
+  divergencia_transporte_caixas?: number | null;
+  divergencia_transporte_unidades?: number | null;
+};
+
+/** NOP-308 — edita conferência já finalizada (auditoria + recalcula status/vales). */
+export function useSalvarEdicaoConferencia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      conferenciaId,
+      pedidoId,
+      motivo,
+      itens,
+    }: {
+      conferenciaId: string;
+      pedidoId: string;
+      motivo: string;
+      itens: ItemConferenciaSave[];
+    }) => {
+      const { data, error } = await supabase.rpc("salvar_edicao_conferencia", {
+        p_conferencia_id: conferenciaId,
+        p_pedido_id: pedidoId,
+        p_motivo: motivo.trim(),
+        p_itens: itens,
+      });
+      if (error) throw new Error(error.message);
+      return data as { edicao_id: string; pedido_status: string; vales_revisao: number };
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["conferencia", v.pedidoId] });
+      qc.invalidateQueries({ queryKey: ["conferencia-edicoes", v.conferenciaId] });
+      qc.invalidateQueries({ queryKey: ["pedidos"] });
+      qc.invalidateQueries({ queryKey: ["faltas"] });
+      qc.invalidateQueries({ queryKey: ["fill-rate"] });
+      qc.invalidateQueries({ queryKey: ["vales"] });
+      qc.invalidateQueries({ queryKey: ["vales-conferente"] });
+      qc.invalidateQueries({ queryKey: ["saldos-caixa"] });
+      qc.invalidateQueries({ queryKey: ["saldo-caixas"] });
+    },
+  });
 }

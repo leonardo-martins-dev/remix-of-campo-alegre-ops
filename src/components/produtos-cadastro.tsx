@@ -23,7 +23,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useCadastroMutations, useFamilias, useProdutos } from "@/hooks/use-cadastros";
+import { useProdutosSemConversao } from "@/hooks/use-conversoes";
 import { normalizeKey } from "@/lib/normalize";
+import { SemConversaoSelo } from "@/components/sem-conversao-selo";
 
 type ProdutoRow = {
   id: string;
@@ -96,8 +98,10 @@ function isFkError(err: unknown): boolean {
 export function ProdutosCadastro() {
   const { data = [], isLoading } = useProdutos();
   const { data: familias = [] } = useFamilias();
+  const { data: semConversao = [] } = useProdutosSemConversao();
   const { insert, update, remove } = useCadastroMutations("produtos", ["cadastros", "produtos"]);
   const [busca, setBusca] = useState("");
+  const [filtroSemConv, setFiltroSemConv] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [editId, setEditId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -105,13 +109,23 @@ export function ProdutosCadastro() {
   const [pendingDelete, setPendingDelete] = useState<ProdutoRow | null>(null);
 
   const rows = data as ProdutoRow[];
+  const semMap = useMemo(
+    () => new Map(semConversao.map((p) => [p.produto_id, p])),
+    [semConversao],
+  );
   const filtered = useMemo(() => {
     const q = normalizeKey(busca);
-    const list = q
+    let list = q
       ? rows.filter((r) => normalizeKey(r.nome).includes(q) || normalizeKey(r.codigo ?? "").includes(q))
       : rows;
-    return [...list].sort(sortProdutos);
-  }, [rows, busca]);
+    if (filtroSemConv) list = list.filter((r) => semMap.has(r.id));
+    return [...list].sort((a, b) => {
+      const ua = semMap.get(a.id)?.usos_recentes ?? 0;
+      const ub = semMap.get(b.id)?.usos_recentes ?? 0;
+      if (filtroSemConv && ua !== ub) return ub - ua;
+      return sortProdutos(a, b);
+    });
+  }, [rows, busca, filtroSemConv, semMap]);
 
   const openCreate = () => {
     setEditId(null);
@@ -198,29 +212,48 @@ export function ProdutosCadastro() {
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Input
-          placeholder="Buscar por nome ou código"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
+        <div className="flex flex-wrap gap-2 items-center">
+          <Input
+            placeholder="Buscar por nome ou código"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="flex-1 min-w-[180px]"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant={filtroSemConv ? "default" : "outline"}
+            onClick={() => setFiltroSemConv((v) => !v)}
+          >
+            Sem conversão ({semConversao.length})
+          </Button>
+        </div>
         {isLoading ? (
           <p className="text-xs text-muted-foreground">Carregando...</p>
         ) : (
           <ul className="text-sm max-h-[480px] overflow-y-auto">
             {filtered.map((row) => {
               const fam = familiaNome(row);
+              const sem = semMap.get(row.id);
               return (
                 <li
                   key={row.id}
                   className={`flex justify-between items-center py-1.5 border-b border-border gap-2 ${row.ativo === false ? "opacity-50" : ""}`}
                 >
-                  <span className="min-w-0">
+                  <span className="min-w-0 flex flex-wrap items-center gap-1.5">
                     <span className="font-medium tabular-nums text-muted-foreground w-12 inline-block">{row.codigo || "—"}</span>
                     {" "}
                     {row.nome}
                     {fam ? <span className="text-muted-foreground"> · {fam}</span> : null}
                     {row.unidade && row.unidade !== "un" ? <span className="text-muted-foreground"> · {row.unidade}</span> : null}
                     {row.ativo === false ? <span className="text-muted-foreground"> · inativo</span> : null}
+                    {sem && (
+                      <SemConversaoSelo
+                        faltaSaida={sem.falta_saida}
+                        faltaFornecedor={sem.falta_fornecedor}
+                        compact
+                      />
+                    )}
                   </span>
                   <div className="flex gap-1 shrink-0">
                     <Button variant="ghost" size="sm" className="h-7" onClick={() => openEdit(row)}>

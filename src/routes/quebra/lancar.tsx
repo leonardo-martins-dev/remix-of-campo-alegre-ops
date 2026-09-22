@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { Camera, AlertTriangle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { FluxoPassos } from "@/components/fluxo-passos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
@@ -102,8 +103,8 @@ function Page() {
   };
 
   async function handleSave() {
-    if (!user || !fornecedorId || !lancados.length) {
-      toast.error("Escolha o fornecedor e ao menos um produto");
+    if (!user || !lancados.length) {
+      toast.error("Selecione ao menos um produto");
       return;
     }
     setSaving(true);
@@ -128,7 +129,7 @@ function Page() {
       });
 
       const laudo = await registrar.mutateAsync({
-        fornecedor_id: fornecedorId,
+        fornecedor_id: fornecedorId || null,
         registrado_por: user.id,
         observacao: obs,
         itens: itensPayload.map(({ _fotoFile, ...rest }) => rest),
@@ -154,10 +155,15 @@ function Page() {
         }
       }
 
-      toast.success("Laudo de ocorrência registrado");
+      toast.success(
+        fornecedorId
+          ? "Laudo de ocorrência registrado"
+          : "Laudo registrado — origem não identificada (ADM vincula depois)",
+      );
       setItens({});
       setProdutosSel([]);
       setObs("");
+      setFornecedorId("");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
@@ -177,24 +183,28 @@ function Page() {
       />
       <PageHeader
         title="Lançar ocorrência"
-        subtitle="Quebra ou falta de qualidade, vinculado ao fornecedor de origem"
+        subtitle="Quebra ou falta de qualidade — fornecedor de origem é opcional"
       />
       <div className="space-y-4 max-w-3xl">
+        <FluxoPassos
+          steps={["Origem", "Produtos", "Registrar"]}
+          current={!produtosSel.length ? 1 : lancados.length === 0 ? 2 : 3}
+        />
         <div className="bg-primary-soft border border-primary/20 rounded-lg p-3 flex gap-2 text-xs text-primary-dark">
           <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
           <span>
-            <strong>Mesmo fluxo do supermercado:</strong> escolha o fornecedor, selecione os
-            produtos com problema, indique o tipo (quebra ou qualidade), adicione evidências e
-            registre.
+            <strong>Mesmo fluxo do supermercado:</strong> selecione os produtos com problema,
+            indique o tipo (quebra ou qualidade), adicione evidências e registre. O fornecedor de
+            origem é opcional — se não souber, o ADM vincula depois.
           </span>
         </div>
         <SeletorCadastro
           tipo="fornecedor"
-          label="Fornecedor de origem"
+          label="Fornecedor de origem (opcional)"
           value={fornecedorId || null}
           onChange={(id) => setFornecedorId(id)}
           suggestedIds={fornecedoresRecentes}
-          placeholder="Fornecedor de origem…"
+          placeholder="Deixe em branco se a origem for desconhecida…"
         />
 
         <SeletorCadastro
@@ -240,19 +250,30 @@ function Page() {
         </Button>
         {lancados.length > 0 && (
           <div className="text-xs text-muted-foreground space-y-1">
-            <p>{lancados.length} produto(s) selecionado(s)</p>
             <p>
-              {
-                lancados.filter(
-                  ([, it]) =>
-                    !it.vinculo || it.vinculo === "none" || !Number(it.vinculo.split("|")[1]),
-                ).length
-              }{" "}
-              item(ns) com preço estimado
+              Produtos: <strong className="text-navy">{lancados.length}</strong>
             </p>
             <p>
-              {lancados.filter(([, it]) => it.tipo === "quebra").length} quebra(s) ·{" "}
-              {lancados.filter(([, it]) => it.tipo === "falta_de_qualidade").length} qualidade
+              Preço estimado:{" "}
+              <strong className="text-navy">
+                {
+                  lancados.filter(
+                    ([, it]) =>
+                      !it.vinculo || it.vinculo === "none" || !Number(it.vinculo.split("|")[1]),
+                  ).length
+                }
+              </strong>
+            </p>
+            <p>
+              Quebra:{" "}
+              <strong className="text-navy">
+                {lancados.filter(([, it]) => it.tipo === "quebra").length}
+              </strong>
+              {" · "}
+              Qualidade:{" "}
+              <strong className="text-navy">
+                {lancados.filter(([, it]) => it.tipo === "falta_de_qualidade").length}
+              </strong>
             </p>
           </div>
         )}
@@ -275,7 +296,7 @@ function ProdutoLinha({
   onFoto: () => void;
 }) {
   const { data: entregas = [] } = useUltimasEntregasProduto(
-    item.qtd > 0 ? fornecedorId : null,
+    item.qtd > 0 && fornecedorId ? fornecedorId : null,
     item.qtd > 0 ? produto.id : null,
   );
   const hasQtd = item.qtd > 0;

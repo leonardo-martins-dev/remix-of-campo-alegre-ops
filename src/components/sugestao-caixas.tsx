@@ -6,9 +6,15 @@ type SugestaoCaixasProps = {
   sugestao: SugestaoItem | undefined;
   showAdminLink?: boolean;
   compact?: boolean;
+  produtoId?: string | null;
 };
 
-export function SugestaoCaixas({ sugestao, showAdminLink = false, compact = false }: SugestaoCaixasProps) {
+export function SugestaoCaixas({
+  sugestao,
+  showAdminLink = false,
+  compact = false,
+  produtoId,
+}: SugestaoCaixasProps) {
   if (!sugestao) return null;
 
   if (sugestao.sem_conversao) {
@@ -17,9 +23,9 @@ export function SugestaoCaixas({ sugestao, showAdminLink = false, compact = fals
         <span className="italic">sem conversão cadastrada</span>
         {showAdminLink && (
           <Link
-            to="/gestao"
-            search={{ tab: "conversao" }}
+            to="/gestao/produtos"
             className="ml-2 inline-flex items-center gap-0.5 text-primary hover:underline"
+            title={produtoId ? `Produto ${produtoId}` : undefined}
           >
             <ExternalLink size={compact ? 10 : 12} />
             <span className={compact ? "text-[10px]" : "text-xs"}>cadastrar</span>
@@ -67,8 +73,7 @@ export function SugestaoCaixasBadge({ sugestao, showAdminLink = false }: Sugesta
         sem conversão
         {showAdminLink && (
           <Link
-            to="/gestao"
-            search={{ tab: "conversao" }}
+            to="/gestao/produtos"
             className="ml-1 text-primary hover:underline"
           >
             →

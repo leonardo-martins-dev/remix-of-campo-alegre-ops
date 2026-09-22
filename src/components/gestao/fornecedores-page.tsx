@@ -19,10 +19,14 @@ import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/com
 import { PageHeader } from "@/components/page-header";
 import { useFornecedores, useCadastroMutations } from "@/hooks/use-cadastros";
 import { useAliases, usePendenciasVinculo } from "@/hooks/use-pedidos";
-import { useResolverPendencia } from "@/hooks/use-wise-pedidos";
+import { useResolverPendencia, useResolverPendenciasFornecedorCertas } from "@/hooks/use-wise-pedidos";
 import { useAuth } from "@/lib/auth";
 import { normalizeKey } from "@/lib/normalize";
 import { MesclarCadastrosPanel } from "@/components/gestao/mesclar-cadastros";
+import { useFornecedoresAbaixoMinimo } from "@/hooks/use-minimo-estoque";
+import { formatBRL } from "@/lib/format";
+import { AlertTriangle, Link2 } from "lucide-react";
+import { TableWrapper } from "@/components/table-wrapper";
 
 type FornecedorRow = {
   id: string;
@@ -39,8 +43,10 @@ export function FornecedoresPage() {
   const { insert, update } = useCadastroMutations("fornecedores", ["cadastros", "fornecedores"]);
   const { data: pendencias = [] } = usePendenciasVinculo();
   const { data: aliases = [] } = useAliases();
-  const { user } = useAuth();
+  const { data: abaixoMinimo = [] } = useFornecedoresAbaixoMinimo();
+  const { user, isAdmin } = useAuth();
   const resolver = useResolverPendencia();
+  const resolverMassa = useResolverPendenciasFornecedorCertas();
 
   const [busca, setBusca] = useState("");
   const [showInativos, setShowInativos] = useState(false);
@@ -50,6 +56,11 @@ export function FornecedoresPage() {
   const [codigoWise, setCodigoWise] = useState("");
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [pendingDesativar, setPendingDesativar] = useState<FornecedorRow | null>(null);
+  const [pendingCriar, setPendingCriar] = useState<{
+    id: string;
+    nome_externo: string;
+    codigo_externo: string | null;
+  } | null>(null);
 
   const pendFornecedor = useMemo(
     () =>
@@ -142,7 +153,34 @@ export function FornecedoresPage() {
       <PageHeader
         title="Fornecedores"
         subtitle="Cadastro de fornecedores do galpão"
-        actions={<Button onClick={openCreate}>Novo</Button>}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {isAdmin && pendFornecedor.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={resolverMassa.isPending}
+                onClick={() =>
+                  resolverMassa.mutate(undefined, {
+                    onSuccess: (r) =>
+                      toast.success(
+                        `Vinculados: ${r.vinculados} · sem match: ${r.sem_match}`,
+                        {
+                          description: `${r.aliases_criados} aliases · ${r.pedidos_fornecedor} pedidos atualizados`,
+                        },
+                      ),
+                    onError: (e) => toast.error(e.message),
+                  })
+                }
+              >
+                <Link2 size={14} className="mr-1" />
+                {resolverMassa.isPending ? "Revinculando…" : "Revincular pendências"}
+              </Button>
+            )}
+            <Button onClick={openCreate}>Novo</Button>
+          </div>
+        }
       />
 
       {pendFornecedor.length > 0 && (
@@ -181,24 +219,59 @@ export function FornecedoresPage() {
                 <Button
                   size="sm"
                   variant="outline"
+                  disabled={!isAdmin}
+                  title={!isAdmin ? "Só administrador pode criar fornecedor novo" : undefined}
                   onClick={() =>
-                    resolver.mutate(
-                      {
-                        pendenciaId: p.id,
-                        acao: "criar",
-                        tipo: "fornecedor",
-                        nomeExterno: p.nome_externo,
-                        criarNome: p.nome_externo,
-                        userId: user!.id,
-                      },
-                      { onSuccess: () => toast.success("Criado") },
-                    )
+                    setPendingCriar({
+                      id: p.id,
+                      nome_externo: p.nome_externo,
+                      codigo_externo: p.codigo_externo,
+                    })
                   }
                 >
                   Criar
                 </Button>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {abaixoMinimo.length > 0 && (
+        <Card className="mb-4 border-warning/40">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <AlertTriangle size={16} className="text-warning" />
+              {abaixoMinimo.length} fornecedor(es) abaixo do estoque mínimo
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TableWrapper stickyFirstColumn>
+              <table className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground uppercase">
+                  <tr>
+                    <th className="text-left py-2 px-2">Fornecedor</th>
+                    <th className="text-center py-2 px-2">Tipo</th>
+                    <th className="text-right py-2 px-2">Mín.</th>
+                    <th className="text-right py-2 px-2">Atual</th>
+                    <th className="text-right py-2 px-2">Faltam</th>
+                    <th className="text-right py-2 px-2">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {abaixoMinimo.map((f, i) => (
+                    <tr key={`${f.fornecedor_id}-${f.tipo_caixa}-${i}`} className="border-t">
+                      <td className="py-2 px-2 font-medium">{f.fornecedor_nome}</td>
+                      <td className="py-2 px-2 text-center">{f.tipo_caixa}</td>
+                      <td className="py-2 px-2 text-right">{f.qtd_minima}</td>
+                      <td className="py-2 px-2 text-right text-danger font-bold">{f.saldo_atual}</td>
+                      <td className="py-2 px-2 text-right text-danger font-bold">{f.faltando}</td>
+                      <td className="py-2 px-2 text-right">{formatBRL(f.valor_faltando)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrapper>
           </CardContent>
         </Card>
       )}
@@ -331,6 +404,50 @@ export function FornecedoresPage() {
               }}
             >
               Desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!pendingCriar} onOpenChange={(open) => !open && setPendingCriar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Criar fornecedor novo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingCriar
+                ? `Confirma criar “${pendingCriar.nome_externo}” no cadastro? Só use se não houver correspondência na base. Preferível vincular a um existente.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resolver.isPending || !isAdmin}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!pendingCriar || !user) return;
+                resolver.mutate(
+                  {
+                    pendenciaId: pendingCriar.id,
+                    acao: "criar",
+                    tipo: "fornecedor",
+                    nomeExterno: pendingCriar.nome_externo,
+                    codigoExterno: pendingCriar.codigo_externo,
+                    criarNome: pendingCriar.nome_externo,
+                    userId: user.id,
+                    confirmarCriacaoAdm: true,
+                  },
+                  {
+                    onSuccess: () => {
+                      toast.success("Fornecedor criado");
+                      setPendingCriar(null);
+                    },
+                    onError: (err) => toast.error(err.message),
+                  },
+                );
+              }}
+            >
+              Confirmar criação
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

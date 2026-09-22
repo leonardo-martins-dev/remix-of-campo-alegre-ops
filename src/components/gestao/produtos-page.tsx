@@ -25,7 +25,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/page-header";
 import { useProdutos, useFamilias, useCadastroMutations } from "@/hooks/use-cadastros";
-import { useConversoesProduto, useSaveConversaoProduto } from "@/hooks/use-conversoes";
+import { useConversoesProduto, useSaveConversaoProduto, useProdutosSemConversao } from "@/hooks/use-conversoes";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { normalizeKey } from "@/lib/normalize";
 
@@ -99,17 +99,25 @@ function ProdutosTab() {
   const { data = [], isLoading } = useProdutos();
   const { data: familias = [] } = useFamilias();
   const { data: conversoes = [] } = useConversoesProduto();
+  const { data: semConversao = [] } = useProdutosSemConversao();
   const { insert, update, remove } = useCadastroMutations("produtos", ["cadastros", "produtos"]);
 
   const [busca, setBusca] = useState("");
   const [showInativos, setShowInativos] = useState(false);
+  const [filtroSemConversao, setFiltroSemConversao] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [touched, setTouched] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ProdutoRow | null>(null);
+  const [inlineFatorId, setInlineFatorId] = useState<string | null>(null);
 
   const rows = data as ProdutoRow[];
+
+  const semConvById = useMemo(() => {
+    const map = new Map(semConversao.map((p) => [p.produto_id, p]));
+    return map;
+  }, [semConversao]);
 
   const fatoresPorProduto = useMemo(() => {
     const map = new Map<string, { sigla: string; fator: number }[]>();
@@ -128,11 +136,19 @@ function ProdutosTab() {
           (r) => normalizeKey(r.nome).includes(q) || normalizeKey(r.codigo ?? "").includes(q)
         )
       : rows;
-    list = [...list].sort(sortProdutos);
+
+    if (filtroSemConversao) {
+      const order = new Map(semConversao.map((p, i) => [p.produto_id, i]));
+      list = list.filter((r) => order.has(r.id));
+      list = [...list].sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999));
+    } else {
+      list = [...list].sort(sortProdutos);
+    }
+
     const ativos = list.filter((r) => r.ativo !== false);
     const inativos = list.filter((r) => r.ativo === false);
     return showInativos ? [...ativos, ...inativos] : ativos;
-  }, [rows, busca, showInativos]);
+  }, [rows, busca, showInativos, filtroSemConversao, semConversao]);
 
   const openCreate = () => {
     setEditId(null);
@@ -224,6 +240,9 @@ function ProdutosTab() {
   const saving = insert.isPending || update.isPending || remove.isPending;
   const showNomeError = touched && !form.nome.trim();
   const inativoCount = rows.filter((r) => r.ativo === false).length;
+  const semConvCount = semConversao.length;
+  const faltaSaidaCount = semConversao.filter((p) => p.falta_saida).length;
+  const faltaFornCount = semConversao.filter((p) => p.falta_fornecedor).length;
 
   return (
     <>
@@ -237,6 +256,16 @@ function ProdutosTab() {
         <Button onClick={openCreate} size="sm">
           Novo
         </Button>
+        {semConvCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setFiltroSemConversao((v) => !v)}
+            className={`chip text-xs ${filtroSemConversao ? "chip-warn ring-1 ring-amber-500" : "chip-warn"}`}
+            title={`${faltaSaidaCount} sem fator de saída · ${faltaFornCount} sem fator fornecedor×tipo`}
+          >
+            Sem conversão ({semConvCount})
+          </button>
+        )}
         {inativoCount > 0 && (
           <label className="text-sm flex items-center gap-1.5 ml-auto">
             <input
@@ -249,16 +278,25 @@ function ProdutosTab() {
         )}
       </div>
 
+      {filtroSemConversao && (
+        <p className="text-xs text-muted-foreground mb-2">
+          Pendentes ordenados pelo uso recente nos pedidos.
+          {faltaSaidaCount > 0 ? ` ${faltaSaidaCount} sem fator de saída.` : ""}
+          {faltaFornCount > 0 ? ` ${faltaFornCount} sem fator fornecedor×tipo.` : ""}
+        </p>
+      )}
+
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
       ) : (
         <ul className="text-sm max-h-[600px] overflow-y-auto space-y-0.5">
           {filtered.map((row) => {
             const fam = familiaNome(row);
+            const pend = semConvById.get(row.id);
             return (
               <li
                 key={row.id}
-                className={`flex justify-between items-center py-2 px-2 rounded-md hover:bg-muted/50 cursor-pointer border-b border-border ${row.ativo === false ? "opacity-50" : ""}`}
+                className={`flex justify-between items-start py-2 px-2 rounded-md hover:bg-muted/50 cursor-pointer border-b border-border ${row.ativo === false ? "opacity-50" : ""}`}
                 onClick={() => openEdit(row)}
               >
                 <span className="min-w-0">
@@ -282,11 +320,43 @@ function ProdutosTab() {
                     }
                     return <span className="text-amber-700/80"> · sem fator un/cx</span>;
                   })()}
+                  {pend && (
+                    <span className="block mt-1 flex flex-wrap gap-1">
+                      {pend.falta_saida && (
+                        <span className="chip chip-warn text-[10px]">falta saída</span>
+                      )}
+                      {pend.falta_fornecedor && (
+                        <span className="chip chip-muted text-[10px]">
+                          falta forn.×tipo ({pend.qtd_fornecedores_sem_fator})
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {inlineFatorId === row.id && (
+                    <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                      <InlineFatorSaida
+                        produtoId={row.id}
+                        onDone={() => setInlineFatorId(null)}
+                      />
+                    </div>
+                  )}
                   {row.ativo === false && (
                     <span className="text-muted-foreground"> · inativo</span>
                   )}
                 </span>
                 <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  {pend?.falta_saida && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7"
+                      onClick={() =>
+                        setInlineFatorId((id) => (id === row.id ? null : row.id))
+                      }
+                    >
+                      {inlineFatorId === row.id ? "Fechar" : "Cadastrar fator"}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -430,6 +500,74 @@ function ProdutosTab() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+function InlineFatorSaida({
+  produtoId,
+  onDone,
+}: {
+  produtoId: string;
+  onDone: () => void;
+}) {
+  const { data: tipos = [] } = useTiposCaixa();
+  const save = useSaveConversaoProduto();
+  const [tipoId, setTipoId] = useState(tipos[0]?.id ?? "");
+  const [fator, setFator] = useState("");
+
+  const add = () => {
+    const n = Number(fator);
+    const tid = tipoId || tipos[0]?.id;
+    if (!tid || !n || n <= 0) {
+      toast.error("Informe tipo de caixa e fator > 0");
+      return;
+    }
+    save.mutate(
+      { produto_id: produtoId, tipo_caixa_id: tid, fator: n },
+      {
+        onSuccess: () => {
+          toast.success("Fator cadastrado — produto saiu da pendência de saída");
+          onDone();
+        },
+        onError: (e) => toast.error(e.message),
+      },
+    );
+  };
+
+  return (
+    <div className="flex flex-wrap items-end gap-2 rounded-md border border-amber-200 bg-amber-50/50 p-2">
+      <div className="space-y-1">
+        <Label className="text-xs">Tipo</Label>
+        <div className="w-40">
+          <SeletorCadastro
+            tipo="tipo_caixa"
+            value={tipoId || tipos[0]?.id || null}
+            onChange={(id) => setTipoId(id)}
+            items={tipos.map((t) => ({
+              id: t.id,
+              nome: t.nome,
+              codigo: t.sigla,
+              meta: { sigla: t.sigla },
+            }))}
+            placeholder="Tipo"
+          />
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Fator un/cx</Label>
+        <Input
+          type="number"
+          min={1}
+          className="h-8 w-24"
+          value={fator}
+          onChange={(e) => setFator(e.target.value)}
+          placeholder="ex. 20"
+        />
+      </div>
+      <Button size="sm" className="h-8" disabled={save.isPending} onClick={add}>
+        {save.isPending ? "Salvando…" : "Salvar"}
+      </Button>
+    </div>
   );
 }
 

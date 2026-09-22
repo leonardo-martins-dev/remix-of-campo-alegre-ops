@@ -169,6 +169,8 @@ export function useRegistrarContagemEmbalagem() {
       qc.invalidateQueries({ queryKey: ["inventario-embalagem-status"] });
       qc.invalidateQueries({ queryKey: ["embalagem-contagem-atual"] });
       qc.invalidateQueries({ queryKey: ["embalagem-historico"] });
+      qc.invalidateQueries({ queryKey: ["embalagem-saldo"] });
+      qc.invalidateQueries({ queryKey: ["embalagem-contagens-recentes"] });
       qc.invalidateQueries({ queryKey: ["alertas"] });
     },
   });
@@ -196,6 +198,189 @@ export function useRegistrarAjusteEmbalagem() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["embalagem-ajustes"] });
       qc.invalidateQueries({ queryKey: ["embalagem-historico"] });
+      qc.invalidateQueries({ queryKey: ["embalagem-saldo"] });
+    },
+  });
+}
+
+/** NOP-296 — saldo Packing por tipo (última contagem + ajustes posteriores). */
+export type SaldoEmbalagem = {
+  tipo_embalagem_id: string;
+  nome: string;
+  unidade_contagem: string;
+  qty_por_pacote: number | null;
+  ultima_contagem_id: string | null;
+  ultima_quantidade: number | null;
+  ultima_data: string | null;
+  ultima_responsavel: string | null;
+  ajustes_pos_contagem: number;
+  saldo: number;
+};
+
+export type ContagemEmbalagemResumo = {
+  id: string;
+  data: string;
+  created_at: string;
+  observacao: string | null;
+  contado_por: string | null;
+  contado_por_nome: string | null;
+  total_itens: number;
+  totais: { tipo_embalagem_id: string; nome: string; unidade_contagem: string; quantidade: number }[];
+};
+
+export function useSaldoEmbalagens() {
+  return useQuery({
+    queryKey: ["embalagem-saldo"],
+    queryFn: async () => {
+      const fromView = await supabase.from("v_saldo_embalagem").select("*");
+      if (!fromView.error && fromView.data) {
+        return fromView.data as SaldoEmbalagem[];
+      }
+
+      // Fallback se a view NOP-296 ainda não estiver no banco.
+      const [{ data: tipos, error: errTipos }, { data: atual, error: errAtual }, { data: ajustes, error: errAj }] =
+        await Promise.all([
+          supabase
+            .from("tipos_embalagem")
+            .select("id, nome, unidade_contagem, qty_por_pacote")
+            .eq("ativo", true)
+            .order("nome"),
+          supabase.from("v_embalagem_contagem_atual").select("*"),
+          supabase
+            .from("ajustes_embalagem")
+            .select("tipo_embalagem_id, quantidade, registrado_em")
+            .order("registrado_em", { ascending: true }),
+        ]);
+      if (errTipos) throw errTipos;
+      if (errAtual) throw errAtual;
+      if (errAj) throw errAj;
+
+      const status = await supabase
+        .from("contagens_embalagem")
+        .select("id, data, created_at, contado_por, profiles:contado_por(nome)")
+        .order("data", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (status.error) throw status.error;
+
+      const lastByTipo = new Map<
+        string,
+        { qtd: number; data: string; created_at: string; contagem_id: string; responsavel: string | null }
+      >();
+      for (const row of (atual ?? []) as ContagemAtualEmbalagem[]) {
+        if (row.ultima_quantidade == null || !row.ultima_data) continue;
+        const head = (status.data ?? []).find((c) => c.data === row.ultima_data);
+        const perfil = head
+          ? Array.isArray(head.profiles)
+            ? head.profiles[0]
+            : head.profiles
+          : null;
+        lastByTipo.set(row.tipo_embalagem_id, {
+          qtd: Number(row.ultima_quantidade),
+          data: row.ultima_data,
+          created_at: head?.created_at ?? `${row.ultima_data}T23:59:59Z`,
+          contagem_id: head?.id ?? "",
+          responsavel: perfil?.nome ?? null,
+        });
+      }
+
+      return (tipos ?? []).map((t) => {
+        const last = lastByTipo.get(t.id);
+        const aj = (ajustes ?? []).filter((a) => {
+          if (a.tipo_embalagem_id !== t.id) return false;
+          if (!last) return true;
+          return a.registrado_em > last.created_at;
+        });
+        const ajustesSum = aj.reduce((s, a) => s + Number(a.quantidade), 0);
+        const saldo = (last?.qtd ?? 0) + ajustesSum;
+        return {
+          tipo_embalagem_id: t.id,
+          nome: t.nome,
+          unidade_contagem: t.unidade_contagem,
+          qty_por_pacote: t.qty_por_pacote,
+          ultima_contagem_id: last?.contagem_id || null,
+          ultima_quantidade: last?.qtd ?? null,
+          ultima_data: last?.data ?? null,
+          ultima_responsavel: last?.responsavel ?? null,
+          ajustes_pos_contagem: ajustesSum,
+          saldo,
+        } satisfies SaldoEmbalagem;
+      });
+    },
+  });
+}
+
+/** Cabeçalhos recentes com totais por tipo (para o bloco Últimas contagens). */
+export function useContagensEmbalagemRecentes(limit = 12) {
+  return useQuery({
+    queryKey: ["embalagem-contagens-recentes", limit],
+    queryFn: async () => {
+      const { data: heads, error } = await supabase
+        .from("contagens_embalagem")
+        .select("id, data, created_at, observacao, contado_por, profiles:contado_por(nome)")
+        .order("data", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      const ids = (heads ?? []).map((h) => h.id);
+      if (!ids.length) return [] as ContagemEmbalagemResumo[];
+
+      const { data: itens, error: errItens } = await supabase
+        .from("contagem_embalagem_itens")
+        .select("contagem_id, quantidade, tipo_embalagem_id, tipos_embalagem(nome, unidade_contagem)")
+        .in("contagem_id", ids);
+      if (errItens) throw errItens;
+
+      const byContagem = new Map<string, ContagemEmbalagemResumo["totais"]>();
+      for (const it of itens ?? []) {
+        const emb = Array.isArray(it.tipos_embalagem) ? it.tipos_embalagem[0] : it.tipos_embalagem;
+        const list = byContagem.get(it.contagem_id) ?? [];
+        list.push({
+          tipo_embalagem_id: it.tipo_embalagem_id,
+          nome: emb?.nome ?? "—",
+          unidade_contagem: emb?.unidade_contagem ?? "",
+          quantidade: Number(it.quantidade),
+        });
+        byContagem.set(it.contagem_id, list);
+      }
+
+      return (heads ?? []).map((h) => {
+        const totais = byContagem.get(h.id) ?? [];
+        const perfil = Array.isArray(h.profiles) ? h.profiles[0] : h.profiles;
+        return {
+          id: h.id,
+          data: h.data,
+          created_at: h.created_at,
+          observacao: h.observacao,
+          contado_por: h.contado_por,
+          contado_por_nome: perfil?.nome ?? null,
+          total_itens: totais.length,
+          totais: totais.sort((a, b) => a.nome.localeCompare(b.nome)),
+        } satisfies ContagemEmbalagemResumo;
+      });
+    },
+  });
+}
+
+export function useContagemEmbalagemDetalhe(contagemId: string | null) {
+  return useQuery({
+    queryKey: ["embalagem-contagem-detalhe", contagemId],
+    enabled: !!contagemId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("contagem_embalagem_itens")
+        .select("quantidade, tipo_embalagem_id, tipos_embalagem(nome, unidade_contagem)")
+        .eq("contagem_id", contagemId!);
+      if (error) throw error;
+      return (data ?? []).map((it) => {
+        const emb = Array.isArray(it.tipos_embalagem) ? it.tipos_embalagem[0] : it.tipos_embalagem;
+        return {
+          tipo_embalagem_id: it.tipo_embalagem_id as string,
+          nome: emb?.nome ?? "—",
+          unidade_contagem: emb?.unidade_contagem ?? "",
+          quantidade: Number(it.quantidade),
+        };
+      });
     },
   });
 }

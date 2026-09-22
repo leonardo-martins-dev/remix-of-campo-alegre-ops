@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { FluxoPassos } from "@/components/fluxo-passos";
+import { StatusOrdemBadge } from "@/components/expedicao/fluxo-ordem";
 import { NumberStepper } from "@/components/number-stepper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,9 @@ import {
 import type { EntregaCaixaQueueItem } from "@/lib/offline-queue";
 
 export const Route = createFileRoute("/expedicao/entrega")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    cargaId: typeof search.cargaId === "string" ? search.cargaId : undefined,
+  }),
   component: Page,
   head: () => ({ meta: [{ title: "Entrega na loja · Campo Alegre" }] }),
 });
@@ -36,6 +41,7 @@ export const Route = createFileRoute("/expedicao/entrega")({
 type StatusCaixa = EntregaCaixaQueueItem["status"];
 
 function Page() {
+  const { cargaId: cargaIdSearch } = Route.useSearch();
   const { user, profile, isAdmin } = useAuth();
   const motoristaDoPerfil = profile?.motorista_id ?? null;
 
@@ -47,6 +53,12 @@ function Page() {
   const { offline, pendentes, guardar } = useEntregaOfflineQueue(!!user);
 
   const [saidaSel, setSaidaSel] = useState<SaidaExpedicao | null>(null);
+
+  useEffect(() => {
+    if (!cargaIdSearch || saidaSel) return;
+    const match = saidas.find((s) => s.carga_id === cargaIdSearch);
+    if (match) setSaidaSel(match);
+  }, [cargaIdSearch, saidas, saidaSel]);
   const { data: caixas = [] } = useCaixasDaSaida(saidaSel?.carga_id ?? null);
 
   const [statusCaixa, setStatusCaixa] = useState<Record<string, StatusCaixa>>({});
@@ -184,10 +196,17 @@ function Page() {
       {(offline || pendentes > 0) && (
         <div className="rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs px-3 py-2 mb-3 flex items-center gap-2">
           <WifiOff size={14} />
-          {offline ? "Modo offline" : ""}
-          {pendentes > 0 && ` · ${pendentes} entrega(s) na fila`}
+          <span>
+            {offline ? "Modo offline" : "Online"}
+            {pendentes > 0 ? ` · ${pendentes} entrega(s) na fila` : ""}
+          </span>
         </div>
       )}
+
+      <FluxoPassos
+        steps={["Ordem", "Confirmar"]}
+        current={saidaSel ? 2 : 1}
+      />
 
       {!saidaSel && (
         <div className="space-y-3">
@@ -209,7 +228,10 @@ function Page() {
                 <span className="font-bold text-navy tabular-nums">
                   {s.cargas?.numero_ordem ?? s.cargas?.codigo}
                 </span>
-                <span className="chip chip-info">{s.total_caixas} cx</span>
+                <div className="flex items-center gap-1.5">
+                  <StatusOrdemBadge status="em_transito" />
+                  <span className="chip chip-muted">{s.total_caixas} cx</span>
+                </div>
               </div>
               <div className="text-sm text-ink flex items-center gap-1 mt-0.5">
                 <Store size={14} className="text-primary" /> {s.clientes?.nome ?? "Loja"}

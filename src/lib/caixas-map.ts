@@ -43,7 +43,13 @@ export function toLegacyColumns(map: CaixasMap) {
 }
 
 export function sumCaixas(map: CaixasMap): number {
-  return Object.values(map).reduce((a, n) => a + Number(n || 0), 0);
+  return Object.values(map).reduce((a, n) => a + safeNum(n), 0);
+}
+
+/** Coerce to a finite number; never returns NaN. */
+export function safeNum(n: unknown, fallback = 0): number {
+  const v = typeof n === "number" ? n : Number(n);
+  return Number.isFinite(v) ? v : fallback;
 }
 
 export function sortedTipos(tipos: TipoCaixa[], includeInactive = false): TipoCaixa[] {

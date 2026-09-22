@@ -14,6 +14,7 @@ import {
   ShoppingCart,
   Store,
   Search,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -28,14 +29,32 @@ import {
   useUpdateCargaResumo,
   useFinalizarCarga,
   useIniciarCarga,
+  useConferirPedido,
   useImportCargasExcel,
   useImportRomaneioItens,
   useImportRelatorioVenda,
   useFilaExpedicao,
   useGerarCargasPedido,
+  useCargasSemCliente,
+  useVincularClienteCarga,
 } from "@/hooks/use-cargas";
+import {
+  STATUS_ORDEM_LABEL,
+  type StatusOrdem,
+} from "@/hooks/use-ordem-expedicao";
 import { useClientes, useProdutos, useMotoristas } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
+import {
+  RomaneioListaEnxuta,
+  EditarItemDialog,
+  type RomaneioLinha,
+} from "@/components/expedicao/romaneio-enxuto";
+import {
+  FluxoOrdemStepper,
+  StatusOrdemBadge,
+  ProximoPassoLinks,
+} from "@/components/expedicao/fluxo-ordem";
+import { Input } from "@/components/ui/input";
 import {
   buildCargasFromExcel,
   parseExpedicaoExcel,
@@ -70,19 +89,26 @@ import {
 import { formatDateBRT, formatTime } from "@/lib/utils-date";
 import { useConfirmarEntregaAdmin, useEntregasSemConfirmacao } from "@/hooks/use-saida-expedicao";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
-import { fromLegacyColumns, toLegacyColumns } from "@/lib/caixas-map";
+import { fromLegacyColumns, toLegacyColumns, safeNum, sumCaixas } from "@/lib/caixas-map";
 import { CoberturaDiaCard } from "@/components/cobertura-dia";
 import { one } from "@/lib/embed";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
+
+type ExpedicaoSearch = { cargaId?: string };
 
 export const Route = createFileRoute("/expedicao/")({
+  validateSearch: (search: Record<string, unknown>): ExpedicaoSearch => ({
+    cargaId: typeof search.cargaId === "string" ? search.cargaId : undefined,
+  }),
   component: Page,
   head: () => ({ meta: [{ title: "Expedição · Campo Alegre" }] }),
 });
 
-type TipoCx = string;
-
 type RomaneioItemView = {
   id: string;
+  produtoId: string | null;
   produto: string;
   romaneio: number;
   real: number;
@@ -95,6 +121,7 @@ type FamiliaView = { familia: string; itens: RomaneioItemView[] };
 function groupRomaneio(
   items: {
     id: string;
+    produto_id?: string | null;
     quantidade_romaneio: number;
     quantidade_real: number;
     caixas_g: number;
@@ -102,7 +129,7 @@ function groupRomaneio(
     caixas_p: number;
     caixas?: Record<string, number> | null;
     status: string;
-    produtos: { nome: string; familias_produto: { nome: string } | { nome: string }[] | null } | { nome: string; familias_produto: unknown }[] | null;
+    produtos: { id?: string; nome: string; familias_produto: { nome: string } | { nome: string }[] | null } | { id?: string; nome: string; familias_produto: unknown }[] | null;
   }[] | undefined
 ): FamiliaView[] {
   const map = new Map<string, RomaneioItemView[]>();
@@ -111,10 +138,13 @@ function groupRomaneio(
     const familia = one(prod?.familias_produto as { nome: string } | { nome: string }[] | null)?.nome ?? "Outros";
     const row: RomaneioItemView = {
       id: it.id,
+      produtoId: it.produto_id ?? prod?.id ?? null,
       produto: prod?.nome ?? "—",
-      romaneio: Number(it.quantidade_romaneio),
-      real: Number(it.quantidade_real),
-      caixas: fromLegacyColumns(it),
+      romaneio: safeNum(it.quantidade_romaneio),
+      real: safeNum(it.quantidade_real),
+      caixas: Object.fromEntries(
+        Object.entries(fromLegacyColumns(it)).map(([k, v]) => [k, safeNum(v)]),
+      ),
       status: it.status as RomaneioItemView["status"],
     };
     if (!map.has(familia)) map.set(familia, []);
@@ -130,11 +160,14 @@ function computeStatus(romaneio: number, real: number): RomaneioItemView["status
 }
 
 function Page() {
+  const { cargaId: cargaIdSearch } = Route.useSearch();
   const { user } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const wiseFileRef = useRef<HTMLInputElement>(null);
   const vendaFileRef = useRef<HTMLInputElement>(null);
   const { data: cargas = [], isLoading: loadingCargas } = useCargasDia();
+  const { data: cargasSemCliente = [] } = useCargasSemCliente();
+  const vincularCliente = useVincularClienteCarga();
   const { data: fila = [], isLoading: loadingFila } = useFilaExpedicao();
   const gerarCargas = useGerarCargasPedido();
   const { data: clientes = [] } = useClientes();
@@ -148,13 +181,21 @@ function Page() {
   const importWise = useImportWiseCarregamento();
   const { data: wiseSyncStatus } = useWiseSyncStatus();
   const iniciar = useIniciarCarga();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const conferirPedido = useConferirPedido();
+  const [selectedId, setSelectedId] = useState<string | null>(cargaIdSearch ?? null);
   const [tab, setTab] = useState<"todas" | "carregando" | "aguardando" | "concluida">("todas");
+  const [filtroRota, setFiltroRota] = useState<string>("todas");
+  const [buscaCarga, setBuscaCarga] = useState("");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [realTouched, setRealTouched] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [wiseOpen, setWiseOpen] = useState(false);
   const [wiseList, setWiseList] = useState<{ id: string; codigo: string; cliente: string; itens: { produto: string; quantidade: number }[] }[]>([]);
   const [wiseSelected, setWiseSelected] = useState<string>("");
+
+  useEffect(() => {
+    if (cargaIdSearch) setSelectedId(cargaIdSearch);
+  }, [cargaIdSearch]);
 
   const activeId = useMemo(() => {
     if (selectedId && cargas.some((c) => c.id === selectedId)) return selectedId;
@@ -169,38 +210,111 @@ function Page() {
 
   const familias = useMemo(() => groupRomaneio(detail?.romaneio_itens), [detail?.romaneio_itens]);
 
+  const produtoIds = useMemo(
+    () => [...new Set(familias.flatMap((f) => f.itens.map((i) => i.produtoId).filter(Boolean)))] as string[],
+    [familias],
+  );
+
+  const { data: fatoresPadrao = [] } = useQuery({
+    queryKey: ["fatores-padrao-saida", produtoIds.join(",")],
+    enabled: produtoIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conversoes_produto_caixa")
+        .select("produto_id, tipo_caixa_id, fator, tipos_caixa(sigla)")
+        .eq("ativo", true)
+        .in("produto_id", produtoIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const fatorPorProdutoSigla = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const row of fatoresPadrao as {
+      produto_id: string;
+      fator: number;
+      tipos_caixa: { sigla: string } | { sigla: string }[] | null;
+    }[]) {
+      const sigla = one(row.tipos_caixa)?.sigla;
+      const fator = safeNum(row.fator);
+      if (!sigla || fator <= 0) continue;
+      m.set(`${row.produto_id}:${sigla}`, fator);
+    }
+    return m;
+  }, [fatoresPadrao]);
+
+  const itensSemFator = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const it of familias.flatMap((f) => f.itens)) {
+      if (!it.produtoId || seen.has(it.produtoId)) continue;
+      const has = [...fatorPorProdutoSigla.keys()].some((k) => k.startsWith(`${it.produtoId}:`));
+      if (!has) {
+        seen.add(it.produtoId);
+        list.push(it.produto);
+      }
+    }
+    return list;
+  }, [familias, fatorPorProdutoSigla]);
+
   const resumo = Array.isArray(detail?.carga_caixas_resumo)
     ? detail.carga_caixas_resumo[0]
     : detail?.carga_caixas_resumo;
 
   const sugCaixas = useMemo<Record<string, number>>(() => {
-    const sum = (k: string) => familias.flatMap((f) => f.itens).reduce((a, i) => a + (i.caixas[k] ?? 0), 0);
+    const keys = tiposCx.length ? tiposCx.map((t) => t.sigla) : ["G", "I", "P"];
+    const fromItens: Record<string, number> = Object.fromEntries(keys.map((k) => [k, 0]));
+    for (const it of familias.flatMap((f) => f.itens)) {
+      let applied = false;
+      for (const k of keys) {
+        const fator = it.produtoId ? fatorPorProdutoSigla.get(`${it.produtoId}:${k}`) : undefined;
+        if (fator && fator > 0 && it.romaneio > 0) {
+          fromItens[k] = safeNum(fromItens[k]) + Math.ceil(it.romaneio / fator);
+          applied = true;
+        }
+      }
+      if (!applied) {
+        for (const k of keys) {
+          fromItens[k] = safeNum(fromItens[k]) + safeNum(it.caixas[k]);
+        }
+      }
+    }
     const json = (resumo as { sugerido?: Record<string, number> } | null)?.sugerido;
     const next: Record<string, number> = {};
-    const keys = tiposCx.length ? tiposCx.map((t) => t.sigla) : ["G", "I", "P"];
     for (const k of keys) {
-      const legacy = k === "G" ? resumo?.sugerido_g : k === "I" ? resumo?.sugerido_i : k === "P" ? resumo?.sugerido_p : undefined;
-      next[k] = json?.[k] ?? legacy ?? sum(k);
+      const legacy =
+        k === "G" ? resumo?.sugerido_g : k === "I" ? resumo?.sugerido_i : k === "P" ? resumo?.sugerido_p : undefined;
+      const stored = json?.[k] ?? legacy;
+      next[k] = safeNum(stored != null ? stored : fromItens[k]);
     }
     return next;
-  }, [familias, resumo, tiposCx]);
+  }, [familias, resumo, tiposCx, fatorPorProdutoSigla]);
 
   const [realCaixas, setRealCaixas] = useState<Record<string, number>>({ G: 0, I: 0, P: 0 });
 
+  const totalSugCx = useMemo(() => sumCaixas(sugCaixas), [sugCaixas]);
+  const totalRealCx = useMemo(() => sumCaixas(realCaixas), [realCaixas]);
+
   useEffect(() => {
     setRealTouched(false);
+    setEditingItemId(null);
   }, [activeId]);
 
   useEffect(() => {
     if (realTouched) return;
     if (resumo) {
       const json = (resumo as { real?: Record<string, number> }).real;
-      setRealCaixas({
-        G: json?.G ?? resumo.real_g,
-        I: json?.I ?? resumo.real_i,
-        P: json?.P ?? resumo.real_p,
-        ...json,
-      });
+      const next: Record<string, number> = {
+        G: safeNum(json?.G ?? resumo.real_g),
+        I: safeNum(json?.I ?? resumo.real_i),
+        P: safeNum(json?.P ?? resumo.real_p),
+      };
+      if (json) {
+        for (const [k, v] of Object.entries(json)) next[k] = safeNum(v);
+      }
+      setRealCaixas(next);
     } else {
       setRealCaixas(sugCaixas);
     }
@@ -233,18 +347,61 @@ function Page() {
     });
   };
 
-  const updateReal = (itemId: string, romaneio: number, v: number) => {
-    if (!activeId) return;
-    const real = Math.max(0, v);
-    const status = computeStatus(romaneio, real);
-    updateItem.mutate({ cargaId: activeId, itemId, quantidade_real: real, status });
+  const siglasCx = tiposCx.length ? tiposCx.map((t) => t.sigla) : ["G", "I", "P"];
+
+  const familiasEnxutas = useMemo(() => {
+    return familias.map((f) => ({
+      familia: f.familia,
+      itens: f.itens.map((it): RomaneioLinha => {
+        const semFator = it.produtoId
+          ? ![...fatorPorProdutoSigla.keys()].some((k) => k.startsWith(`${it.produtoId}:`))
+          : true;
+        return { ...it, semFator };
+      }),
+    }));
+  }, [familias, fatorPorProdutoSigla]);
+
+  const editingItem = useMemo(() => {
+    if (!editingItemId) return null;
+    return familiasEnxutas.flatMap((f) => f.itens).find((i) => i.id === editingItemId) ?? null;
+  }, [editingItemId, familiasEnxutas]);
+
+  const handleSaveItemEdit = (next: { real: number; caixas: Record<string, number> }) => {
+    if (!activeId || !editingItem) return;
+    const status = computeStatus(editingItem.romaneio, next.real);
+    const legacy = toLegacyColumns(next.caixas);
+    updateItem.mutate(
+      {
+        cargaId: activeId,
+        itemId: editingItem.id,
+        quantidade_real: next.real,
+        status,
+        ...legacy,
+        caixas: next.caixas,
+      },
+      {
+        onSuccess: () => {
+          setEditingItemId(null);
+          toast.success("Item atualizado");
+        },
+        onError: () => toast.error("Não foi possível salvar o item"),
+      },
+    );
   };
 
-  const updateCaixaItem = (itemId: string, tipo: TipoCx, current: Record<string, number>, v: number) => {
+  const handleConferirPedido = () => {
     if (!activeId) return;
-    const next = { ...current, [tipo]: Math.max(0, v) };
-    const legacy = toLegacyColumns(next);
-    updateItem.mutate({ cargaId: activeId, itemId, ...legacy });
+    conferirPedido.mutate(activeId, {
+      onSuccess: (res) => {
+        toast.success("Pedido conferido", {
+          description:
+            res.sem_fator > 0
+              ? `${res.itens} itens · ${res.sem_fator} sem fator de saída`
+              : `${res.itens} itens · caixas sugeridas aplicadas`,
+        });
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Erro ao conferir pedido"),
+    });
   };
 
   const flat = familias.flatMap((f) => f.itens);
@@ -255,7 +412,25 @@ function Page() {
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const ss = String(elapsed % 60).padStart(2, "0");
 
-  const cargasFiltradas = cargas.filter((c) => tab === "todas" || c.status === tab);
+  const rotasDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of cargas) {
+      if (c.rota_nome) set.add(c.rota_nome);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [cargas]);
+
+  const cargasFiltradas = cargas.filter((c) => {
+    if (tab !== "todas" && c.status !== tab) return false;
+    if (filtroRota !== "todas" && (c.rota_nome ?? "") !== filtroRota) return false;
+    const q = buscaCarga.trim().toLowerCase();
+    if (q) {
+      const loja = (c.cliente_nome ?? "").toLowerCase();
+      const num = (c.numero_ordem ?? c.codigo ?? "").toLowerCase();
+      if (!loja.includes(q) && !num.includes(q)) return false;
+    }
+    return true;
+  });
 
   const emCarregamento = cargas.filter((c) => c.status === "carregando").length;
 
@@ -266,11 +441,11 @@ function Page() {
       { cargaId: activeId },
       {
         onSuccess: () => {
-          const total = realCaixas.G + realCaixas.I + realCaixas.P;
+          const total = totalRealCx;
           const cliente =
             one(detail.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? "Cliente";
           toast.success("Carga finalizada", {
-            description: `${cliente} · ${total} caixas registradas (G ${realCaixas.G} / I ${realCaixas.I} / P ${realCaixas.P}).`,
+            description: `${cliente} · ${total} caixas registradas.`,
           });
         },
         onError: () => toast.error("Não foi possível finalizar a carga."),
@@ -509,11 +684,15 @@ function Page() {
       >
         <FileSpreadsheet size={14} /> <span className="lg:hidden">Exp. Wise</span><span className="hidden lg:inline">Importar exportação Wise</span>
       </button>
-      <Link to="/expedicao/saida" className={btnAction}>
+      <Link
+        to="/expedicao/saida"
+        search={{ cargaId: undefined, clienteId: undefined }}
+        className={btnAction}
+      >
         <Truck size={14} /> <span className="lg:hidden">Saída</span>
         <span className="hidden lg:inline">Saída para a loja</span>
       </Link>
-      <Link to="/expedicao/entrega" className={btnAction}>
+      <Link to="/expedicao/entrega" search={{ cargaId: undefined }} className={btnAction}>
         <Store size={14} /> Entrega
       </Link>
       <Link to="/expedicao/rastreio" className={btnAction}>
@@ -568,18 +747,37 @@ function Page() {
     );
   }
 
-  const clienteNome = one(detail?.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
-  const motorista = (detail?.motoristas as { nome: string } | null)?.nome ?? "—";
-  const placa = (detail?.caminhoes as { placa: string } | null)?.placa ?? "—";
-  const rota = (detail?.rotas as { nome: string } | null)?.nome ?? "—";
-  const statusLabel =
-    detail?.status === "carregando"
+  const clienteNome =
+    one(detail?.clientes as { nome: string } | { nome: string }[] | null)?.nome ??
+    (detail as { cliente_nome?: string } | undefined)?.cliente_nome ??
+    "Sem loja vinculada";
+  const motorista = (detail?.motoristas as { nome: string } | null)?.nome ?? null;
+  const placa = (detail?.caminhoes as { placa: string } | null)?.placa ?? null;
+  const rota = (detail?.rotas as { nome: string } | null)?.nome ?? null;
+  const statusOrdem = (detail as { status_ordem?: string } | undefined)?.status_ordem ?? null;
+  const numeroOrdem =
+    (detail as { numero_ordem?: string | null } | undefined)?.numero_ordem ??
+    detail?.codigo?.replace(/^PV-/, "") ??
+    detail?.codigo ??
+    null;
+  const statusLabel = statusOrdem
+    ? (STATUS_ORDEM_LABEL[statusOrdem as StatusOrdem] ?? statusOrdem)
+    : detail?.status === "carregando"
       ? "Em carregamento"
       : detail?.status === "concluida"
         ? "Concluída"
         : detail?.status === "aguardando"
           ? "Aguardando"
           : detail?.status ?? "";
+  const podeConferir =
+    !!activeId &&
+    (!statusOrdem || statusOrdem === "importada" || statusOrdem === "conferida") &&
+    detail?.status !== "concluida";
+  const saidaBloqueada =
+    statusOrdem === "em_transito" ||
+    statusOrdem === "entregue" ||
+    statusOrdem === "entregue_parcial" ||
+    statusOrdem === "recusada";
 
   return (
     <div>
@@ -602,6 +800,22 @@ function Page() {
 
       <EntregasPendentesCard />
 
+      {cargasSemCliente.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 flex gap-2">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          <div>
+            <strong>{cargasSemCliente.length} carga(s) sem loja</strong>
+            {" — "}
+            {cargasSemCliente
+              .slice(0, 5)
+              .map((c) => c.numero_ordem || c.codigo)
+              .join(", ")}
+            {cargasSemCliente.length > 5 ? ` +${cargasSemCliente.length - 5}` : ""}
+            . Abra a carga e vincule o supermercado (ou use Saída para a loja).
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row flex-wrap items-stretch md:items-center gap-2 md:gap-3 mb-4">
         <Select value={activeId ?? ""} onValueChange={setSelectedId}>
           <SelectTrigger className="w-full md:w-[280px] h-11 lg:h-9">
@@ -610,7 +824,10 @@ function Page() {
           <SelectContent>
             {cargas.map((c) => (
               <SelectItem key={c.id} value={c.id}>
-                {c.codigo} · {one(c.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? "—"} ({c.status})
+                {c.numero_ordem || c.codigo} · {c.cliente_nome || "Sem loja"}
+                {c.status_ordem
+                  ? ` (${STATUS_ORDEM_LABEL[c.status_ordem as StatusOrdem] ?? c.status_ordem})`
+                  : ` (${c.status})`}
               </SelectItem>
             ))}
           </SelectContent>
@@ -675,7 +892,11 @@ function Page() {
               <div className="p-4 sm:p-5 border-b border-border">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <h2 className="text-base sm:text-lg font-bold text-navy">{clienteNome}</h2>
-                  <span className="chip chip-info">{statusLabel}</span>
+                  {statusOrdem ? (
+                    <StatusOrdemBadge status={statusOrdem} />
+                  ) : (
+                    <span className="chip chip-info">{statusLabel}</span>
+                  )}
                   {activeId && (
                     <Link
                       to="/expedicao/rotas"
@@ -686,131 +907,106 @@ function Page() {
                     </Link>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                  <span className="chip chip-muted text-xs">🚚 {placa}</span>
-                  <span className="chip chip-muted text-xs">👤 {motorista}</span>
-                  <span className="chip chip-muted text-xs hidden sm:inline-flex">📍 Rota {rota}</span>
-                  <span className="chip chip-muted text-xs">⏱ {formatTime(detail?.hora_inicio)}</span>
+                <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
+                  {numeroOrdem && (
+                    <span className="chip chip-muted text-xs tabular-nums">OS {numeroOrdem}</span>
+                  )}
+                  {placa && placa !== "—" && (
+                    <span className="chip chip-muted text-xs">Placa {placa}</span>
+                  )}
+                  {motorista && motorista !== "—" && (
+                    <span className="chip chip-muted text-xs">Motorista {motorista}</span>
+                  )}
+                  {rota && rota !== "—" && (
+                    <span className="chip chip-muted text-xs hidden sm:inline-flex">Rota {rota}</span>
+                  )}
+                  {detail?.hora_inicio && (
+                    <span className="chip chip-muted text-xs">Início {formatTime(detail.hora_inicio)}</span>
+                  )}
                   <span className="chip chip-teal text-xs">
-                    {totalItens} itens · {realCaixas.G + realCaixas.I + realCaixas.P} cx
+                    {totalItens} itens · {totalRealCx} cx
                   </span>
                 </div>
-              </div>
-
-              <div className="divide-y divide-border">
-                {familias.map((fam, fi) => (
-                  <div key={fam.familia}>
-                    <div className="px-4 sm:px-5 py-2 bg-secondary/50 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Família {fi + 1} · {fam.familia}
+                {statusOrdem && <FluxoOrdemStepper status={statusOrdem} compact />}
+                {activeId && (
+                  <ProximoPassoLinks
+                    statusOrdem={statusOrdem}
+                    cargaId={activeId}
+                    clienteId={detail?.cliente_id}
+                  />
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    className="min-h-11 lg:min-h-9"
+                    disabled={!podeConferir || conferirPedido.isPending || saidaBloqueada}
+                    onClick={handleConferirPedido}
+                  >
+                    <CheckCircle2 size={14} className="mr-1" /> Conferir pedido
+                  </Button>
+                </div>
+                {itensSemFator.length > 0 && (
+                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                    <strong>Sem conversão ({itensSemFator.length})</strong>
+                    {": "}
+                    {itensSemFator.slice(0, 4).join(", ")}
+                    {itensSemFator.length > 4 ? ` +${itensSemFator.length - 4}` : ""}
+                    {" — "}
+                    <Link to="/gestao/produtos" className="underline font-medium">
+                      cadastrar em Produtos
+                    </Link>
+                  </div>
+                )}
+                {!detail?.cliente_id && (
+                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                      <div>
+                        <strong>Carga sem loja vinculada</strong>
+                        {" — "}vincule o supermercado para aparecer na Saída para a loja.
+                        {detail?.cliente_cnpj ? ` CNPJ: ${detail.cliente_cnpj}` : null}
+                      </div>
                     </div>
-                    
-                    {/* Mobile: Card view */}
-                    <div className="lg:hidden p-3 md:p-4 space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
-                      {fam.itens.map((it) => (
-                        <div key={it.id} className="mobile-item-card">
-                          <div className="flex items-start justify-between gap-2 mb-3">
-                            <div className="font-semibold text-navy text-sm">{it.produto}</div>
-                            <div>
-                              {it.status === "ok" && <span className="chip chip-ok">OK</span>}
-                              {it.status === "corrigido" && (
-                                <span className="chip chip-warn">
-                                  {it.real > it.romaneio ? `+${it.real - it.romaneio}` : `−${it.romaneio - it.real}`}
-                                </span>
-                              )}
-                              {it.status === "pendente" && <span className="chip chip-muted">Pendente</span>}
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3 mb-3">
-                            <div>
-                              <div className="text-xs text-muted-foreground mb-1">Romaneio</div>
-                              <div className="font-bold text-navy text-lg">{it.romaneio}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs text-muted-foreground mb-1">Real</div>
-                              <NumberStepper
-                                value={it.real}
-                                onChange={(v) => updateReal(it.id, it.romaneio, v)}
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-muted-foreground mb-1.5">Caixas</div>
-                            <div className="flex flex-wrap gap-2">
-                              {(tiposCx.length ? tiposCx.map((t) => t.sigla) : (["G", "I", "P"] as const)).map((k) => (
-                                <div key={k} className="flex items-center gap-1.5">
-                                  <span className="text-xs font-bold text-muted-foreground">{k}</span>
-                                  <NumberStepper
-                                    size="sm"
-                                    width="w-14"
-                                    value={it.caixas[k] ?? 0}
-                                    onChange={(v) => updateCaixaItem(it.id, k, it.caixas, v)}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Desktop: Table view */}
-                    <div className="hidden lg:block overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="text-xs text-muted-foreground uppercase tracking-wider">
-                          <tr>
-                            <th className="text-left px-5 py-2">Produto</th>
-                            <th className="text-right px-3 py-2">Romaneio</th>
-                            <th className="text-center px-3 py-2">Real</th>
-                            <th className="text-center px-3 py-2">Caixas {tiposCx.map((t) => t.sigla).join(" / ") || "G / I / P"}</th>
-                            <th className="text-right px-5 py-2">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fam.itens.map((it) => (
-                            <tr key={it.id} className="border-t border-border">
-                              <td className="px-5 py-3 font-semibold text-navy">{it.produto}</td>
-                              <td className="px-3 py-3 text-right text-ink">{it.romaneio}</td>
-                              <td className="px-3 py-3">
-                                <NumberStepper
-                                  size="sm"
-                                  value={it.real}
-                                  onChange={(v) => updateReal(it.id, it.romaneio, v)}
-                                />
-                              </td>
-                              <td className="px-3 py-3">
-                                <div className="flex items-center justify-center gap-2">
-                                  {(tiposCx.length ? tiposCx.map((t) => t.sigla) : (["G", "I", "P"] as const)).map((k) => (
-                                    <div key={k} className="flex items-center gap-1">
-                                      <span className="text-xs font-bold text-muted-foreground w-3">{k}</span>
-                                      <NumberStepper
-                                        size="sm"
-                                        width="w-8"
-                                        value={it.caixas[k] ?? 0}
-                                        onChange={(v) => updateCaixaItem(it.id, k, it.caixas, v)}
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="px-5 py-3 text-right">
-                                {it.status === "ok" && <span className="chip chip-ok">OK</span>}
-                                {it.status === "corrigido" && (
-                                  <span className="chip chip-warn">
-                                    {it.real > it.romaneio
-                                      ? `Sobra +${it.real - it.romaneio}`
-                                      : `Corrigido −${it.romaneio - it.real}`}
-                                  </span>
-                                )}
-                                {it.status === "pendente" && <span className="chip chip-muted">Pendente</span>}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="w-56">
+                        <SeletorCadastro
+                          tipo="cliente"
+                          value={null}
+                          placeholder="Vincular supermercado…"
+                          onChange={(id) => {
+                            if (!id || !activeId) return;
+                            vincularCliente.mutate(
+                              { carga_id: activeId, cliente_id: id },
+                              {
+                                onSuccess: (r) =>
+                                  toast.success(`Loja vinculada: ${r.cliente_nome}`),
+                                onError: (e) =>
+                                  toast.error(e instanceof Error ? e.message : "Erro ao vincular"),
+                              },
+                            );
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
+
+              <RomaneioListaEnxuta
+                familias={familiasEnxutas}
+                siglas={siglasCx}
+                onEdit={(it) => setEditingItemId(it.id)}
+              />
+              <EditarItemDialog
+                item={editingItem}
+                siglas={siglasCx}
+                open={!!editingItemId}
+                onOpenChange={(o) => {
+                  if (!o) setEditingItemId(null);
+                }}
+                onSave={handleSaveItemEdit}
+                saving={updateItem.isPending}
+              />
             </>
           )}
         </div>
@@ -858,20 +1054,20 @@ function Page() {
               <tbody>
                 {(tiposCx.length ? tiposCx : [{ sigla: "G", nome: "Grande" }, { sigla: "I", nome: "Isopor" }, { sigla: "P", nome: "Plástica" }]).map((t) => {
                   const k = t.sigla;
-                  const diff = (realCaixas[k] ?? 0) - (sugCaixas[k] ?? 0);
+                  const diff = safeNum(realCaixas[k]) - safeNum(sugCaixas[k]);
                   return (
                     <tr key={k} className="border-t border-border">
                       <td className="py-2 font-semibold text-navy">
                         {t.nome}
                       </td>
-                      <td className="py-2 text-right text-muted-foreground">{sugCaixas[k] ?? 0}</td>
+                      <td className="py-2 text-right text-muted-foreground">{safeNum(sugCaixas[k])}</td>
                       <td className="py-2">
                         <NumberStepper
                           size="sm"
-                          value={realCaixas[k] ?? 0}
+                          value={safeNum(realCaixas[k])}
                           onChange={(v) => {
                             setRealTouched(true);
-                            const next = { ...realCaixas, [k]: v };
+                            const next = { ...realCaixas, [k]: safeNum(v) };
                             setRealCaixas(next);
                             persistResumo(next);
                           }}
@@ -892,10 +1088,10 @@ function Page() {
                 <tr className="border-t border-border bg-secondary/30">
                   <td className="py-2 font-bold text-navy">Total</td>
                   <td className="py-2 text-right text-muted-foreground">
-                    {sugCaixas.G + sugCaixas.I + sugCaixas.P}
+                    {totalSugCx}
                   </td>
                   <td className="py-2 text-center font-bold text-navy">
-                    {realCaixas.G + realCaixas.I + realCaixas.P}
+                    {totalRealCx}
                   </td>
                   <td className="py-2 text-right" />
                 </tr>
@@ -903,42 +1099,72 @@ function Page() {
             </table>
           </div>
           <button
-            onClick={handleFinalizar}
-            disabled={finalizar.isPending || detail?.status === "concluida"}
-            className="mt-5 w-full inline-flex items-center justify-center gap-2 h-11 rounded-lg bg-primary text-primary-foreground font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+            onClick={handleConferirPedido}
+            disabled={!podeConferir || conferirPedido.isPending || saidaBloqueada}
+            className="mt-5 w-full inline-flex items-center justify-center gap-2 h-11 rounded-lg border border-primary text-primary font-bold hover:bg-primary-soft active:scale-[0.99] transition disabled:opacity-50"
           >
-            <CheckCircle2 size={16} /> Finalizar carga
+            <CheckCircle2 size={16} /> Conferir pedido
+          </button>
+          <button
+            onClick={handleFinalizar}
+            disabled={finalizar.isPending || detail?.status === "concluida" || saidaBloqueada}
+            className="mt-2 w-full inline-flex items-center justify-center gap-2 h-11 rounded-lg bg-primary text-primary-foreground font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
+          >
+            <Package size={16} /> Finalizar carga
           </button>
           <p className="text-xs text-muted-foreground text-center mt-2">
-            Registra as <strong>caixas reais enviadas</strong> no Controle de Caixas
+            Conferir preenche real = romaneio e caixas por fator. Finalizar promove a Em carga.
           </p>
         </div>
       </div>
 
       <div className="mt-5 sm:mt-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-          <h3 className="text-sm font-bold text-navy flex items-center gap-2">
-            <Truck size={14} /> Outras cargas hoje
-          </h3>
-          <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary/50 overflow-x-auto">
-            {(
-              [
-                ["todas", "Todas"],
-                ["carregando", "Carregando"],
-                ["aguardando", "Aguardando"],
-                ["concluida", "Finalizadas"],
-              ] as const
-            ).map(([k, l]) => (
-              <button
-                key={k}
-                onClick={() => setTab(k)}
-                className={`px-3 h-8 sm:h-7 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${
-                  tab === k ? "bg-card text-navy shadow-sm" : "text-muted-foreground hover:text-navy"
-                }`}
-              >
-                {l}
-              </button>
-            ))}
+        <div className="flex flex-col gap-3 mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h3 className="text-sm font-bold text-navy flex items-center gap-2">
+              <Truck size={14} /> Outras cargas hoje
+            </h3>
+            <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary/50 overflow-x-auto">
+              {(
+                [
+                  ["todas", "Todas"],
+                  ["carregando", "Carregando"],
+                  ["aguardando", "Aguardando"],
+                  ["concluida", "Finalizadas"],
+                ] as const
+              ).map(([k, l]) => (
+                <button
+                  key={k}
+                  onClick={() => setTab(k)}
+                  className={`px-3 h-8 sm:h-7 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${
+                    tab === k ? "bg-card text-navy shadow-sm" : "text-muted-foreground hover:text-navy"
+                  }`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Select value={filtroRota} onValueChange={setFiltroRota}>
+              <SelectTrigger className="w-full sm:w-[200px] h-11 lg:h-9">
+                <SelectValue placeholder="Filtrar rota" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as rotas</SelectItem>
+                {rotasDisponiveis.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              className="h-11 lg:h-9"
+              placeholder="Buscar loja ou nº OS…"
+              value={buscaCarga}
+              onChange={(e) => setBuscaCarga(e.target.value)}
+            />
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -948,8 +1174,10 @@ function Page() {
             </div>
           )}
           {cargasFiltradas.map((c) => {
-            const nome = one(c.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
-            const mot = one(c.motoristas as { nome: string } | { nome: string }[] | null)?.nome ?? "—";
+            const nome = c.cliente_nome || one(c.clientes as { nome: string } | { nome: string }[] | null)?.nome || "Sem loja vinculada";
+            const mot = c.motorista_nome || one(c.motoristas as { nome: string } | { nome: string }[] | null)?.nome || null;
+            const rotaNome = c.rota_nome || one(c.rotas as { nome: string } | { nome: string }[] | null)?.nome || null;
+            const numOs = c.numero_ordem || c.codigo?.replace(/^PV-/, "") || c.codigo;
             const active = c.id === activeId;
             return (
               <button
@@ -958,18 +1186,32 @@ function Page() {
                 onClick={() => setSelectedId(c.id)}
                 className={`card-base p-4 text-left transition ring-2 ${active ? "ring-primary" : "ring-transparent"}`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-muted-foreground">{c.codigo}</span>
-                  {c.status === "concluida" && <span className="chip chip-ok">Concluída</span>}
-                  {c.status === "carregando" && <span className="chip chip-info">Carregando</span>}
-                  {c.status === "aguardando" && <span className="chip chip-warn">Aguardando</span>}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-xs font-bold text-muted-foreground tabular-nums">
+                    OS {numOs}
+                  </span>
+                  {c.status_ordem ? (
+                    <StatusOrdemBadge status={c.status_ordem} />
+                  ) : (
+                    <>
+                      {c.status === "concluida" && <span className="chip chip-ok">Concluída</span>}
+                      {c.status === "carregando" && <span className="chip chip-info">Carregando</span>}
+                      {c.status === "aguardando" && <span className="chip chip-warn">Aguardando</span>}
+                    </>
+                  )}
                 </div>
                 <div className="font-bold text-navy text-sm">{nome}</div>
-                <div className="text-xs text-muted-foreground mt-1">{mot}</div>
+                <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                  {rotaNome && <div>Rota {rotaNome}</div>}
+                  {mot && <div>Motorista {mot}</div>}
+                  <div>
+                    {Number(c.total_linhas ?? 0)} itens · {Number(c.total_caixas ?? 0)} cx
+                  </div>
+                </div>
                 <div className="mt-3 h-1.5 rounded-full bg-secondary overflow-hidden">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${Number(c.progresso)}%`, background: "var(--primary)" }}
+                    style={{ width: `${Number(c.progresso ?? 0)}%`, background: "var(--primary)" }}
                   />
                 </div>
               </button>

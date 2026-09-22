@@ -5,6 +5,14 @@ import { PageHeader } from "@/components/page-header";
 import { Input } from "@/components/ui/input";
 import { formatDateBRT, formatTime } from "@/lib/utils-date";
 import { useRastreio, type RastreioCaixa } from "@/hooks/use-rastreio";
+import {
+  useDivergenciasExpedicao,
+  type DivergenciaExpedicao,
+} from "@/hooks/use-divergencias-expedicao";
+import {
+  FluxoOrdemStepper,
+  StatusOrdemBadge,
+} from "@/components/expedicao/fluxo-ordem";
 import { STATUS_ORDEM_LABEL, type StatusOrdem } from "@/hooks/use-ordem-expedicao";
 
 export const Route = createFileRoute("/expedicao/rastreio")({
@@ -146,9 +154,73 @@ function CaixaCard({ cx }: { cx: RastreioCaixa }) {
   );
 }
 
+function DivergenciaCard({ d }: { d: DivergenciaExpedicao }) {
+  const hasDiv =
+    Number(d.divergencia_separacao_saida) !== 0 || Number(d.divergencia_saida_entrega) !== 0;
+  return (
+    <div className="card-base p-4 space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="font-bold text-navy tabular-nums">OS {d.numero_ordem}</div>
+          <div className="text-sm text-ink">{d.cliente_nome}</div>
+        </div>
+        <StatusOrdemBadge status={d.status_ordem} />
+      </div>
+      <FluxoOrdemStepper status={d.status_ordem} compact />
+      <div className="text-xs text-muted-foreground space-y-0.5">
+        {d.romaneio_conferido_em && (
+          <div>
+            Conferido {formatDateBRT(d.romaneio_conferido_em)} às {formatTime(d.romaneio_conferido_em)}
+            {d.romaneio_conferido_por_nome ? ` · ${d.romaneio_conferido_por_nome}` : ""}
+            {` · ${Number(d.caixas_romaneio_real)} cx`}
+          </div>
+        )}
+        {d.separado_em && (
+          <div>
+            Em carga {formatDateBRT(d.separado_em)} às {formatTime(d.separado_em)}
+            {` · ${Number(d.caixas_separadas)} cx`}
+          </div>
+        )}
+        {d.saida_conferida_em && (
+          <div>
+            Saída {formatDateBRT(d.saida_conferida_em)} às {formatTime(d.saida_conferida_em)}
+            {d.saida_conferida_por_nome ? ` · ${d.saida_conferida_por_nome}` : ""}
+            {` · ${Number(d.caixas_saida)} cx`}
+          </div>
+        )}
+        {d.entregue_em && (
+          <div>
+            Entrega {formatDateBRT(d.entregue_em)} às {formatTime(d.entregue_em)}
+            {` · ${Number(d.caixas_entregues)} entregue(s)`}
+            {Number(d.caixas_recusadas) > 0 ? ` · ${Number(d.caixas_recusadas)} recusada(s)` : ""}
+          </div>
+        )}
+      </div>
+      {hasDiv && (
+        <div className="rounded-md bg-amber-50 border border-amber-200 text-amber-950 text-xs px-3 py-2">
+          Divergências:{" "}
+          {Number(d.divergencia_separacao_saida) !== 0 && (
+            <span className="mr-2">
+              separação×saída {Number(d.divergencia_separacao_saida) > 0 ? "+" : ""}
+              {Number(d.divergencia_separacao_saida)}
+            </span>
+          )}
+          {Number(d.divergencia_saida_entrega) !== 0 && (
+            <span>
+              saída×entrega {Number(d.divergencia_saida_entrega) > 0 ? "+" : ""}
+              {Number(d.divergencia_saida_entrega)}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Page() {
   const [busca, setBusca] = useState("");
   const { data: caixas = [], isLoading } = useRastreio(busca);
+  const { data: divergencias = [] } = useDivergenciasExpedicao(busca);
 
   const porOrdem = new Map<string, RastreioCaixa[]>();
   for (const cx of caixas) {
@@ -157,11 +229,13 @@ function Page() {
     porOrdem.set(cx.numero_ordem, lista);
   }
 
+  const divPorOrdem = new Map(divergencias.map((d) => [d.numero_ordem, d]));
+
   return (
     <div className="w-full max-w-3xl mx-auto">
       <PageHeader
         title="Rastreio"
-        subtitle="Busque por ordem, caixa ou supermercado e veja quem fez o quê"
+        subtitle="Etapas, responsáveis e divergências conferido × saída × entrega"
         actions={
           <Link
             to="/expedicao"
@@ -186,10 +260,19 @@ function Page() {
       </div>
 
       {isLoading && <p className="text-sm text-muted-foreground">Buscando…</p>}
-      {!isLoading && caixas.length === 0 && (
+      {!isLoading && caixas.length === 0 && divergencias.length === 0 && (
         <p className="text-sm text-muted-foreground">
           Nenhuma caixa encontrada. As caixas aparecem aqui depois da separação da ordem.
         </p>
+      )}
+
+      {divergencias.length > 0 && caixas.length === 0 && (
+        <div className="space-y-3 mb-5">
+          <h2 className="text-sm font-semibold text-navy">Fluxo das ordens</h2>
+          {divergencias.map((d) => (
+            <DivergenciaCard key={d.carga_id} d={d} />
+          ))}
+        </div>
       )}
 
       <div className="space-y-5">
@@ -198,6 +281,7 @@ function Page() {
             <h2 className="text-sm font-semibold text-navy flex items-center gap-2">
               <Boxes size={14} /> Ordem {ordem} · {lista.length} caixa(s)
             </h2>
+            {divPorOrdem.get(ordem) && <DivergenciaCard d={divPorOrdem.get(ordem)!} />}
             {lista.map((cx) => (
               <CaixaCard key={cx.caixa_id} cx={cx} />
             ))}

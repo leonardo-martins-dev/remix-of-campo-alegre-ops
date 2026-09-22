@@ -26,6 +26,9 @@ export type SolicitacaoVale = {
   lancado_em: string | null;
   lancado_por: string | null;
   ref_wise: string | null;
+  /** NOP-308: vale já no Wise após edição da conferência */
+  precisa_revisao_adm?: boolean;
+  revisao_motivo?: string | null;
   created_at: string;
   updated_at: string;
   fornecedores?: { nome: string } | null;

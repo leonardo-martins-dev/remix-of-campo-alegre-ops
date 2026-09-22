@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { FluxoPassos } from "@/components/fluxo-passos";
 import { TableWrapper } from "@/components/table-wrapper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +48,6 @@ import {
 import {
   usePosicoesPendentes,
   useFornecedoresAbaixoMinimo,
-  useDivergenciasPendentes,
   useTotalGeralCaixas,
   useMinimosEstoque,
   useSaveMinimoEstoque,
@@ -131,6 +131,10 @@ function Page() {
           </div>
         }
       />
+      <FluxoPassos
+        steps={["Visão geral", "Contagem", "Modo campo"]}
+        current={view === "visao_geral" ? 1 : view === "painel" ? 2 : 3}
+      />
       {view === "visao_geral" ? (
         <VisaoGeralInventario />
       ) : view === "campo" ? (
@@ -148,7 +152,6 @@ function VisaoGeralInventario() {
   const { data: totais = [] } = useTotalGeralCaixas();
   const { data: pendentes = [] } = usePosicoesPendentes();
   const { data: abaixoMinimo = [] } = useFornecedoresAbaixoMinimo();
-  const { data: divergencias = [] } = useDivergenciasPendentes();
   const { data: saldos = [] } = useSaldosCaixa();
 
   const saldoPorPosicaoTipo = useMemo(() => {
@@ -175,10 +178,6 @@ function VisaoGeralInventario() {
     }
     return { qty, valor };
   }, [totais]);
-
-  const totalValorFaltando = useMemo(() => {
-    return abaixoMinimo.reduce((a, b) => a + b.valor_faltando, 0);
-  }, [abaixoMinimo]);
 
   const posicoesPorTipo = useMemo(() => {
     const m: Record<string, typeof pendentes> = { galpao: [], fornecedor: [], cliente: [] };
@@ -218,60 +217,6 @@ function VisaoGeralInventario() {
 
       {/* NOP-158: pendência do inventário de embalagens junto com a de caixas */}
       <PendenciasInventarioSemanal origem="caixas" />
-
-      {/* Alertas pendentes */}
-      {isAdmin && (pendentes.length > 0 || abaixoMinimo.length > 0 || divergencias.length > 0) && (
-        <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 space-y-3">
-          <h3 className="font-semibold text-danger flex items-center gap-2">
-            <AlertTriangle size={18} /> Alertas do ADM
-          </h3>
-          {pendentes.length > 0 && (
-            <div className="text-sm">
-              <p className="font-medium mb-1">
-                {pendentes.length} posição(ões) sem contagem há mais de 7 dias:
-              </p>
-              <ul className="list-disc list-inside text-muted-foreground">
-                {pendentes.slice(0, 5).map((p) => (
-                  <li key={p.posicao_id}>
-                    {p.posicao_nome} — {p.dias_desde_contagem} dias
-                  </li>
-                ))}
-                {pendentes.length > 5 && <li>e mais {pendentes.length - 5}...</li>}
-              </ul>
-            </div>
-          )}
-          {abaixoMinimo.length > 0 && (
-            <div className="text-sm">
-              <p className="font-medium mb-1">
-                {abaixoMinimo.length} fornecedor(es) abaixo do estoque mínimo:
-              </p>
-              <ul className="list-disc list-inside text-muted-foreground">
-                {abaixoMinimo.slice(0, 5).map((f, i) => (
-                  <li key={`${f.fornecedor_id}-${f.tipo_caixa}-${i}`}>
-                    {f.fornecedor_nome} — {f.tipo_caixa}: faltam {f.faltando} cx (R$ {f.valor_faltando.toFixed(0)})
-                  </li>
-                ))}
-                {abaixoMinimo.length > 5 && <li>e mais {abaixoMinimo.length - 5}...</li>}
-              </ul>
-            </div>
-          )}
-          {divergencias.length > 0 && (
-            <div className="text-sm">
-              <p className="font-medium mb-1">
-                {divergencias.length} divergência(s) pendente(s) de conciliação:
-              </p>
-              <ul className="list-disc list-inside text-muted-foreground">
-                {divergencias.slice(0, 5).map((d) => (
-                  <li key={d.contagem_id}>
-                    {d.posicao_nome} — {d.tipo_caixa}: {d.qtd_contada} contado vs {d.qtd_calculada} esperado ({d.diferenca > 0 ? "+" : ""}{d.diferenca})
-                  </li>
-                ))}
-                {divergencias.length > 5 && <li>e mais {divergencias.length - 5}...</li>}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Total por tipo de caixa */}
       <div className="card-base p-5">
@@ -353,50 +298,6 @@ function VisaoGeralInventario() {
           );
         })}
       </div>
-
-      {/* Fornecedores abaixo do mínimo */}
-      {abaixoMinimo.length > 0 && (
-        <div className="card-base p-4">
-          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <AlertTriangle size={16} className="text-warning" />
-            Fornecedores abaixo do estoque mínimo
-          </h3>
-          <TableWrapper stickyFirstColumn>
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground uppercase">
-                <tr>
-                  <th className="text-left py-2 px-3 whitespace-nowrap">Fornecedor</th>
-                  <th className="text-center py-2 px-3 whitespace-nowrap">Tipo</th>
-                  <th className="text-right py-2 px-3 whitespace-nowrap">Mínimo</th>
-                  <th className="text-right py-2 px-3 whitespace-nowrap">Atual</th>
-                  <th className="text-right py-2 px-3 whitespace-nowrap">Faltam</th>
-                  <th className="text-right py-2 px-3 whitespace-nowrap">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {abaixoMinimo.map((f, i) => (
-                  <tr key={`${f.fornecedor_id}-${f.tipo_caixa}-${i}`} className="border-t">
-                    <td className="py-2 px-3 font-medium whitespace-nowrap">{f.fornecedor_nome}</td>
-                    <td className="py-2 px-3 text-center font-semibold">{f.tipo_caixa}</td>
-                    <td className="py-2 px-3 text-right">{f.qtd_minima}</td>
-                    <td className="py-2 px-3 text-right text-danger font-bold">{f.saldo_atual}</td>
-                    <td className="py-2 px-3 text-right text-danger font-bold">{f.faltando}</td>
-                    <td className="py-2 px-3 text-right whitespace-nowrap">{formatBRL(f.valor_faltando)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-secondary/30">
-                <tr>
-                  <td colSpan={5} className="py-2 px-3 text-right font-bold">Total faltando:</td>
-                  <td className="py-2 px-3 text-right font-bold text-danger whitespace-nowrap">
-                    {formatBRL(totalValorFaltando)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </TableWrapper>
-        </div>
-      )}
 
       {/* Configurar estoque mínimo - apenas ADM */}
       {isAdmin && <ConfigurarMinimoEstoque />}

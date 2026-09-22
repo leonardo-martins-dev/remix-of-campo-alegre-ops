@@ -5,20 +5,39 @@ import { todayBRT } from "@/lib/utils-date";
 
 export type StatusOrdem =
   | "importada"
+  | "conferida"
   | "separada"
   | "em_transito"
   | "entregue"
   | "entregue_parcial"
   | "recusada";
 
+/** Cadeia NOP-300: Importado → Conferido → Em carga → Saída confirmada → Entregue */
 export const STATUS_ORDEM_LABEL: Record<StatusOrdem, string> = {
-  importada: "Importada",
-  separada: "Separada",
-  em_transito: "Em trânsito",
+  importada: "Importado",
+  conferida: "Conferido",
+  separada: "Em carga",
+  em_transito: "Saída confirmada",
   entregue: "Entregue",
   entregue_parcial: "Entregue parcial",
   recusada: "Recusada",
 };
+
+export const STATUS_ORDEM_CHAIN: StatusOrdem[] = [
+  "importada",
+  "conferida",
+  "separada",
+  "em_transito",
+  "entregue",
+];
+
+export function statusOrdemChip(status: string | null | undefined): string {
+  if (status === "entregue") return "chip-ok";
+  if (status === "em_transito") return "chip-info";
+  if (status === "separada" || status === "conferida") return "chip-warn";
+  if (status === "entregue_parcial" || status === "recusada") return "chip-danger";
+  return "chip-muted";
+}
 
 export type OrdemExpedicao = {
   carga_id: string;
@@ -27,7 +46,7 @@ export type OrdemExpedicao = {
   data_carga: string;
   status_ordem: StatusOrdem;
   status_separacao: string | null;
-  cliente_id: string;
+  cliente_id: string | null;
   cliente_nome: string;
   cliente_cnpj: string | null;
   motorista_id: string | null;
@@ -38,6 +57,8 @@ export type OrdemExpedicao = {
   separado_em: string | null;
   conferido_por_nome: string | null;
   conferido_em: string | null;
+  romaneio_conferido_por_nome?: string | null;
+  romaneio_conferido_em?: string | null;
   entregue_por_nome: string | null;
   entregue_em: string | null;
   recebedor_nome: string | null;

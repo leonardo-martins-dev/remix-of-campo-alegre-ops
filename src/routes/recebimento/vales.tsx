@@ -543,6 +543,18 @@ function ValeCard({
                 Ver conferência →
               </Link>
             )}
+            {vale.precisa_revisao_adm && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="chip chip-danger" title={vale.revisao_motivo ?? undefined}>
+                  Revisão ADM
+                </span>
+                {vale.revisao_motivo && (
+                  <span className="text-[11px] text-muted-foreground line-clamp-2">
+                    {vale.revisao_motivo}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="text-left sm:text-right shrink-0">
@@ -588,6 +600,11 @@ function ValeCard({
           {vale.lancado_por_profile?.nome && <span>Lançado por: {vale.lancado_por_profile.nome}</span>}
           {vale.lancado_em && <span>em {formatDateBRT(vale.lancado_em)}</span>}
           {vale.ref_wise && <span className="chip chip-info">Ref: {vale.ref_wise}</span>}
+          {vale.precisa_revisao_adm && (
+            <span className="chip chip-warn" title={vale.revisao_motivo ?? undefined}>
+              Revisar ADM
+            </span>
+          )}
         </div>
       )}
 

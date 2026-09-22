@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { CalendarClock, Package, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { FluxoPassos } from "@/components/fluxo-passos";
 import { TableWrapper } from "@/components/table-wrapper";
 import { NumberStepper } from "@/components/number-stepper";
 import { PendenciasInventarioSemanal } from "@/components/pendencias-inventario-semanal";
@@ -52,26 +53,38 @@ function Page() {
         title="Inventário de embalagens"
         subtitle="Contagem semanal no Packing — fecha toda sexta-feira. Sem esperado × contado: a variação entre semanas é o consumo aparente."
         actions={
-          <div className="flex gap-1">
-            <button
-              type="button"
-              onClick={() => setView("contagem")}
-              className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "contagem" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/embalagens/saldo"
+              className="inline-flex items-center h-9 px-3 rounded-md text-xs font-semibold text-muted-foreground hover:bg-secondary"
             >
-              Contagem
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("historico")}
-              className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "historico" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
-            >
-              Histórico e ajustes
-            </button>
+              Ver saldo
+            </Link>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setView("contagem")}
+                className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "contagem" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+              >
+                Contagem
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("historico")}
+                className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "historico" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+              >
+                Histórico e ajustes
+              </button>
+            </div>
           </div>
         }
       />
 
       <div className="space-y-5">
+        <FluxoPassos
+          steps={["Contagem", "Histórico"]}
+          current={view === "contagem" ? 1 : 2}
+        />
         <StatusStrip />
         <PendenciasInventarioSemanal origem="embalagens" />
         {view === "contagem" ? <ContagemView /> : <HistoricoView />}

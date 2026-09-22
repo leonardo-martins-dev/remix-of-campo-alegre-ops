@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { SemConversaoSelo } from "@/components/sem-conversao-selo";
 import type { TipoCaixa } from "@/lib/caixas-map";
 import type { SugestaoItem } from "@/hooks/use-sugestao-caixas";
 
@@ -27,6 +28,7 @@ type CaixasItemEditorProps = {
   tipos: TipoCaixa[];
   sugestao?: SugestaoItem;
   readOnly?: boolean;
+  produtoId?: string | null;
 };
 
 export function CaixasItemEditor({
@@ -35,6 +37,7 @@ export function CaixasItemEditor({
   tipos,
   sugestao,
   readOnly = false,
+  produtoId,
 }: CaixasItemEditorProps) {
   const [addOpen, setAddOpen] = useState(false);
 
@@ -77,7 +80,7 @@ export function CaixasItemEditor({
   );
 
   if (entries.length === 0 && sugestao?.sem_conversao && readOnly) {
-    return <span className="text-xs text-muted-foreground italic">sem fator</span>;
+    return <SemConversaoSelo faltaFornecedor compact />;
   }
 
   if (entries.length === 0 && readOnly) {
@@ -87,9 +90,7 @@ export function CaixasItemEditor({
   if (entries.length === 0) {
     return (
       <div className="flex flex-col gap-0.5 items-start">
-        {sugestao?.sem_conversao ? (
-          <span className="text-[10px] text-amber-700 leading-tight">Sem fator un/cx</span>
-        ) : null}
+        {sugestao?.sem_conversao ? <SemConversaoSelo faltaFornecedor compact /> : null}
         <Popover open={addOpen} onOpenChange={setAddOpen}>
           <PopoverTrigger asChild>
             <button

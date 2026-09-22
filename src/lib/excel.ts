@@ -34,6 +34,28 @@ export function exportToExcel(filename: string, sheetName: string, data: Record<
   XLSX.writeFile(wb, filename);
 }
 
+/** CSV UTF-8 com BOM para abrir bem no Excel (pt-BR). */
+export function exportToCsv(filename: string, data: Record<string, unknown>[]) {
+  if (!data.length) return;
+  const keys = Object.keys(data[0]);
+  const esc = (v: unknown) => {
+    const s = v == null ? "" : String(v);
+    if (/[;"\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const lines = [
+    keys.join(";"),
+    ...data.map((row) => keys.map((k) => esc(row[k])).join(";")),
+  ];
+  const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function buildPedidosFromExcel(
   rows: ExcelPedidoRow[],
   maps: {

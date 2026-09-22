@@ -76,7 +76,7 @@ export function useRegistrarQuebra() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (payload: {
-      fornecedor_id: string;
+      fornecedor_id: string | null;
       registrado_por: string;
       observacao?: string;
       itens: {
@@ -97,7 +97,7 @@ export function useRegistrarQuebra() {
           fornecedor_id: payload.fornecedor_id,
           registrado_por: payload.registrado_por,
           observacao: payload.observacao ?? null,
-          status: "registrado",
+          status: payload.fornecedor_id ? "registrado" : "origem_nao_identificada",
         })
         .select()
         .single();
@@ -118,6 +118,23 @@ export function useRegistrarQuebra() {
       );
       if (iErr) throw iErr;
       return laudo;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quebras"] }),
+  });
+}
+
+export function useVincularFornecedorQuebra() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { quebraId: string; fornecedorId: string }) => {
+      const { error } = await supabase
+        .from("quebras")
+        .update({
+          fornecedor_id: payload.fornecedorId,
+          status: "registrado",
+        })
+        .eq("id", payload.quebraId);
+      if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["quebras"] }),
   });
