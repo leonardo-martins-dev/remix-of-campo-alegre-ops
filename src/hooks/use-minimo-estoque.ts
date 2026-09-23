@@ -18,8 +18,21 @@ export type FornecedorAbaixoMinimo = {
   qtd_minima: number;
   saldo_atual: number;
   faltando: number;
+  /** Caixas a enviar para voltar ao mínimo (NOP-323) */
+  enviar_qtd?: number;
+  /** Texto acionável, ex.: "Enviar 12 caixa(s) tipo VM" */
+  acao?: string;
   custo_unitario: number;
   valor_faltando: number;
+};
+
+export type GiroFornecedorCaixa = {
+  fornecedor_id: string;
+  tipo_caixa: string;
+  total_movimentado: number;
+  periodo_dias: number;
+  media_diaria: number;
+  sugestao_minimo: number;
 };
 
 export type PosicaoPendente = {
@@ -80,6 +93,39 @@ export type TotalGeralCaixas = {
   valor_total: number;
 };
 
+async function upsertMinimo(payload: {
+  fornecedor_id: string;
+  tipo_caixa: string;
+  qtd_minima: number;
+}) {
+  const { data: existing } = await supabase
+    .from("minimo_estoque_fornecedor_caixa")
+    .select("id")
+    .eq("fornecedor_id", payload.fornecedor_id)
+    .eq("tipo_caixa", payload.tipo_caixa)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("minimo_estoque_fornecedor_caixa")
+      .update({ qtd_minima: payload.qtd_minima, ativo: true })
+      .eq("id", existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from("minimo_estoque_fornecedor_caixa")
+      .insert(payload);
+    if (error) throw error;
+  }
+}
+
+function invalidateMinimoQueries(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["minimos-estoque"] });
+  qc.invalidateQueries({ queryKey: ["fornecedores-abaixo-minimo"] });
+  qc.invalidateQueries({ queryKey: ["painel-inventario"] });
+  qc.invalidateQueries({ queryKey: ["giro-fornecedor-caixa"] });
+}
+
 export function useMinimosEstoque(fornecedorId?: string) {
   return useQuery({
     queryKey: ["minimos-estoque", fornecedorId ?? "all"],
@@ -97,6 +143,19 @@ export function useMinimosEstoque(fornecedorId?: string) {
   });
 }
 
+export function useGiroFornecedorCaixa(fornecedorId?: string) {
+  return useQuery({
+    queryKey: ["giro-fornecedor-caixa", fornecedorId ?? "all"],
+    queryFn: async () => {
+      let q = supabase.from("v_giro_fornecedor_caixa").select("*").order("tipo_caixa");
+      if (fornecedorId) q = q.eq("fornecedor_id", fornecedorId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as GiroFornecedorCaixa[];
+    },
+  });
+}
+
 export function useSaveMinimoEstoque() {
   const qc = useQueryClient();
   return useMutation({
@@ -105,31 +164,23 @@ export function useSaveMinimoEstoque() {
       tipo_caixa: string;
       qtd_minima: number;
     }) => {
-      const { data: existing } = await supabase
-        .from("minimo_estoque_fornecedor_caixa")
-        .select("id")
-        .eq("fornecedor_id", payload.fornecedor_id)
-        .eq("tipo_caixa", payload.tipo_caixa)
-        .maybeSingle();
+      await upsertMinimo(payload);
+    },
+    onSuccess: () => invalidateMinimoQueries(qc),
+  });
+}
 
-      if (existing) {
-        const { error } = await supabase
-          .from("minimo_estoque_fornecedor_caixa")
-          .update({ qtd_minima: payload.qtd_minima, ativo: true })
-          .eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("minimo_estoque_fornecedor_caixa")
-          .insert(payload);
-        if (error) throw error;
+export function useSaveMinimosBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      items: { fornecedor_id: string; tipo_caixa: string; qtd_minima: number }[],
+    ) => {
+      for (const item of items) {
+        await upsertMinimo(item);
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["minimos-estoque"] });
-      qc.invalidateQueries({ queryKey: ["fornecedores-abaixo-minimo"] });
-      qc.invalidateQueries({ queryKey: ["painel-inventario"] });
-    },
+    onSuccess: () => invalidateMinimoQueries(qc),
   });
 }
 
@@ -143,11 +194,7 @@ export function useDeleteMinimoEstoque() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["minimos-estoque"] });
-      qc.invalidateQueries({ queryKey: ["fornecedores-abaixo-minimo"] });
-      qc.invalidateQueries({ queryKey: ["painel-inventario"] });
-    },
+    onSuccess: () => invalidateMinimoQueries(qc),
   });
 }
 

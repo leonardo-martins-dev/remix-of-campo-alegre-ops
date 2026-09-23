@@ -54,6 +54,7 @@ import {
   useMinimosEstoque,
   useSaveMinimoEstoque,
   useDeleteMinimoEstoque,
+  useGiroFornecedorCaixa,
 } from "@/hooks/use-minimo-estoque";
 import {
   ensurePosicao,
@@ -330,11 +331,15 @@ function ConfigurarMinimoEstoque() {
   const { data: fornecedoresAll = [] } = useFornecedores();
   const { data: tipos = [] } = useTiposCaixa();
   const { data: minimos = [] } = useMinimosEstoque();
+  const { data: giros = [] } = useGiroFornecedorCaixa();
   const saveMinimo = useSaveMinimoEstoque();
   const deleteMinimo = useDeleteMinimoEstoque();
   const [fornId, setFornId] = useState("");
   const [tipoSel, setTipoSel] = useState("");
   const [qtd, setQtd] = useState(0);
+  const giroSugestao = giros.find(
+    (g) => g.fornecedor_id === fornId && g.tipo_caixa === tipoSel,
+  )?.sugestao_minimo;
   const [pendingDesativar, setPendingDesativar] = useState<{ id: string; label: string } | null>(null);
 
   async function handleSave() {
@@ -389,6 +394,15 @@ function ConfigurarMinimoEstoque() {
             onChange={(e) => setQtd(parseInt(e.target.value) || 0)}
             className="mt-1 h-10 w-full sm:w-24"
           />
+          {giroSugestao != null && giroSugestao > 0 && (
+            <button
+              type="button"
+              className="text-[11px] text-muted-foreground underline mt-0.5"
+              onClick={() => setQtd(giroSugestao)}
+            >
+              Giro sugere {giroSugestao}
+            </button>
+          )}
         </div>
         <Button onClick={handleSave} disabled={saveMinimo.isPending} className="h-10 col-span-2 sm:col-span-1">
           Salvar

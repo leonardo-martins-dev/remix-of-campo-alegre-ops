@@ -23,8 +23,13 @@ import { useResolverPendencia, useResolverPendenciasFornecedorCertas } from "@/h
 import { useAuth } from "@/lib/auth";
 import { normalizeKey } from "@/lib/normalize";
 import { MesclarCadastrosPanel } from "@/components/gestao/mesclar-cadastros";
+import { EstoqueMinimoEditor } from "@/components/gestao/estoque-minimo-editor";
 import { useFornecedoresAbaixoMinimo } from "@/hooks/use-minimo-estoque";
 import { formatBRL } from "@/lib/format";
+import {
+  countFornecedoresUnicos,
+  textoAcaoAlerta,
+} from "@/lib/estoque-minimo";
 import { AlertTriangle, Link2 } from "lucide-react";
 import { TableWrapper } from "@/components/table-wrapper";
 
@@ -144,6 +149,8 @@ export function FornecedoresPage() {
     }
   };
 
+  const abaixoMinimoFornecedores = countFornecedoresUnicos(abaixoMinimo);
+
   const inativoCount = (fornecedores as FornecedorRow[]).filter(
     (f) => f.ativo === false && f.nome !== AGUARDANDO_VINCULO,
   ).length;
@@ -242,7 +249,10 @@ export function FornecedoresPage() {
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               <AlertTriangle size={16} className="text-warning" />
-              {abaixoMinimo.length} fornecedor(es) abaixo do estoque mínimo
+              {abaixoMinimoFornecedores} fornecedor(es) abaixo do estoque mínimo
+              <span className="font-normal text-muted-foreground">
+                ({abaixoMinimo.length} tipo(s))
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -254,26 +264,48 @@ export function FornecedoresPage() {
                     <th className="text-center py-2 px-2">Tipo</th>
                     <th className="text-right py-2 px-2">Mín.</th>
                     <th className="text-right py-2 px-2">Atual</th>
-                    <th className="text-right py-2 px-2">Faltam</th>
+                    <th className="text-left py-2 px-2">Ação</th>
                     <th className="text-right py-2 px-2">Valor</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {abaixoMinimo.map((f, i) => (
-                    <tr key={`${f.fornecedor_id}-${f.tipo_caixa}-${i}`} className="border-t">
-                      <td className="py-2 px-2 font-medium">{f.fornecedor_nome}</td>
-                      <td className="py-2 px-2 text-center">{f.tipo_caixa}</td>
-                      <td className="py-2 px-2 text-right">{f.qtd_minima}</td>
-                      <td className="py-2 px-2 text-right text-danger font-bold">{f.saldo_atual}</td>
-                      <td className="py-2 px-2 text-right text-danger font-bold">{f.faltando}</td>
-                      <td className="py-2 px-2 text-right">{formatBRL(f.valor_faltando)}</td>
-                    </tr>
-                  ))}
+                  {abaixoMinimo.map((f, i) => {
+                    const enviar = f.enviar_qtd ?? f.faltando;
+                    const acao =
+                      f.acao ?? textoAcaoAlerta(enviar, f.tipo_caixa);
+                    const row = (fornecedores as FornecedorRow[]).find(
+                      (x) => x.id === f.fornecedor_id,
+                    );
+                    return (
+                      <tr
+                        key={`${f.fornecedor_id}-${f.tipo_caixa}-${i}`}
+                        className="border-t cursor-pointer hover:bg-muted/40"
+                        onClick={() => row && openEdit(row)}
+                      >
+                        <td className="py-2 px-2 font-medium">{f.fornecedor_nome}</td>
+                        <td className="py-2 px-2 text-center">{f.tipo_caixa}</td>
+                        <td className="py-2 px-2 text-right">{f.qtd_minima}</td>
+                        <td className="py-2 px-2 text-right text-danger font-bold">
+                          {f.saldo_atual}
+                        </td>
+                        <td className="py-2 px-2 text-danger font-medium">{acao}</td>
+                        <td className="py-2 px-2 text-right">
+                          {formatBRL(f.valor_faltando)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </TableWrapper>
           </CardContent>
         </Card>
+      )}
+
+      {selecionados.length > 0 && isAdmin && (
+        <div className="mb-4">
+          <EstoqueMinimoEditor fornecedorIds={selecionados} />
+        </div>
       )}
 
       <MesclarCadastrosPanel
@@ -486,6 +518,9 @@ export function FornecedoresPage() {
                   ))}
                 </ul>
               </div>
+            )}
+            {editId && (
+              <EstoqueMinimoEditor fornecedorIds={[editId]} />
             )}
           </div>
           <SheetFooter>
