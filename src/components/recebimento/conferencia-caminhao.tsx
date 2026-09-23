@@ -2,7 +2,7 @@
  * NOP-328 — casca única da Conferência de recebimento (3 passos do mockup).
  * Reaproveita mutações/NOP-327; a apresentação é PassoFornecedores / PassoItem / PassoFila.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
   CheckCircle2,
@@ -33,6 +33,7 @@ import { isAguardandoVinculo } from "@/lib/seletor-cadastro";
 import { formatTime, dateKeyBRT } from "@/lib/utils-date";
 import {
   caixasEsperadas,
+  draftConferenciaDirty,
   itemConferenciaQtyLocked,
   labelUnidadeProduto,
   podeEditarConferenciaFinalizada,
@@ -126,6 +127,15 @@ export function ConferenciaCaminhao({
   const [editandoFinalizada, setEditandoFinalizada] = useState(false);
   const [editMotivo, setEditMotivo] = useState("");
   const [assinaturaNome, setAssinaturaNome] = useState("");
+
+  /** Último snapshot gravado/hidratado por item — base do dirty check (NOP-340). */
+  const savedBaselineRef = useRef<Record<string, DraftItem>>({});
+  /** Evita troca de item/fornecedor enquanto o auto-save corre. */
+  const navLockRef = useRef(false);
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+  const itemAtivoIdRef = useRef(itemAtivoId);
+  itemAtivoIdRef.current = itemAtivoId;
 
   const grupos = useMemo((): GrupoFornecedor[] => {
     const map = new Map<string, GrupoFornecedor & { pedidos: PedidoAberto[] }>();
@@ -305,23 +315,34 @@ export function ConferenciaCaminhao({
     return out;
   }, [pedidoIds, pendentes, confQueries, saldoQueries, sugQueries]);
 
-  // Hidrata drafts a partir da conferência
+  // Hidrata drafts a partir da conferência (não apaga drafts de fornecedor desmarcado)
   useEffect(() => {
+    const additions: Record<string, DraftItem> = {};
+    pedidoIds.forEach((_, idx) => {
+      const conf = confQueries[idx]?.data as ConferenciaRow | null | undefined;
+      for (const ic of conf?.itens_conferencia ?? []) {
+        if (draftsRef.current[ic.id] || additions[ic.id]) continue;
+        const snap: DraftItem = {
+          caixas: Number(ic.quantidade_recebida) || 0,
+          conferido: !!ic.conferido,
+          qualidade: !!ic.tem_problema_qualidade,
+        };
+        additions[ic.id] = snap;
+        // Baseline = servidor; sair sem digitar não marca sujo.
+        if (!savedBaselineRef.current[ic.id]) {
+          savedBaselineRef.current[ic.id] = { ...snap };
+        }
+      }
+    });
+    if (Object.keys(additions).length === 0) return;
     setDrafts((prev) => {
       const next = { ...prev };
       let changed = false;
-      pedidoIds.forEach((_, idx) => {
-        const conf = confQueries[idx]?.data as ConferenciaRow | null | undefined;
-        for (const ic of conf?.itens_conferencia ?? []) {
-          if (next[ic.id]) continue;
-          next[ic.id] = {
-            caixas: Number(ic.quantidade_recebida) || 0,
-            conferido: !!ic.conferido,
-            qualidade: !!ic.tem_problema_qualidade,
-          };
-          changed = true;
-        }
-      });
+      for (const [id, snap] of Object.entries(additions)) {
+        if (next[id]) continue;
+        next[id] = snap;
+        changed = true;
+      }
       return changed ? next : prev;
     });
   }, [pedidoIds, confQueries]);
@@ -336,23 +357,6 @@ export function ConferenciaCaminhao({
     const pend = fila.find((f) => !(drafts[f.itemId]?.conferido));
     setItemAtivoId(pend?.itemId ?? fila[0].itemId);
   }, [fila, itemAtivoId, drafts]);
-
-  const toggleFornecedor = (fornecedorId: string) => {
-    const g = grupos.find((x) => x.fornecedorId === fornecedorId);
-    if (!g) return;
-    const allOn = g.pedidoIds.every((id) => pedidoIds.includes(id));
-    if (allOn) {
-      onChangePedidoIds(pedidoIds.filter((id) => !g.pedidoIds.includes(id)));
-    } else {
-      onChangePedidoIds([...new Set([...pedidoIds, ...g.pedidoIds])]);
-    }
-  };
-
-  const selecionarTodos = () => {
-    onChangePedidoIds(grupos.flatMap((g) => g.pedidoIds));
-  };
-
-  const limparSelecao = () => onChangePedidoIds([]);
 
   const iniciarSelecao = async () => {
     if (pedidoIds.length === 0) {
@@ -550,6 +554,123 @@ export function ConferenciaCaminhao({
     });
   };
 
+  const syncBaselinePedido = (pedidoId: string, draftMap: Record<string, DraftItem>) => {
+    const confIdx = pedidoIds.indexOf(pedidoId);
+    const conf = confQueries[confIdx]?.data as ConferenciaRow | null | undefined;
+    for (const ic of conf?.itens_conferencia ?? []) {
+      const d = draftMap[ic.id];
+      if (d) savedBaselineRef.current[ic.id] = { ...d };
+    }
+  };
+
+  /**
+   * NOP-340 — auto-save do item ativo se estiver sujo.
+   * Mesmo caminho do Salvar (parcial no servidor, sem confirmar se não estava conferido).
+   * @returns true se pode seguir a navegação; false se a gravação falhou (não troca).
+   */
+  const flushParcialAtivoSeSujo = async (): Promise<boolean> => {
+    if (saveMut.isPending || editMut.isPending) {
+      toast.error("Aguarde a gravação terminar antes de trocar.");
+      return false;
+    }
+    const ativoId = itemAtivoIdRef.current;
+    if (!ativoId) return true;
+    const draft = draftsRef.current[ativoId];
+    const row = fila.find((f) => f.itemId === ativoId);
+    if (!row || !draft) return true;
+
+    const confAberta =
+      row.conferenciaStatus === "em_andamento" || row.conferenciaStatus === "parcial";
+    const confFinalizada = row.conferenciaStatus === "finalizada";
+    const readOnly = confFinalizada && !editandoFinalizada;
+    const bloqueado = itemConferenciaQtyLocked({
+      conferenciaAberta: confAberta,
+      editando: editandoFinalizada,
+      readOnly,
+      conferido: draft.conferido,
+      temValePendente: false,
+    });
+    if (bloqueado) return true;
+
+    if (!draftConferenciaDirty(draft, savedBaselineRef.current[ativoId])) {
+      return true;
+    }
+
+    const nextDrafts = {
+      ...draftsRef.current,
+      // Auto-save / Salvar: não confirma item que ainda não estava conferido
+      [ativoId]: { ...draft, conferido: draft.conferido },
+    };
+    try {
+      await persistPedido(row.pedidoId, "parcial", nextDrafts);
+      setDrafts(nextDrafts);
+      draftsRef.current = nextDrafts;
+      syncBaselinePedido(row.pedidoId, nextDrafts);
+      return true;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar progresso", {
+        description: "A troca foi cancelada para não perder o que você digitou.",
+      });
+      return false;
+    }
+  };
+
+  /** Troca de item com pré-save; falha de rede bloqueia a troca. */
+  const abrirItem = async (id: string) => {
+    if (id === itemAtivoIdRef.current) {
+      document.getElementById("passo-2")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (navLockRef.current) return;
+    navLockRef.current = true;
+    try {
+      const ok = await flushParcialAtivoSeSujo();
+      if (!ok) return;
+      setItemAtivoId(id);
+      document.getElementById("passo-2")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } finally {
+      navLockRef.current = false;
+    }
+  };
+
+  /**
+   * Troca seleção de fornecedores com pré-save do item ativo.
+   * Não limpa drafts/baseline dos pedidos que saem da seleção (NOP-340).
+   */
+  const changePedidoIdsSafe = async (nextIds: string[]) => {
+    const same =
+      nextIds.length === pedidoIds.length && nextIds.every((id) => pedidoIds.includes(id));
+    if (same) return;
+    if (navLockRef.current) return;
+    navLockRef.current = true;
+    try {
+      const ok = await flushParcialAtivoSeSujo();
+      if (!ok) return;
+      onChangePedidoIds(nextIds);
+    } finally {
+      navLockRef.current = false;
+    }
+  };
+
+  const toggleFornecedor = (fornecedorId: string) => {
+    const g = grupos.find((x) => x.fornecedorId === fornecedorId);
+    if (!g) return;
+    const allOn = g.pedidoIds.every((id) => pedidoIds.includes(id));
+    if (allOn) {
+      void changePedidoIdsSafe(pedidoIds.filter((id) => !g.pedidoIds.includes(id)));
+    } else {
+      void changePedidoIdsSafe([...new Set([...pedidoIds, ...g.pedidoIds])]);
+    }
+  };
+
+  const selecionarTodos = () => {
+    void changePedidoIdsSafe(grupos.flatMap((g) => g.pedidoIds));
+  };
+
+  const limparSelecao = () => {
+    void changePedidoIdsSafe([]);
+  };
+
   /** NOP-340 — grava caixas sem marcar o item como conferido (retomável / outro aparelho). */
   const salvarItem = async () => {
     if (!ativo || !draftAtivo || bloqueadoAtivo) return;
@@ -558,8 +679,10 @@ export function ConferenciaCaminhao({
       [ativo.itemId]: { ...draftAtivo, conferido: false },
     };
     setDrafts(nextDrafts);
+    draftsRef.current = nextDrafts;
     try {
       await persistPedido(ativo.pedidoId, "parcial", nextDrafts);
+      syncBaselinePedido(ativo.pedidoId, nextDrafts);
       const parcial = textoParcialCaixas(draftAtivo.caixas, ativo.esperadoCaixas);
       toast.success("Progresso do item salvo", {
         description: parcial
@@ -578,8 +701,10 @@ export function ConferenciaCaminhao({
       [ativo.itemId]: { ...draftAtivo, conferido: true },
     };
     setDrafts(nextDrafts);
+    draftsRef.current = nextDrafts;
     try {
       await persistPedido(ativo.pedidoId, "parcial", nextDrafts);
+      syncBaselinePedido(ativo.pedidoId, nextDrafts);
       toast.success("Item confirmado");
       const next = fila.find(
         (f) => f.itemId !== ativo.itemId && !(nextDrafts[f.itemId]?.conferido),
@@ -646,6 +771,7 @@ export function ConferenciaCaminhao({
         const conf = confQueries[confIdx]?.data as ConferenciaRow | null | undefined;
         if (conf?.status === "finalizada") continue;
         await persistPedido(id, "parcial");
+        syncBaselinePedido(id, draftsRef.current);
       }
       toast.success("Progresso guardado");
     } catch (e) {
@@ -829,8 +955,7 @@ export function ConferenciaCaminhao({
           <PassoFila
             linhas={linhasFila}
             onAbrir={(id) => {
-              setItemAtivoId(id);
-              document.getElementById("passo-2")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              void abrirItem(id);
             }}
           />
         </PassoSecao>

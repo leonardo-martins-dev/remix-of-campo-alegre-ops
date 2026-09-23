@@ -199,6 +199,31 @@ export function resumoSelecao(selecionados: number, total: number): string {
   return `${Math.max(0, selecionados)} selecionados de ${Math.max(0, total)}`;
 }
 
+
+/** Snapshot local do item na conferência (caixas + flags). */
+export type DraftConferenciaSnapshot = {
+  caixas: number;
+  conferido: boolean;
+  qualidade: boolean;
+};
+
+/**
+ * NOP-340 — item "sujo" só quando o valor mudou vs. o último gravado/hidratado.
+ * Abrir e sair sem digitar → false (não cria parcial nem muda status).
+ */
+export function draftConferenciaDirty(
+  current: DraftConferenciaSnapshot | null | undefined,
+  saved: DraftConferenciaSnapshot | null | undefined,
+): boolean {
+  if (!current) return false;
+  const base = saved ?? { caixas: 0, conferido: false, qualidade: false };
+  return (
+    Number(current.caixas) !== Number(base.caixas) ||
+    !!current.conferido !== !!base.conferido ||
+    !!current.qualidade !== !!base.qualidade
+  );
+}
+
 /**
  * NOP-340 — parcial na fila: "7 de 12 cx". Sem esperado, só as recebidas.
  */

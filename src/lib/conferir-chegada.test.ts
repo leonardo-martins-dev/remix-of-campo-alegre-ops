@@ -17,6 +17,7 @@ import {
   textoConversao,
   textoParcialCaixas,
   labelUnidadeProduto,
+  draftConferenciaDirty,
   unidadesDeCaixas,
 } from "./conferir-chegada";
 
@@ -195,3 +196,36 @@ assert(textoConversao(30, "UND") === "1 caixa = 30 un", "conversão UND → un")
 assert(textoConversao(12.5, "KG") === "1 caixa = 12,5 kg", "conversão KG");
 
 console.log("conferir-chegada NOP-349: ok");
+
+/* ───────── NOP-340 — dirty check p/ auto-save ───────── */
+assert(
+  draftConferenciaDirty({ caixas: 0, conferido: false, qualidade: false }, undefined) === false,
+  "abrir sem digitar (baseline vazio) não é sujo",
+);
+assert(
+  draftConferenciaDirty(
+    { caixas: 7, conferido: false, qualidade: false },
+    { caixas: 7, conferido: false, qualidade: false },
+  ) === false,
+  "igual ao salvo não é sujo",
+);
+assert(
+  draftConferenciaDirty(
+    { caixas: 8, conferido: false, qualidade: false },
+    { caixas: 7, conferido: false, qualidade: false },
+  ) === true,
+  "caixas alteradas = sujo",
+);
+assert(
+  draftConferenciaDirty(
+    { caixas: 7, conferido: true, qualidade: false },
+    { caixas: 7, conferido: false, qualidade: false },
+  ) === true,
+  "conferido alterado = sujo",
+);
+assert(
+  draftConferenciaDirty(null, { caixas: 1, conferido: false, qualidade: false }) === false,
+  "sem current = não sujo",
+);
+
+console.log("conferir-chegada NOP-340 dirty: ok");
