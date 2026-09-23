@@ -15,6 +15,7 @@ import {
   X,
   ChevronRight,
   ChevronDown,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -79,6 +80,7 @@ import { CaixasItemEditor, type CaixaItemEntry } from "@/components/caixas-item-
 import { useCaixasItemConferencia } from "@/hooks/use-caixas-item";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { isAguardandoVinculo } from "@/lib/seletor-cadastro";
+import { normalizeKey } from "@/lib/normalize";
 import { SemConversaoSelo } from "@/components/sem-conversao-selo";
 import type { TipoCaixa } from "@/lib/caixas-map";
 import {
@@ -86,6 +88,11 @@ import {
   useSaidaRocaPedido,
   useSaidasEmTransito,
 } from "@/hooks/use-saida-roca";
+import {
+  chipsFornecedoresSessao,
+  filterValesDoPedido,
+  removerFornecedorDaSessao,
+} from "@/lib/conferir-chegada";
 
 /** NOP-298: pedidoId (legado) ou pedidoIds CSV para sessão multi-fornecedor. */
 type ConferirSearch = { pedidoId?: string; pedidoIds?: string };
@@ -718,6 +725,40 @@ function SessaoMultiFornecedor({
         current={todosProntos ? 3 : 2}
       />
 
+      {/* NOP-318: fornecedores escolhidos como chips (não lista de botões) */}
+      <div className="sticky top-0 z-20 -mx-1 px-1 py-2 mb-4 bg-background/95 backdrop-blur-md border-b border-border/70 flex flex-wrap gap-2 items-center">
+        {chipsFornecedoresSessao(grupos).map((chip) => (
+          <span
+            key={chip.fornecedorId}
+            className="chip chip-info inline-flex items-center gap-1.5 min-h-9 pl-2.5 pr-1"
+          >
+            <span className="font-semibold">{chip.nome}</span>
+            <span className="text-[10px] opacity-80">
+              {chip.pedidoIds.length} ped.
+            </span>
+            <button
+              type="button"
+              aria-label={`Remover ${chip.nome}`}
+              className="rounded-full p-1 hover:bg-background/60"
+              onClick={() =>
+                onChangePedidoIds(
+                  removerFornecedorDaSessao(pedidoIds, chip.pedidoIds),
+                )
+              }
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={() => onChangePedidoIds([])}
+          className="text-xs font-semibold text-primary-dark hover:underline min-h-9 px-2"
+        >
+          Trocar seleção
+        </button>
+      </div>
+
       <div className="card-base p-3 mb-5 flex flex-wrap items-end gap-3">
         <div className="space-y-1.5 flex-1 min-w-[8rem]">
           <Label htmlFor="hora-chegada-sessao">Hora de chegada</Label>
@@ -1119,7 +1160,14 @@ function ConferenciaItens({
 
   // Vale state
   const createVale = useCreateVale();
-  const { data: meusVales = [] } = useValesConferente(user?.id ?? null);
+  const { data: meusValesAll = [] } = useValesConferente(user?.id ?? null);
+  /** NOP-318: na conferência só vales do pedido aberto (fila completa no módulo Vales). */
+  const meusVales = useMemo(
+    () => filterValesDoPedido(meusValesAll, pedidoId),
+    [meusValesAll, pedidoId],
+  );
+  const [trocarPedidoOpen, setTrocarPedidoOpen] = useState(false);
+  const [buscaTrocaPedido, setBuscaTrocaPedido] = useState("");
   const [valeOpen, setValeOpen] = useState(false);
   const [valeItem, setValeItem] = useState<LinhaItem | null>(null);
   const [valeJaRecebido, setValeJaRecebido] = useState(0);
@@ -1873,19 +1921,31 @@ function ConferenciaItens({
       />
 
       {!embedded && (
-        <PageHeader
-          title={fornecedorNome}
-          subtitle={`Pedido ${codigo}${wiseId ? ` · Wise ${wiseId}` : ""} · Entrega ${entregaAtual || 1} de ${entregaTotal}${horaChegada ? ` · Chegou às ${formatTime(horaChegada)}` : ""} · Conferente: ${conferenteNome}`}
-          actions={
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-navy"
-            >
-              <ArrowLeft size={14} /> {readOnly ? "Voltar" : "Trocar pedido"}
-            </button>
-          }
-        />
+        <div className="sticky top-0 z-20 -mx-1 px-1 pt-1 pb-3 mb-4 bg-background/95 backdrop-blur-md border-b border-border/70">
+          <PageHeader
+            title={fornecedorNome}
+            subtitle={`Pedido ${codigo}${wiseId ? ` · Wise ${wiseId}` : ""} · Entrega ${entregaAtual || 1} de ${entregaTotal}${horaChegada ? ` · Chegou às ${formatTime(horaChegada)}` : ""} · Conferente: ${conferenteNome}`}
+            actions={
+              readOnly ? (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-navy min-h-11"
+                >
+                  <ArrowLeft size={14} /> Voltar
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setTrocarPedidoOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-dark hover:underline min-h-11"
+                >
+                  <Search size={14} /> Trocar pedido
+                </button>
+              )
+            }
+          />
+        </div>
       )}
       {embedded && (
         <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
@@ -2009,38 +2069,6 @@ function ConferenciaItens({
           </div>
         );
       })()}
-
-      {!readOnly && !embedded && pendentes.length > 1 && (
-        <div className="mb-4 lg:hidden">
-          <SeletorCadastro
-            tipo="fornecedor"
-            label="Pedido em conferência"
-            items={pedidosSeletor}
-            value={pedidoId}
-            onChange={(id) => id && id !== pedidoId && onTrocar(id)}
-            placeholder="Escolher pedido…"
-          />
-        </div>
-      )}
-
-      {!readOnly && !embedded && (
-        <div className="hidden lg:flex flex-wrap gap-2 mb-4">
-          {pendentes.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => onTrocar(p.id)}
-              className={`px-3 min-h-11 rounded-md text-sm font-semibold transition-colors whitespace-nowrap ${
-                p.id === pedidoId
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card border border-border text-navy hover:bg-secondary"
-              }`}
-            >
-              {one(p.fornecedores)?.nome ?? p.codigo}
-            </button>
-          ))}
-        </div>
-      )}
 
       {!embedded && (
         <FluxoPassos
@@ -2191,9 +2219,6 @@ function ConferenciaItens({
       {tipos.length > 0 && (
         <div className="mt-5 rounded-xl border p-4 space-y-3">
           <h3 className="text-sm font-semibold">Resumo de caixas desta entrega → galpão</h3>
-          <p className="text-xs text-muted-foreground">
-            Packing → fornecedor só na tela de Movimentação (motorista) ou inventário.
-          </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {tipos.map((t) => {
               const cheiasCalc = itens.reduce((acc, it) => {
@@ -2216,8 +2241,15 @@ function ConferenciaItens({
       {meusVales.length > 0 && (
         <div className="mt-5 rounded-xl border p-4">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <Receipt size={14} /> Meus pedidos de vale
+            <Receipt size={14} /> Vales deste pedido
           </h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            Só vales do pedido aberto. A fila pessoal completa fica em{" "}
+            <Link to="/recebimento/vales" className="underline font-medium">
+              Vales
+            </Link>
+            .
+          </p>
           <div className="space-y-2">
             {meusVales.slice(0, 5).map((v) => (
               <div key={v.id} className="flex items-center justify-between gap-3 p-2 rounded bg-secondary/30 text-sm">
@@ -2380,6 +2412,98 @@ function ConferenciaItens({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={trocarPedidoOpen}
+        onOpenChange={(o) => {
+          setTrocarPedidoOpen(o);
+          if (!o) setBuscaTrocaPedido("");
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Trocar pedido</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Busque um pedido ativo por fornecedor ou código.
+          </p>
+          <div className="relative">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={buscaTrocaPedido}
+              onChange={(e) => setBuscaTrocaPedido(e.target.value)}
+              placeholder="Buscar pedido ativo…"
+              className="pl-9 min-h-11"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-72 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+            {pedidosSeletor
+              .filter((p) => {
+                const q = normalizeKey(buscaTrocaPedido);
+                if (!q) return true;
+                return (
+                  normalizeKey(p.nome).includes(q) ||
+                  normalizeKey(p.codigo ?? "").includes(q)
+                );
+              })
+              .map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={p.id === pedidoId}
+                  onClick={() => {
+                    if (p.id === pedidoId) return;
+                    onTrocar(p.id);
+                    setTrocarPedidoOpen(false);
+                    setBuscaTrocaPedido("");
+                  }}
+                  className={`w-full text-left px-3 py-3 text-sm hover:bg-secondary/50 disabled:opacity-60 ${
+                    p.id === pedidoId ? "bg-primary-soft" : ""
+                  }`}
+                >
+                  <div className="font-semibold text-navy">{p.nome}</div>
+                  {p.codigo && (
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Pedido {p.codigo}
+                      {p.id === pedidoId ? " · atual" : ""}
+                    </div>
+                  )}
+                </button>
+              ))}
+            {pedidosSeletor.length === 0 && (
+              <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                Nenhum pedido ativo
+              </p>
+            )}
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setTrocarPedidoOpen(false);
+                setBuscaTrocaPedido("");
+                onBack();
+              }}
+            >
+              Voltar à seleção
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full sm:w-auto"
+              onClick={() => setTrocarPedidoOpen(false)}
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={valeOpen} onOpenChange={setValeOpen}>
         <DialogContent className="max-w-lg">
