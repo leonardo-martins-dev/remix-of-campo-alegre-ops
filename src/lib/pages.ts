@@ -29,6 +29,10 @@ export const FORNECEDOR_SLUGS = ["fornecedor", "recebimento/saida-roca"];
 
 export const SLUG_TO_PATH: Record<string, string> = {
   dashboard: "/",
+  receber: "/receber",
+  expedir: "/expedir",
+  caixas: "/caixas",
+  embalagens: "/embalagens",
   recebimento: "/recebimento",
   "recebimento/conferir": "/recebimento/conferir",
   "recebimento/saida-roca": "/recebimento/saida-roca",
@@ -100,7 +104,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
 
 export function pathnameToSlug(pathname: string): string {
   if (pathname === "/" || pathname === "") return "dashboard";
-  return pathname.replace(/^\//, "");
+  return pathname.replace(/^\//, "").replace(/\/$/, "");
 }
 
 export function slugToPath(slug: string): string {

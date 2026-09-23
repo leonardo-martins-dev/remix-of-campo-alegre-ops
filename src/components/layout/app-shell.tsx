@@ -1,10 +1,20 @@
 import { Link, useNavigate, useRouterState, Outlet } from "@tanstack/react-router";
 import {
-  ChevronDown, Bell, Search, Sprout, LogOut, Settings, UserPlus, Eye, EyeOff,
+  ChevronDown, Bell, Search, Sprout, LogOut, Settings, UserPlus, Eye, EyeOff, ChevronRight,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { getIcon, slugToPath } from "@/lib/pages";
+import {
+  OPS_HUBS,
+  GESTAO_LINKS,
+  PROFILE_PRIMARY,
+  resolveNavProfile,
+  isHubAccessible,
+  filterAccessibleLinks,
+  structuredNavSlugs,
+  SIDEBAR_HIDDEN_SLUGS,
+} from "@/lib/nav";
 import { initials } from "@/lib/utils-date";
 import { useGlobalSearch, useAlertas } from "@/hooks/use-dashboard";
 import { one } from "@/lib/embed";
@@ -44,76 +54,155 @@ function SidebarNav({
   pathname: string;
   onNavigate?: () => void;
 }) {
-  const { isAdmin, pages } = useAuth();
-  const hasGestaoInSidebar = pages.some((p) => p.slug === "gestao");
+  const { isAdmin, pages, profile, viewMode, hasPageAccess } = useAuth();
+  const navProfile = resolveNavProfile(profile, isAdmin, viewMode);
+  const [maisOpen, setMaisOpen] = useState(false);
 
-  const groups = useMemo(() => {
-    const map = new Map<string, typeof pages>();
-    for (const p of pages) {
-      const list = map.get(p.grupo) ?? [];
-      list.push(p);
-      map.set(p.grupo, list);
-    }
-    return [...map.entries()].map(([label, items]) => ({
-      label,
-      items: items.sort((a, b) => a.ordem - b.ordem),
-    }));
-  }, [pages]);
+  const primary = useMemo(
+    () => filterAccessibleLinks(PROFILE_PRIMARY[navProfile], hasPageAccess, {
+      adminOnlySlugs: ["gestao/usuarios"],
+      isAdmin,
+    }),
+    [navProfile, hasPageAccess, isAdmin],
+  );
+
+  const opsHubs = useMemo(
+    () => OPS_HUBS.filter((h) => isHubAccessible(h, hasPageAccess)),
+    [hasPageAccess],
+  );
+
+  const showOpsGroup = navProfile === "admin";
+
+  const gestaoLinks = useMemo(() => {
+    if (navProfile === "fornecedor" || navProfile === "motorista") return [];
+    const canGestao = isAdmin || hasPageAccess("gestao");
+    if (!canGestao && !hasPageAccess("indicadores")) return [];
+    return filterAccessibleLinks(GESTAO_LINKS, hasPageAccess, {
+      adminOnlySlugs: ["gestao/usuarios"],
+      isAdmin,
+    }).filter((l) => {
+      if (l.slug === "indicadores") return hasPageAccess("indicadores") || isAdmin;
+      if (l.slug === "gestao/usuarios") return isAdmin;
+      return canGestao || isAdmin;
+    });
+  }, [navProfile, isAdmin, hasPageAccess]);
+
+  const covered = useMemo(() => structuredNavSlugs(navProfile), [navProfile]);
+
+  const maisTelas = useMemo(() => {
+    return pages
+      .filter((p) => !SIDEBAR_HIDDEN_SLUGS.has(p.slug) && !covered.has(p.slug))
+      .sort((a, b) => a.ordem - b.ordem);
+  }, [pages, covered]);
 
   const linkClass = (active: boolean) =>
     `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
       active ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold" : "text-ink hover:bg-secondary"
     }`;
 
+  const pathActive = (to: string) => {
+    if (to === "/") return pathname === "/";
+    return pathname === to || pathname.startsWith(to + "/");
+  };
+
   return (
     <>
       <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-4 space-y-5">
-        {groups.map((g) => (
-          <div key={g.label} className="px-3">
-            <div className="label-group px-3 mb-2">{g.label}</div>
+        {primary.length > 0 && (
+          <div className="px-3">
+            <div className="label-group px-3 mb-2">Meu turno</div>
             <div className="space-y-0.5">
-              {g.items.map((it) => {
-                const path = slugToPath(it.slug);
-                const active = pathname === path;
-                const Icon = getIcon(it.icone);
+              {primary.map((it) => {
+                const Icon = it.icon;
+                // Admin "Pendências" highlights home; Operação too — differentiate by hash skip
+                const active = pathActive(it.to) && !(it.id === "adm-pend" && pathname !== "/");
                 return (
-                  <Link
-                    key={it.slug}
-                    to={path}
-                    onClick={onNavigate}
-                    className={linkClass(active)}
-                  >
+                  <Link key={it.id} to={it.to} onClick={onNavigate} className={linkClass(active)}>
                     <Icon size={16} className="shrink-0" />
-                    <span className="truncate">{it.nome}</span>
+                    <span className="truncate">{it.label}</span>
                   </Link>
                 );
               })}
             </div>
           </div>
-        ))}
-        {isAdmin && (
+        )}
+
+        {showOpsGroup && opsHubs.length > 0 && (
           <div className="px-3">
-            <div className="label-group px-3 mb-2">Administração</div>
+            <div className="label-group px-3 mb-2">Operação</div>
             <div className="space-y-0.5">
-              {!hasGestaoInSidebar && (
-                <Link
-                  to="/gestao"
-                  onClick={onNavigate}
-                  className={linkClass(pathname === "/gestao")}
-                >
-                  <Settings size={16} className="shrink-0" />
-                  <span>Configurações</span>
-                </Link>
-              )}
-              <Link
-                to="/gestao/usuarios"
-                onClick={onNavigate}
-                className={linkClass(pathname === "/gestao/usuarios")}
-              >
-                <UserPlus size={16} className="shrink-0" />
-                <span>Criar Usuários</span>
-              </Link>
+              {opsHubs.map((hub) => {
+                const Icon = hub.icon;
+                return (
+                  <Link
+                    key={hub.id}
+                    to={hub.to}
+                    onClick={onNavigate}
+                    className={linkClass(pathActive(hub.to))}
+                  >
+                    <Icon size={16} className="shrink-0" />
+                    <span className="truncate">{hub.label}</span>
+                  </Link>
+                );
+              })}
             </div>
+          </div>
+        )}
+
+        {gestaoLinks.length > 0 && (
+          <div className="px-3">
+            <div className="label-group px-3 mb-2">Gestão</div>
+            <div className="space-y-0.5">
+              {gestaoLinks.map((it) => {
+                const Icon = it.icon;
+                return (
+                  <Link
+                    key={it.id}
+                    to={it.to}
+                    onClick={onNavigate}
+                    className={linkClass(pathActive(it.to))}
+                  >
+                    <Icon size={16} className="shrink-0" />
+                    <span className="truncate">{it.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {maisTelas.length > 0 && (
+          <div className="px-3">
+            <button
+              type="button"
+              onClick={() => setMaisOpen((o) => !o)}
+              className="flex w-full items-center gap-2 px-3 mb-2 text-left"
+            >
+              <span className="label-group flex-1">Mais telas</span>
+              <ChevronRight
+                size={14}
+                className={`text-muted-foreground transition-transform ${maisOpen ? "rotate-90" : ""}`}
+              />
+            </button>
+            {maisOpen && (
+              <div className="space-y-0.5">
+                {maisTelas.map((it) => {
+                  const path = slugToPath(it.slug);
+                  const Icon = getIcon(it.icone);
+                  return (
+                    <Link
+                      key={it.slug}
+                      to={path}
+                      onClick={onNavigate}
+                      className={linkClass(pathname === path)}
+                    >
+                      <Icon size={16} className="shrink-0" />
+                      <span className="truncate">{it.nome}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </nav>
@@ -140,11 +229,17 @@ export function AppShell() {
 
   if (isTv || isFornecedor) return <Outlet />;
 
-  const roleLabel = !isAdmin
-    ? "Operação"
-    : viewMode === "operador"
-      ? "Admin · modo operador"
-      : "Administrador";
+  const navProfileLabel =
+    profile?.role === "fornecedor"
+      ? "Fornecedor"
+      : profile?.motorista_id && !isAdmin
+        ? "Motorista"
+        : !isAdmin
+          ? "Operação"
+          : viewMode === "operador"
+            ? "Admin · modo operador"
+            : "Administrador";
+  const roleLabel = navProfileLabel;
   const toggleNav = () => {
     if (isNarrow) setMobileOpen(true);
     else setDesktopOpen((o) => !o);

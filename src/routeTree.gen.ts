@@ -9,16 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ReceberRouteImport } from './routes/receber'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndicadoresRouteImport } from './routes/indicadores'
 import { Route as GestaoRouteImport } from './routes/gestao'
 import { Route as FornecedoresRouteImport } from './routes/fornecedores'
 import { Route as FornecedorRouteImport } from './routes/fornecedor'
+import { Route as ExpedirRouteImport } from './routes/expedir'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RecebimentoIndexRouteImport } from './routes/recebimento/index'
 import { Route as QuebraIndexRouteImport } from './routes/quebra/index'
 import { Route as ExpedicaoIndexRouteImport } from './routes/expedicao/index'
+import { Route as EmbalagensIndexRouteImport } from './routes/embalagens/index'
+import { Route as CaixasIndexRouteImport } from './routes/caixas/index'
 import { Route as RelatoriosCustosRouteImport } from './routes/relatorios/custos'
 import { Route as RecebimentoValesRouteImport } from './routes/recebimento/vales'
 import { Route as RecebimentoSaidaRocaRouteImport } from './routes/recebimento/saida-roca'
@@ -41,8 +45,8 @@ import { Route as ExpedicaoSaidaRouteImport } from './routes/expedicao/saida'
 import { Route as ExpedicaoRotasRouteImport } from './routes/expedicao/rotas'
 import { Route as ExpedicaoRastreioRouteImport } from './routes/expedicao/rastreio'
 import { Route as ExpedicaoEntregaRouteImport } from './routes/expedicao/entrega'
-import { Route as EmbalagensInventarioRouteImport } from './routes/embalagens/inventario'
 import { Route as EmbalagensSaldoRouteImport } from './routes/embalagens/saldo'
+import { Route as EmbalagensInventarioRouteImport } from './routes/embalagens/inventario'
 import { Route as CaixasSaldoRouteImport } from './routes/caixas/saldo'
 import { Route as CaixasRetornoRouteImport } from './routes/caixas/retorno'
 import { Route as CaixasMovimentacaoRouteImport } from './routes/caixas/movimentacao'
@@ -52,6 +56,11 @@ import { Route as CaixasGalpaoRouteImport } from './routes/caixas/galpao'
 import { Route as CaixasFornecedorRouteImport } from './routes/caixas/fornecedor'
 import { Route as CaixasEconomiaRouteImport } from './routes/caixas/economia'
 
+const ReceberRoute = ReceberRouteImport.update({
+  id: '/receber',
+  path: '/receber',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -77,6 +86,11 @@ const FornecedorRoute = FornecedorRouteImport.update({
   path: '/fornecedor',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExpedirRoute = ExpedirRouteImport.update({
+  id: '/expedir',
+  path: '/expedir',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -100,6 +114,16 @@ const QuebraIndexRoute = QuebraIndexRouteImport.update({
 const ExpedicaoIndexRoute = ExpedicaoIndexRouteImport.update({
   id: '/expedicao/',
   path: '/expedicao/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbalagensIndexRoute = EmbalagensIndexRouteImport.update({
+  id: '/embalagens/',
+  path: '/embalagens/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CaixasIndexRoute = CaixasIndexRouteImport.update({
+  id: '/caixas/',
+  path: '/caixas/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RelatoriosCustosRoute = RelatoriosCustosRouteImport.update({
@@ -212,14 +236,14 @@ const ExpedicaoEntregaRoute = ExpedicaoEntregaRouteImport.update({
   path: '/expedicao/entrega',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EmbalagensInventarioRoute = EmbalagensInventarioRouteImport.update({
-  id: '/embalagens/inventario',
-  path: '/embalagens/inventario',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const EmbalagensSaldoRoute = EmbalagensSaldoRouteImport.update({
   id: '/embalagens/saldo',
   path: '/embalagens/saldo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbalagensInventarioRoute = EmbalagensInventarioRouteImport.update({
+  id: '/embalagens/inventario',
+  path: '/embalagens/inventario',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CaixasSaldoRoute = CaixasSaldoRouteImport.update({
@@ -266,11 +290,13 @@ const CaixasEconomiaRoute = CaixasEconomiaRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/expedir': typeof ExpedirRoute
   '/fornecedor': typeof FornecedorRoute
   '/fornecedores': typeof FornecedoresRoute
   '/gestao': typeof GestaoRouteWithChildren
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
+  '/receber': typeof ReceberRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
@@ -303,6 +329,8 @@ export interface FileRoutesByFullPath {
   '/recebimento/saida-roca': typeof RecebimentoSaidaRocaRoute
   '/recebimento/vales': typeof RecebimentoValesRoute
   '/relatorios/custos': typeof RelatoriosCustosRoute
+  '/caixas/': typeof CaixasIndexRoute
+  '/embalagens/': typeof EmbalagensIndexRoute
   '/expedicao/': typeof ExpedicaoIndexRoute
   '/quebra/': typeof QuebraIndexRoute
   '/recebimento/': typeof RecebimentoIndexRoute
@@ -310,11 +338,13 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/expedir': typeof ExpedirRoute
   '/fornecedor': typeof FornecedorRoute
   '/fornecedores': typeof FornecedoresRoute
   '/gestao': typeof GestaoRouteWithChildren
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
+  '/receber': typeof ReceberRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
@@ -347,6 +377,8 @@ export interface FileRoutesByTo {
   '/recebimento/saida-roca': typeof RecebimentoSaidaRocaRoute
   '/recebimento/vales': typeof RecebimentoValesRoute
   '/relatorios/custos': typeof RelatoriosCustosRoute
+  '/caixas': typeof CaixasIndexRoute
+  '/embalagens': typeof EmbalagensIndexRoute
   '/expedicao': typeof ExpedicaoIndexRoute
   '/quebra': typeof QuebraIndexRoute
   '/recebimento': typeof RecebimentoIndexRoute
@@ -355,11 +387,13 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
+  '/expedir': typeof ExpedirRoute
   '/fornecedor': typeof FornecedorRoute
   '/fornecedores': typeof FornecedoresRoute
   '/gestao': typeof GestaoRouteWithChildren
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
+  '/receber': typeof ReceberRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
@@ -392,6 +426,8 @@ export interface FileRoutesById {
   '/recebimento/saida-roca': typeof RecebimentoSaidaRocaRoute
   '/recebimento/vales': typeof RecebimentoValesRoute
   '/relatorios/custos': typeof RelatoriosCustosRoute
+  '/caixas/': typeof CaixasIndexRoute
+  '/embalagens/': typeof EmbalagensIndexRoute
   '/expedicao/': typeof ExpedicaoIndexRoute
   '/quebra/': typeof QuebraIndexRoute
   '/recebimento/': typeof RecebimentoIndexRoute
@@ -401,11 +437,13 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/expedir'
     | '/fornecedor'
     | '/fornecedores'
     | '/gestao'
     | '/indicadores'
     | '/login'
+    | '/receber'
     | '/caixas/economia'
     | '/caixas/fornecedor'
     | '/caixas/galpao'
@@ -438,6 +476,8 @@ export interface FileRouteTypes {
     | '/recebimento/saida-roca'
     | '/recebimento/vales'
     | '/relatorios/custos'
+    | '/caixas/'
+    | '/embalagens/'
     | '/expedicao/'
     | '/quebra/'
     | '/recebimento/'
@@ -445,11 +485,13 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard'
+    | '/expedir'
     | '/fornecedor'
     | '/fornecedores'
     | '/gestao'
     | '/indicadores'
     | '/login'
+    | '/receber'
     | '/caixas/economia'
     | '/caixas/fornecedor'
     | '/caixas/galpao'
@@ -482,6 +524,8 @@ export interface FileRouteTypes {
     | '/recebimento/saida-roca'
     | '/recebimento/vales'
     | '/relatorios/custos'
+    | '/caixas'
+    | '/embalagens'
     | '/expedicao'
     | '/quebra'
     | '/recebimento'
@@ -489,11 +533,13 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/expedir'
     | '/fornecedor'
     | '/fornecedores'
     | '/gestao'
     | '/indicadores'
     | '/login'
+    | '/receber'
     | '/caixas/economia'
     | '/caixas/fornecedor'
     | '/caixas/galpao'
@@ -526,6 +572,8 @@ export interface FileRouteTypes {
     | '/recebimento/saida-roca'
     | '/recebimento/vales'
     | '/relatorios/custos'
+    | '/caixas/'
+    | '/embalagens/'
     | '/expedicao/'
     | '/quebra/'
     | '/recebimento/'
@@ -534,11 +582,13 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
+  ExpedirRoute: typeof ExpedirRoute
   FornecedorRoute: typeof FornecedorRoute
   FornecedoresRoute: typeof FornecedoresRoute
   GestaoRoute: typeof GestaoRouteWithChildren
   IndicadoresRoute: typeof IndicadoresRoute
   LoginRoute: typeof LoginRoute
+  ReceberRoute: typeof ReceberRoute
   CaixasEconomiaRoute: typeof CaixasEconomiaRoute
   CaixasFornecedorRoute: typeof CaixasFornecedorRoute
   CaixasGalpaoRoute: typeof CaixasGalpaoRoute
@@ -561,6 +611,8 @@ export interface RootRouteChildren {
   RecebimentoSaidaRocaRoute: typeof RecebimentoSaidaRocaRoute
   RecebimentoValesRoute: typeof RecebimentoValesRoute
   RelatoriosCustosRoute: typeof RelatoriosCustosRoute
+  CaixasIndexRoute: typeof CaixasIndexRoute
+  EmbalagensIndexRoute: typeof EmbalagensIndexRoute
   ExpedicaoIndexRoute: typeof ExpedicaoIndexRoute
   QuebraIndexRoute: typeof QuebraIndexRoute
   RecebimentoIndexRoute: typeof RecebimentoIndexRoute
@@ -568,6 +620,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/receber': {
+      id: '/receber'
+      path: '/receber'
+      fullPath: '/receber'
+      preLoaderRoute: typeof ReceberRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -603,6 +662,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FornecedorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/expedir': {
+      id: '/expedir'
+      path: '/expedir'
+      fullPath: '/expedir'
+      preLoaderRoute: typeof ExpedirRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -636,6 +702,20 @@ declare module '@tanstack/react-router' {
       path: '/expedicao'
       fullPath: '/expedicao/'
       preLoaderRoute: typeof ExpedicaoIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embalagens/': {
+      id: '/embalagens/'
+      path: '/embalagens'
+      fullPath: '/embalagens/'
+      preLoaderRoute: typeof EmbalagensIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/caixas/': {
+      id: '/caixas/'
+      path: '/caixas'
+      fullPath: '/caixas/'
+      preLoaderRoute: typeof CaixasIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/relatorios/custos': {
@@ -792,18 +872,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExpedicaoEntregaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/embalagens/inventario': {
-      id: '/embalagens/inventario'
-      path: '/embalagens/inventario'
-      fullPath: '/embalagens/inventario'
-      preLoaderRoute: typeof EmbalagensInventarioRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/embalagens/saldo': {
       id: '/embalagens/saldo'
       path: '/embalagens/saldo'
       fullPath: '/embalagens/saldo'
       preLoaderRoute: typeof EmbalagensSaldoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embalagens/inventario': {
+      id: '/embalagens/inventario'
+      path: '/embalagens/inventario'
+      fullPath: '/embalagens/inventario'
+      preLoaderRoute: typeof EmbalagensInventarioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/caixas/saldo': {
@@ -897,11 +977,13 @@ const GestaoRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
+  ExpedirRoute: ExpedirRoute,
   FornecedorRoute: FornecedorRoute,
   FornecedoresRoute: FornecedoresRoute,
   GestaoRoute: GestaoRouteWithChildren,
   IndicadoresRoute: IndicadoresRoute,
   LoginRoute: LoginRoute,
+  ReceberRoute: ReceberRoute,
   CaixasEconomiaRoute: CaixasEconomiaRoute,
   CaixasFornecedorRoute: CaixasFornecedorRoute,
   CaixasGalpaoRoute: CaixasGalpaoRoute,
@@ -924,6 +1006,8 @@ const rootRouteChildren: RootRouteChildren = {
   RecebimentoSaidaRocaRoute: RecebimentoSaidaRocaRoute,
   RecebimentoValesRoute: RecebimentoValesRoute,
   RelatoriosCustosRoute: RelatoriosCustosRoute,
+  CaixasIndexRoute: CaixasIndexRoute,
+  EmbalagensIndexRoute: EmbalagensIndexRoute,
   ExpedicaoIndexRoute: ExpedicaoIndexRoute,
   QuebraIndexRoute: QuebraIndexRoute,
   RecebimentoIndexRoute: RecebimentoIndexRoute,

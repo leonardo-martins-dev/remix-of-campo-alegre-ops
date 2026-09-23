@@ -11,6 +11,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase, type AccessiblePage, type Profile } from "./supabase";
 import { ensureUserProfile } from "./ensure-profile";
 import { FORNECEDOR_SLUGS } from "./pages";
+import { OPS_HUBS, hubChildSlugs } from "./nav";
 import {
   canViewValoresCaixa as resolveCanViewValoresCaixa,
   isValoresCaixaSlug,
@@ -155,7 +156,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return resolveIsAdmin(profile, user);
       }
       if (resolveIsAdmin(profile, user)) return true;
-      return pages.some((p) => p.slug === slug);
+      if (pages.some((p) => p.slug === slug)) return true;
+      // NOP-321: hubs acessíveis se o usuário tem qualquer filho
+      const hub = OPS_HUBS.find((h) => h.slug === slug);
+      if (hub) {
+        return hubChildSlugs(hub).some((s) => pages.some((p) => p.slug === s));
+      }
+      return false;
     },
     [profile, user, pages, viewMode]
   );
