@@ -2,10 +2,14 @@ import { useMemo, useState } from "react";
 import { Check, Truck } from "lucide-react";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { resumoSelecao } from "@/lib/conferir-chegada";
+import { FornecedorCorBadge } from "@/components/fornecedor-cor-badge";
+import { fornecedorCorDef } from "@/lib/fornecedor-cores";
 
 export type GrupoFornecedor = {
   fornecedorId: string;
   nome: string;
+  /** NOP-360 — cor da paleta (null = legado) */
+  cor: string | null;
   /** todos os pedidos abertos do fornecedor hoje */
   pedidoIds: string[];
   /** os que já estão na sessão de conferência */
@@ -110,6 +114,7 @@ export function PassoFornecedores({
         {visiveis.map((g) => {
           const marcado = g.pedidoIdsSelecionados.length > 0;
           const parcial = marcado && g.pedidoIdsSelecionados.length < g.pedidoIds.length;
+          const corDef = fornecedorCorDef(g.cor);
           return (
             <button
               key={g.fornecedorId}
@@ -117,11 +122,16 @@ export function PassoFornecedores({
               onClick={() => onToggle(g.fornecedorId)}
               aria-pressed={marcado}
               className={[
-                "w-full text-left rounded-xl border p-3 flex gap-3 items-start transition-colors min-h-16",
+                "w-full text-left rounded-xl border p-3 flex gap-3 items-start transition-colors min-h-16 overflow-hidden",
                 marcado
                   ? "border-primary bg-primary-soft/50 ring-2 ring-primary/20"
                   : "border-border bg-card hover:border-primary/40",
               ].join(" ")}
+              style={
+                corDef
+                  ? { boxShadow: `inset 6px 0 0 0 ${corDef.hex}` }
+                  : undefined
+              }
             >
               <span
                 className={[
@@ -136,7 +146,10 @@ export function PassoFornecedores({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex items-start justify-between gap-2">
-                  <span className="font-bold text-navy text-sm truncate">{g.nome}</span>
+                  <span className="min-w-0">
+                    <span className="font-bold text-navy text-sm truncate block">{g.nome}</span>
+                    <FornecedorCorBadge cor={g.cor} size="sm" className="mt-0.5" />
+                  </span>
                   {g.emTransito && (
                     <span className="chip chip-info shrink-0">
                       <Truck size={10} /> Em trânsito

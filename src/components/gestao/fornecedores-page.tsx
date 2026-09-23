@@ -32,6 +32,10 @@ import {
 } from "@/lib/estoque-minimo";
 import { AlertTriangle, Link2 } from "lucide-react";
 import { TableWrapper } from "@/components/table-wrapper";
+import { FornecedorCorBadge } from "@/components/fornecedor-cor-badge";
+import { FornecedorCorPicker } from "@/components/fornecedor-cor-picker";
+import { useCoresEmUsoFornecedor } from "@/hooks/use-fornecedor-cor";
+import { isFornecedorCorId, type FornecedorCorId } from "@/lib/fornecedor-cores";
 
 type FornecedorRow = {
   id: string;
@@ -39,6 +43,7 @@ type FornecedorRow = {
   ativo: boolean;
   codigo_wise?: string | null;
   mesclado_em_id?: string | null;
+  cor?: string | null;
 };
 
 const AGUARDANDO_VINCULO = "Aguardando vínculo";
@@ -59,13 +64,17 @@ export function FornecedoresPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [nome, setNome] = useState("");
   const [codigoWise, setCodigoWise] = useState("");
+  const [cor, setCor] = useState<FornecedorCorId | null>(null);
+  const [corError, setCorError] = useState<string | null>(null);
   const [selecionados, setSelecionados] = useState<string[]>([]);
+  const { data: coresEmUso = [] } = useCoresEmUsoFornecedor(sheetOpen ? editId : null);
   const [pendingDesativar, setPendingDesativar] = useState<FornecedorRow | null>(null);
   const [pendingCriar, setPendingCriar] = useState<{
     id: string;
     nome_externo: string;
     codigo_externo: string | null;
   } | null>(null);
+  const [pendingCriarCor, setPendingCriarCor] = useState<FornecedorCorId | null>(null);
 
   const pendFornecedor = useMemo(
     () =>
@@ -100,6 +109,8 @@ export function FornecedoresPage() {
     setEditId(null);
     setNome("");
     setCodigoWise("");
+    setCor(null);
+    setCorError(null);
     setSheetOpen(true);
   };
 
@@ -107,6 +118,8 @@ export function FornecedoresPage() {
     setEditId(row.id);
     setNome(row.nome);
     setCodigoWise(row.codigo_wise ?? "");
+    setCor(isFornecedorCorId(row.cor) ? row.cor : null);
+    setCorError(null);
     setSheetOpen(true);
   };
 
@@ -123,10 +136,16 @@ export function FornecedoresPage() {
       toast.error("Informe o nome do fornecedor");
       return;
     }
+    if (!cor) {
+      setCorError("Escolha a cor do fornecedor");
+      toast.error("Cor é obrigatória");
+      return;
+    }
+    setCorError(null);
     const codigo = codigoWise.trim() || null;
     if (editId) {
       update.mutate(
-        { id: editId, nome: nome.trim(), codigo_wise: codigo },
+        { id: editId, nome: nome.trim(), codigo_wise: codigo, cor },
         {
           onSuccess: () => {
             toast.success("Fornecedor atualizado");
@@ -137,7 +156,7 @@ export function FornecedoresPage() {
       );
     } else {
       insert.mutate(
-        { nome: nome.trim(), codigo_wise: codigo, ativo: true },
+        { nome: nome.trim(), codigo_wise: codigo, cor, ativo: true },
         {
           onSuccess: () => {
             toast.success("Fornecedor cadastrado");
@@ -354,11 +373,12 @@ export function FornecedoresPage() {
                   onChange={() => toggleSelecionado(row.id)}
                   aria-label={`Selecionar ${row.nome}`}
                 />
-                <span className="min-w-0">
+                <span className="min-w-0 flex items-center gap-2 flex-wrap">
+                  <FornecedorCorBadge cor={row.cor} size="sm" />
                   {row.codigo_wise ? (
-                    <span className="chip chip-muted mr-1">{row.codigo_wise}</span>
+                    <span className="chip chip-muted">{row.codigo_wise}</span>
                   ) : null}
-                  {row.nome}
+                  <span>{row.nome}</span>
                   {row.mesclado_em_id ? (
                     <span className="text-muted-foreground text-xs">
                       {" "}
@@ -447,17 +467,28 @@ export function FornecedoresPage() {
             <AlertDialogTitle>Criar fornecedor novo?</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingCriar
-                ? `Confirma criar “${pendingCriar.nome_externo}” no cadastro? Só use se não houver correspondência na base. Preferível vincular a um existente.`
+                ? `Confirma criar “${pendingCriar.nome_externo}” no cadastro? Só use se não houver correspondência na base. Preferível vincular a um existente. Escolha a cor (obrigatória).`
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {pendingCriar && (
+            <div className="px-1 pb-2 max-h-64 overflow-y-auto">
+              <FornecedorCorPicker
+                value={pendingCriarCor}
+                onChange={setPendingCriarCor}
+              />
+            </div>
+          )}
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setPendingCriarCor(null)}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              disabled={resolver.isPending || !isAdmin}
+              disabled={resolver.isPending || !isAdmin || !pendingCriarCor}
               onClick={(e) => {
                 e.preventDefault();
-                if (!pendingCriar || !user) return;
+                if (!pendingCriar || !user || !pendingCriarCor) {
+                  toast.error("Escolha a cor do fornecedor");
+                  return;
+                }
                 resolver.mutate(
                   {
                     pendenciaId: pendingCriar.id,
@@ -468,11 +499,13 @@ export function FornecedoresPage() {
                     criarNome: pendingCriar.nome_externo,
                     userId: user.id,
                     confirmarCriacaoAdm: true,
+                    cor: pendingCriarCor,
                   },
                   {
                     onSuccess: () => {
                       toast.success("Fornecedor criado");
                       setPendingCriar(null);
+                      setPendingCriarCor(null);
                     },
                     onError: (err) => toast.error(err.message),
                   },
@@ -505,6 +538,25 @@ export function FornecedoresPage() {
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 placeholder="Nome do fornecedor"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>
+                Cor <span className="text-destructive">*</span>
+              </Label>
+              <p className="text-xs text-muted-foreground mb-1">
+                Identifica as caixas no galpão. Círculo + nome — cores em uso nos seus produtos
+                aparecem marcadas.
+              </p>
+              <FornecedorCorPicker
+                value={cor}
+                onChange={(id) => {
+                  setCor(id);
+                  setCorError(null);
+                }}
+                emUso={coresEmUso}
+                disabled={insert.isPending || update.isPending}
+                error={corError}
               />
             </div>
             {editId && fornecedorAliases.length > 0 && (

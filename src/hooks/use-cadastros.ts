@@ -31,6 +31,8 @@ export type CadastroBase = {
   /** NOP-132: código Wise fora do nome */
   codigo_wise?: string | null;
   mesclado_em_id?: string | null;
+  /** NOP-360: cor da paleta (nullable = legado) */
+  cor?: string | null;
 };
 
 export function useFornecedores() {

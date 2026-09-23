@@ -60,7 +60,7 @@ type PedidoAberto = {
   fornecedor_id: string;
   hora_chegada: string | null;
   status: string;
-  fornecedores?: { nome: string } | { nome: string }[] | null;
+  fornecedores?: { nome: string; cor?: string | null } | { nome: string; cor?: string | null }[] | null;
   itens_pedido?: unknown[];
 };
 
@@ -146,6 +146,7 @@ export function ConferenciaCaminhao({
         g = {
           fornecedorId: p.fornecedor_id,
           nome: nomeFornecedor(p),
+          cor: one(p.fornecedores)?.cor ?? null,
           pedidoIds: [],
           pedidoIdsSelecionados: [],
           itensTotal: 0,
@@ -250,6 +251,7 @@ export function ConferenciaCaminhao({
     conferenciaId: string;
     conferenciaStatus: string;
     fornecedorNome: string;
+    fornecedorCor: string | null;
     pedidoCodigo: string;
     produto: string;
     fotoUrl: string | null;
@@ -295,6 +297,7 @@ export function ConferenciaCaminhao({
           conferenciaId: conf.id,
           conferenciaStatus: conf.status,
           fornecedorNome: nomeFornecedor(ped),
+          fornecedorCor: one(ped.fornecedores)?.cor ?? null,
           pedidoCodigo: ped.codigo,
           produto: prod?.nome ?? ip?.nome_externo ?? "—",
           fotoUrl: ic.foto_url,
@@ -430,6 +433,7 @@ export function ConferenciaCaminhao({
     ? {
         itemId: ativo.itemId,
         fornecedorNome: ativo.fornecedorNome,
+        fornecedorCor: ativo.fornecedorCor,
         pedidoCodigo: ativo.pedidoCodigo,
         produto: ativo.produto,
         fotoUrl: ativo.fotoUrl,

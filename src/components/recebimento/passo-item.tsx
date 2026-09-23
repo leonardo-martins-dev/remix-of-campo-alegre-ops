@@ -5,10 +5,13 @@ import { Input } from "@/components/ui/input";
 import { SemConversaoSelo } from "@/components/sem-conversao-selo";
 import { ChipLabel } from "@/components/ui-galpao";
 import { labelUnidadeProduto, progressoItem, textoConversao } from "@/lib/conferir-chegada";
+import { FornecedorCorBadge } from "@/components/fornecedor-cor-badge";
 
 export type ItemEmConferencia = {
   itemId: string;
   fornecedorNome: string;
+  /** NOP-360 */
+  fornecedorCor?: string | null;
   pedidoCodigo: string;
   produto: string;
   fotoUrl: string | null;
@@ -131,7 +134,10 @@ export function PassoItem({
   return (
     <div className="space-y-3">
       <div className="rounded-lg bg-secondary/60 px-3 py-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="font-bold text-navy truncate">{item.fornecedorNome}</span>
+        <span className="min-w-0 flex items-center gap-2">
+          <span className="font-bold text-navy truncate">{item.fornecedorNome}</span>
+          <FornecedorCorBadge cor={item.fornecedorCor} size="sm" />
+        </span>
         <span className="chip chip-info shrink-0">Pedido {item.pedidoCodigo}</span>
       </div>
 

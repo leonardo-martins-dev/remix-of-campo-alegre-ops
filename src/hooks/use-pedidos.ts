@@ -73,7 +73,7 @@ export function usePedidosDia(date = todayBRT()) {
         .from("pedidos_recebimento")
         .select(`
           id, codigo, fornecedor_id, origem, data_pedido, hora_chegada, status, wise_pedido_id, data_prevista,
-          fornecedores(nome),
+          fornecedores(nome, cor),
           itens_pedido(id, cliente_id, clientes(nome), itens_pedido_rateio(destinatario_id, quantidade, destinatarios(nome)))
         `)
         .or(
@@ -95,7 +95,7 @@ export function usePedido(pedidoId: string | null) {
         .from("pedidos_recebimento")
         .select(`
           *,
-          fornecedores(nome),
+          fornecedores(nome, cor),
           itens_pedido(
             id, quantidade_pedida, preco_unitario, unidade, cliente_id, nome_externo, codigo_externo, produto_id,
             produtos(id, nome, unidade, codigo, tolerancia_pct, tipo_caixa_padrao_id),
@@ -247,7 +247,7 @@ export function useFaltas(filters: FaltasFilters = {}) {
           itens_pedido(
             id, quantidade_pedida, preco_unitario,
             produtos(nome, unidade),
-            pedidos_recebimento(id, codigo, data_pedido, status, fornecedor_id, encerrado_em, encerrado_por, motivo_encerramento, fornecedores(id, nome))
+            pedidos_recebimento(id, codigo, data_pedido, status, fornecedor_id, encerrado_em, encerrado_por, motivo_encerramento, fornecedores(id, nome, cor))
           )
         `)
         .not("divergencia", "is", null);
@@ -363,7 +363,7 @@ export function usePedidosAguardandoLiberacao() {
         .from("pedidos_recebimento")
         .select(`
           id, codigo, status, data_pedido, hora_chegada,
-          fornecedores(nome),
+          fornecedores(nome, cor),
           conferencias(id, status, finalizada_em, itens_conferencia(
             id, divergencia, quantidade_divergencia, quantidade_recebida, foto_url,
             dentro_tolerancia, tolerancia_pct_aplicada,

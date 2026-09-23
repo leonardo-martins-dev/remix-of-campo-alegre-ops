@@ -399,6 +399,8 @@ export function useResolverPendencia() {
       userId: string;
       /** Confirmação explícita do ADM para criar fornecedor novo (NOP-306). */
       confirmarCriacaoAdm?: boolean;
+      /** NOP-360 — obrigatória ao criar fornecedor */
+      cor?: string | null;
     }) => {
       let entidadeId = payload.entidadeId ?? null;
 
@@ -419,6 +421,11 @@ export function useResolverPendencia() {
         }
         if (payload.tipo === "fornecedor" && payload.codigoExterno) {
           row.codigo_wise = payload.codigoExterno;
+        }
+        if (payload.tipo === "fornecedor") {
+          const cor = (payload as { cor?: string }).cor;
+          if (!cor) throw new Error("Cor é obrigatória no cadastro do fornecedor");
+          row.cor = cor;
         }
         const { data, error } = await supabase.from(table).insert(row).select("id").single();
         if (error) throw error;
