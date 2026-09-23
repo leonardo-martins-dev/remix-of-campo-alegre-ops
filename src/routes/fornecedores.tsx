@@ -14,6 +14,7 @@ import { useValesPorFornecedor, useValesFornecedor } from "@/hooks/use-vales";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { one } from "@/lib/embed";
+import { fillRateDisplay, formatMetaLine } from "@/lib/indicadores-metricas";
 
 export const Route = createFileRoute("/fornecedores")({
   component: Page,
@@ -136,9 +137,38 @@ function Page() {
           0,
         );
         const fillRow = (
-          fillRows as { fornecedor_id: string; fill_rate?: number; fill_rate_valor?: number }[]
+          fillRows as {
+            fornecedor_id: string;
+            fill_rate?: number | null;
+            fill_rate_valor?: number | null;
+            total_itens?: number;
+            itens_completos?: number;
+            valor_pedido?: number;
+            valor_recebido?: number;
+          }[]
         ).find((r) => r.fornecedor_id === f.id);
-        const fill = Number(fillRow?.fill_rate_valor ?? fillRow?.fill_rate ?? 100);
+        // Prefer valor; fall back to itens. Never default to 100 (NOP-320).
+        const denomValor = Number(fillRow?.valor_pedido ?? 0);
+        const numValor = Number(fillRow?.valor_recebido ?? 0);
+        const denomItens = Number(fillRow?.total_itens ?? 0);
+        const numItens = Number(fillRow?.itens_completos ?? 0);
+        const fillDisp = fillRateDisplay(
+          denomValor > 0
+            ? {
+                numerador: numValor,
+                denominador: denomValor,
+                pedidos: peds.length,
+                entregas,
+                formula: "valor recebido ÷ valor pedido × 100 (pedidos fechados no período)",
+              }
+            : {
+                numerador: numItens,
+                denominador: denomItens,
+                pedidos: peds.length,
+                entregas,
+                formula: "itens completos ÷ itens do pedido × 100 (pedidos fechados no período)",
+              },
+        );
         const valeRow = (
           valesPorFornecedor as {
             fornecedor_id: string;
@@ -158,7 +188,7 @@ function Page() {
           nome: f.nome,
           pedidos: peds.length,
           entregas,
-          fill,
+          fillDisp,
           faltaCx,
           faltaR,
           acima,
@@ -233,17 +263,34 @@ function Page() {
                 </td>
                 <td
                   className={`px-2 whitespace-nowrap ${
-                    r.fill < alvo
-                      ? "text-destructive"
-                      : r.fill >= alvo
-                        ? "text-[var(--success)]"
-                        : ""
+                    r.fillDisp.kind !== "pct"
+                      ? "text-muted-foreground"
+                      : r.fillDisp.pct! < alvo
+                        ? "text-destructive"
+                        : "text-[var(--success)]"
                   }`}
+                  title={formatMetaLine({
+                    periodLabel: period === "week" ? "7 dias" : "30 dias",
+                    sampleSize: r.fillDisp.sampleSize,
+                    formula: r.fillDisp.formula,
+                  })}
                 >
-                  <span
-                    className={`inline-block h-2 w-2 rounded-full mr-1 ${r.fill < alvo * 0.9 ? "bg-destructive" : r.fill < alvo ? "bg-[var(--warning)]" : "bg-[var(--success)]"}`}
-                  />
-                  {r.fill.toFixed(0)}%
+                  {r.fillDisp.kind === "pct" ? (
+                    <>
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full mr-1 ${
+                          r.fillDisp.pct! < alvo * 0.9
+                            ? "bg-destructive"
+                            : r.fillDisp.pct! < alvo
+                              ? "bg-[var(--warning)]"
+                              : "bg-[var(--success)]"
+                        }`}
+                      />
+                      {r.fillDisp.label}
+                    </>
+                  ) : (
+                    <span className="italic">{r.fillDisp.label}</span>
+                  )}
                 </td>
                 <td className="px-2 whitespace-nowrap">
                   {r.faltaCx} un · {formatBRL(r.faltaR)} {r.acima ? `(${r.acima} acima)` : ""}
@@ -275,6 +322,10 @@ function Page() {
           </tbody>
         </table>
       </TableWrapper>
+      <p className="text-[11px] text-muted-foreground mt-2 mb-4">
+        Período: {period === "week" ? "7 dias" : "30 dias"} · Fill = valor recebido ÷ valor pedido (pedidos
+        fechados); sem denominador → &quot;sem dados&quot; / &quot;aguardando entrega&quot; (sem cor de meta).
+      </p>
       {ficha && (
         <div className="mt-6 rounded-xl border p-4 space-y-3">
           <div className="flex justify-between">
@@ -288,7 +339,7 @@ function Page() {
             </Button>
           </div>
           <p className="text-sm">
-            Impacto total {formatBRL(ficha.impacto)} · fill {ficha.fill.toFixed(1)}% · quebra{" "}
+            Impacto total {formatBRL(ficha.impacto)} · fill {ficha.fillDisp.label} · quebra{" "}
             {ficha.quebraCx} un · qualidade galpão {ficha.galQualCx} un
           </p>
 

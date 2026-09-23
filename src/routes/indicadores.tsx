@@ -5,6 +5,7 @@ import { TableWrapper } from "@/components/table-wrapper";
 import { KpiCard } from "@/components/kpi-card";
 import { useIndicadores } from "@/hooks/use-dashboard";
 import { formatTime, formatDurationMinutes } from "@/lib/utils-date";
+import { durationMinutes, formatMetaLine } from "@/lib/indicadores-metricas";
 
 export const Route = createFileRoute("/indicadores")({
   component: Page,
@@ -31,77 +32,123 @@ function Page() {
   }
 
   const cv = data.cicloView as {
-    tempo_medio_conferencia_min?: number;
-    tempo_medio_carga_min?: number;
-    ciclo_total_medio_min?: number;
-    retorno_medio_caixas_min?: number;
-  } | undefined;
+    tempo_medio_conferencia_min?: number | null;
+    tempo_medio_carga_min?: number | null;
+    ciclo_total_medio_min?: number | null;
+    retorno_medio_caixas_min?: number | null;
+  };
 
-  const conf = Number(cv?.tempo_medio_conferencia_min ?? 0);
-  const carga = Number(cv?.tempo_medio_carga_min ?? 0);
-  const cicloTotal = Number(cv?.ciclo_total_medio_min ?? 0);
-  const retorno = Number(cv?.retorno_medio_caixas_min ?? 0);
-  const inicioCarga = Math.max(conf, cicloTotal - carga);
+  const confMeta = data.confMeta;
+  const cargaMeta = data.cargaMeta;
+  const retornoMeta = data.retornoMeta;
+
+  const conf = cv?.tempo_medio_conferencia_min ?? null;
+  const carga = cv?.tempo_medio_carga_min ?? null;
+  const cicloTotal = cv?.ciclo_total_medio_min ?? null;
+  const retorno = cv?.retorno_medio_caixas_min ?? null;
+  const inicioCarga =
+    conf != null && cicloTotal != null && carga != null
+      ? Math.max(conf, cicloTotal - carga)
+      : conf ?? 0;
 
   const ciclo = [
     { etapa: "Chegada fornecedor", tempo: 0 },
-    { etapa: "Conferência ok", tempo: conf },
+    { etapa: "Conferência ok", tempo: conf ?? 0 },
     { etapa: "Início da carga", tempo: inicioCarga },
-    { etapa: "Caminhão na rua", tempo: cicloTotal },
-    { etapa: "Retorno de caixas", tempo: cicloTotal + retorno },
+    { etapa: "Caminhão na rua", tempo: cicloTotal ?? inicioCarga },
+    {
+      etapa: "Retorno de caixas",
+      tempo: (cicloTotal ?? inicioCarga) + (retorno ?? 0),
+    },
   ];
 
   const tempoCargaPorLoja = data.cargas.map((c) => {
-    const inicio = new Date(c.hora_inicio).getTime();
-    const fim = new Date(c.hora_fim).getTime();
-    const duracao = Math.max(1, (fim - inicio) / 60000);
+    const minutes = durationMinutes(c.hora_inicio, c.hora_fim);
     const itens = c.romaneio_itens?.length ?? 0;
     const cliente = Array.isArray(c.clientes) ? c.clientes[0] : c.clientes;
+    const duracao = minutes == null ? null : Math.round(minutes);
     return {
       loja: cliente?.nome ?? "—",
       inicio: formatTime(c.hora_inicio),
       fim: formatTime(c.hora_fim),
-      duracao: Math.round(duracao),
-      ipm: itens / duracao,
+      duracao,
+      ipm: minutes && minutes > 0 ? itens / minutes : null,
+      outlier: data.cargaOutliers?.some((o) => o.id === c.id) ?? false,
     };
   });
 
   const conferenciasRows = data.conferencias.map((c) => {
-    const dur =
-      (new Date(c.finalizada_em).getTime() - new Date(c.iniciada_em).getTime()) / 60000;
+    const minutes = durationMinutes(c.iniciada_em, c.finalizada_em);
     const ped = Array.isArray(c.pedidos_recebimento) ? c.pedidos_recebimento[0] : c.pedidos_recebimento;
     const forn = ped ? (Array.isArray(ped.fornecedores) ? ped.fornecedores[0] : ped.fornecedores) : null;
     return {
+      id: c.id,
       codigo: ped?.codigo ?? "—",
       fornecedor: forn?.nome ?? "—",
-      duracao: Math.round(dur),
+      duracao: minutes == null ? null : Math.round(minutes),
+      outlier: data.confOutliers?.some((o) => o.id === c.id) ?? false,
     };
+  });
+
+  const confFooter = formatMetaLine({
+    periodLabel: confMeta.periodLabel,
+    sampleSize: confMeta.sampleSize,
+    formula: confMeta.formula,
+    outliersCount: confMeta.outliers.length,
+  });
+  const cargaFooter = formatMetaLine({
+    periodLabel: cargaMeta.periodLabel,
+    sampleSize: cargaMeta.sampleSize,
+    formula: cargaMeta.formula,
+    outliersCount: cargaMeta.outliers.length,
+  });
+  const cicloFooter = formatMetaLine({
+    periodLabel: confMeta.periodLabel,
+    sampleSize: Math.min(confMeta.sampleSize, cargaMeta.sampleSize) || confMeta.sampleSize + cargaMeta.sampleSize,
+    formula: "média conferência + média carga (amostras válidas)",
+  });
+  const retornoFooter = formatMetaLine({
+    periodLabel: retornoMeta.periodLabel,
+    sampleSize: retornoMeta.sampleSize,
+    formula: retornoMeta.formula,
   });
 
   return (
     <div>
       <PageHeader
         title="Indicadores — Tempos & Ciclo"
-        subtitle="Métricas geradas automaticamente pelos timestamps das operações"
+        subtitle="Médias só com registros finalizados válidos · período, amostra e fórmula em cada KPI"
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <KpiCard
           label="Tempo médio de conferência"
-          value={formatDurationMinutes(conf)}
+          value={conf == null ? "sem dados" : formatDurationMinutes(conf)}
           icon={PackageCheck}
+          muted={conf == null}
+          footer={confFooter}
         />
-        <KpiCard label="Tempo médio de carga" value={formatDurationMinutes(carga)} icon={Truck} />
+        <KpiCard
+          label="Tempo médio de carga"
+          value={carga == null ? "sem dados" : formatDurationMinutes(carga)}
+          icon={Truck}
+          muted={carga == null}
+          footer={cargaFooter}
+        />
         <KpiCard
           label="Ciclo total médio"
-          value={formatDurationMinutes(cicloTotal)}
+          value={cicloTotal == null ? "sem dados" : formatDurationMinutes(cicloTotal)}
           icon={Clock}
+          muted={cicloTotal == null}
+          footer={cicloFooter}
         />
         <KpiCard
           label="Retorno médio de caixa"
-          value={formatDurationMinutes(retorno)}
+          value={retorno == null ? "sem dados" : formatDurationMinutes(retorno)}
           icon={RotateCcw}
           positiveIsGood={false}
+          muted={retorno == null}
+          footer={retornoFooter}
         />
       </div>
 
@@ -134,12 +181,16 @@ function Page() {
             </div>
           ))}
         </div>
+        <p className="text-[11px] text-muted-foreground mt-3">
+          Linha usa as médias acima (sem outliers). Timestamps iguais ou registros abertos não entram na média.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card-base">
           <div className="p-4 border-b border-border">
             <h3 className="text-sm font-bold text-navy">Tempo de carregamento por loja</h3>
+            <p className="text-[11px] text-muted-foreground mt-1">{cargaFooter}</p>
           </div>
           {tempoCargaPorLoja.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">Sem cargas finalizadas.</p>
@@ -158,12 +209,19 @@ function Page() {
                 <tbody>
                   {tempoCargaPorLoja.map((t) => (
                     <tr key={t.loja + t.inicio} className="border-t border-border">
-                      <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{t.loja}</td>
+                      <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">
+                        {t.loja}
+                        {t.outlier && (
+                          <span className="ml-1 text-[10px] text-amber-600 font-normal">(outlier)</span>
+                        )}
+                      </td>
                       <td className="px-3 py-3 text-right text-muted-foreground font-mono whitespace-nowrap">{t.inicio}</td>
                       <td className="px-3 py-3 text-right text-muted-foreground font-mono whitespace-nowrap">{t.fim}</td>
-                      <td className="px-3 py-3 text-right font-semibold whitespace-nowrap">{t.duracao} min</td>
+                      <td className="px-3 py-3 text-right font-semibold whitespace-nowrap">
+                        {t.duracao == null ? "—" : `${t.duracao} min`}
+                      </td>
                       <td className="px-4 py-3 text-right font-bold text-primary-dark whitespace-nowrap">
-                        {t.ipm.toFixed(2)}
+                        {t.ipm == null ? "—" : t.ipm.toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -176,6 +234,7 @@ function Page() {
         <div className="card-base">
           <div className="p-4 border-b border-border">
             <h3 className="text-sm font-bold text-navy">Tempo de conferência por pedido</h3>
+            <p className="text-[11px] text-muted-foreground mt-1">{confFooter}</p>
           </div>
           {conferenciasRows.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">Sem conferências finalizadas.</p>
@@ -191,10 +250,21 @@ function Page() {
                 </thead>
                 <tbody>
                   {conferenciasRows.map((r) => (
-                    <tr key={r.codigo} className="border-t border-border">
-                      <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">{r.codigo}</td>
+                    <tr key={r.id} className="border-t border-border">
+                      <td className="px-4 py-3 font-semibold text-navy whitespace-nowrap">
+                        {r.codigo}
+                        {r.outlier && (
+                          <span className="ml-1 text-[10px] text-amber-600 font-normal">(outlier)</span>
+                        )}
+                      </td>
                       <td className="px-3 py-3 text-ink whitespace-nowrap">{r.fornecedor}</td>
-                      <td className="px-3 py-3 text-right font-semibold whitespace-nowrap">{r.duracao} min</td>
+                      <td
+                        className={`px-3 py-3 text-right font-semibold whitespace-nowrap ${
+                          r.outlier ? "text-amber-700" : ""
+                        }`}
+                      >
+                        {r.duracao == null ? "—" : `${r.duracao} min`}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

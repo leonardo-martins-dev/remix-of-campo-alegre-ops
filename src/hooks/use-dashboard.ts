@@ -4,6 +4,14 @@ import { todayISO } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { capitalNaRua, computeFifoAging } from "@/lib/caixas-map";
 import { addDaysBRT, formatDateBRT, todayBRT } from "@/lib/utils-date";
+import {
+  averageDurationMinutes,
+  durationMinutes,
+  fillRateDisplay,
+  MAX_CARGA_MIN,
+  MAX_CONFERENCIA_MIN,
+  safePct,
+} from "@/lib/indicadores-metricas";
 
 export function useDashboard() {
   const date = todayISO();
@@ -72,13 +80,28 @@ export function useDashboard() {
       const fillOk = fillRows.reduce((a: number, f: { itens_completos?: number }) => a + Number(f.itens_completos ?? 0), 0);
       const fillPedido = fillRows.reduce((a: number, f: { valor_pedido?: number }) => a + Number(f.valor_pedido ?? 0), 0);
       const fillRecebido = fillRows.reduce((a: number, f: { valor_recebido?: number }) => a + Number(f.valor_recebido ?? 0), 0);
-      const fillAvg = fillItens ? (fillOk / fillItens) * 100 : 0;
-      const fillValorAvg = fillPedido ? (fillRecebido / fillPedido) * 100 : 0;
+      // NOP-320: null quando denominador zero — UI mostra "sem dados"
+      const fillAvg = safePct(fillOk, fillItens);
+      const fillValorAvg = safePct(fillRecebido, fillPedido);
+      const fillItensDisp = fillRateDisplay({
+        numerador: fillOk,
+        denominador: fillItens,
+        formula: "itens completos ÷ itens do pedido × 100 (pedidos fechados hoje)",
+      });
+      const fillValorDisp = fillRateDisplay({
+        numerador: fillRecebido,
+        denominador: fillPedido,
+        formula: "valor recebido ÷ valor pedido × 100 (pedidos fechados hoje)",
+      });
 
       return {
         cargasExpedidas: statusCounts.concluida,
         fillRate: fillAvg,
         fillRateValor: fillValorAvg,
+        fillItensDisp,
+        fillValorDisp,
+        fillSampleItens: fillItens,
+        fillSampleValor: fillPedido,
         caixasAbertas,
         caixasClientes,
         caixasFornecedores,
@@ -103,28 +126,81 @@ export function useIndicadores() {
   return useQuery({
     queryKey: ["indicadores"],
     queryFn: async () => {
-      const [ciclo, cargas, conferencias] = await Promise.all([
-        supabase.from("v_indicadores_ciclo").select("*").order("data_registro", { ascending: false }).limit(7),
+      // NOP-320: médias a partir dos mesmos registros das tabelas (não v_indicadores_ciclo,
+      // que inclui inserts com timestamps iguais → média 0).
+      const [cargas, conferencias] = await Promise.all([
         supabase
           .from("cargas")
           .select("id, hora_inicio, hora_fim, clientes(nome), romaneio_itens(id)")
           .not("hora_fim", "is", null)
+          .not("hora_inicio", "is", null)
           .order("hora_fim", { ascending: false })
-          .limit(10),
+          .limit(50),
         supabase
           .from("conferencias")
           .select("id, iniciada_em, finalizada_em, pedidos_recebimento(codigo, fornecedores(nome))")
           .eq("status", "finalizada")
+          .not("iniciada_em", "is", null)
+          .not("finalizada_em", "is", null)
           .order("finalizada_em", { ascending: false })
-          .limit(10),
+          .limit(50),
       ]);
 
-      const latest = ciclo.data?.[0];
+      const cargasRows = cargas.data ?? [];
+      const confRows = conferencias.data ?? [];
+
+      const cargaSamples = cargasRows
+        .map((c: { id: string; hora_inicio: string; hora_fim: string }) => {
+          const minutes = durationMinutes(c.hora_inicio, c.hora_fim);
+          return minutes == null ? null : { id: c.id, minutes };
+        })
+        .filter(Boolean) as { id: string; minutes: number }[];
+
+      const confSamples = confRows
+        .map((c: { id: string; iniciada_em: string; finalizada_em: string }) => {
+          const minutes = durationMinutes(c.iniciada_em, c.finalizada_em);
+          return minutes == null ? null : { id: c.id, minutes };
+        })
+        .filter(Boolean) as { id: string; minutes: number }[];
+
+      const periodLabel = "últimas operações finalizadas (até 50)";
+      const confAvg = averageDurationMinutes(confSamples, {
+        maxValidMin: MAX_CONFERENCIA_MIN,
+        formula: "AVG(finalizada_em − iniciada_em) em min; exclui abertas/≤0 e >8h",
+        periodLabel,
+      });
+      const cargaAvg = averageDurationMinutes(cargaSamples, {
+        maxValidMin: MAX_CARGA_MIN,
+        formula: "AVG(hora_fim − hora_inicio) em min; exclui abertas/≤0 e >4h",
+        periodLabel,
+      });
+
+      const cicloTotal =
+        confAvg.avgMin != null && cargaAvg.avgMin != null
+          ? Math.round((confAvg.avgMin + cargaAvg.avgMin) * 10) / 10
+          : confAvg.avgMin ?? cargaAvg.avgMin;
+
       return {
-        cicloView: latest,
-        cicloHistorico: ciclo.data ?? [],
-        cargas: cargas.data ?? [],
-        conferencias: conferencias.data ?? [],
+        cicloView: {
+          tempo_medio_conferencia_min: confAvg.avgMin,
+          tempo_medio_carga_min: cargaAvg.avgMin,
+          ciclo_total_medio_min: cicloTotal,
+          retorno_medio_caixas_min: null as number | null,
+        },
+        confMeta: confAvg,
+        cargaMeta: cargaAvg,
+        retornoMeta: {
+          avgMin: null as number | null,
+          sampleSize: 0,
+          outliers: [] as { id: string; minutes: number }[],
+          formula: "retorno de caixas ainda sem amostra confiável nesta tela",
+          periodLabel,
+        },
+        cargas: cargasRows.slice(0, 10),
+        conferencias: confRows.slice(0, 10),
+        // detalhes extras para tabela de outliers
+        confOutliers: confAvg.outliers,
+        cargaOutliers: cargaAvg.outliers,
       };
     },
   });

@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { validateRateio } from "@/lib/rateio";
 import { addDaysBRT, dateRangeBRT, todayBRT } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
+import { safePct } from "@/lib/indicadores-metricas";
 
 async function fetchConfigNum(chave: string, fallback: number): Promise<number> {
   const { data } = await supabase.from("configuracoes").select("valor").eq("chave", chave).maybeSingle();
@@ -461,8 +462,8 @@ export function useFillRate(period: "today" | "week" | "month" = "week") {
           itens_completos: number;
           valor_pedido: number;
           valor_recebido: number;
-          fill_rate: number;
-          fill_rate_valor: number;
+          fill_rate: number | null;
+          fill_rate_valor: number | null;
         }
       >();
       for (const row of data ?? []) {
@@ -474,8 +475,8 @@ export function useFillRate(period: "today" | "week" | "month" = "week") {
           itens_completos: 0,
           valor_pedido: 0,
           valor_recebido: 0,
-          fill_rate: 0,
-          fill_rate_valor: 0,
+          fill_rate: null,
+          fill_rate_valor: null,
         };
         cur.total_itens += Number(row.total_itens ?? 0);
         cur.itens_completos += Number(row.itens_completos ?? 0);
@@ -483,10 +484,11 @@ export function useFillRate(period: "today" | "week" | "month" = "week") {
         cur.valor_recebido += Number(row.valor_recebido ?? 0);
         byForn.set(id, cur);
       }
+      // NOP-320: sem denominador → null (nunca 100% em 0/0)
       return [...byForn.values()].map((r) => ({
         ...r,
-        fill_rate: r.total_itens ? Math.round((r.itens_completos / r.total_itens) * 1000) / 10 : 0,
-        fill_rate_valor: r.valor_pedido ? Math.round((r.valor_recebido / r.valor_pedido) * 1000) / 10 : 0,
+        fill_rate: safePct(r.itens_completos, r.total_itens),
+        fill_rate_valor: safePct(r.valor_recebido, r.valor_pedido),
       }));
     },
   });

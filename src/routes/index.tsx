@@ -109,9 +109,24 @@ function AdminDashboard() {
     );
   }
 
-  const { cargasExpedidas, fillRate, fillRateValor, caixasClientes, caixasFornecedores, caixasGalpao, capital, perdaCaixasMes, lastInventarioGalpao, statusCounts, topClientes, quebraDia, pendenciasVinculo, divergenciasDia } = data;
+  const { cargasExpedidas, fillRate, fillRateValor, fillItensDisp, fillValorDisp, fillSampleItens, fillSampleValor, caixasClientes, caixasFornecedores, caixasGalpao, capital, perdaCaixasMes, lastInventarioGalpao, statusCounts, topClientes, quebraDia, pendenciasVinculo, divergenciasDia } = data as typeof data & {
+    fillItensDisp?: { label: string; kind: string; formula: string; sampleSize: number };
+    fillValorDisp?: { label: string; kind: string; formula: string; sampleSize: number };
+    fillSampleItens?: number;
+    fillSampleValor?: number;
+    fillRate: number | null;
+    fillRateValor: number | null;
+  };
   const totalCargas = statusCounts.concluida + statusCounts.carregando + statusCounts.aguardando;
   const maxAbertas = Math.max(1, ...topClientes.map((c) => c.abertas));
+  const fillLabel =
+    fillItensDisp && fillValorDisp
+      ? `${fillItensDisp.label} / ${fillValorDisp.label}`
+      : fillRate == null && fillRateValor == null
+        ? "sem dados"
+        : `${fillRate == null ? "sem dados" : `${Math.round(fillRate)}%`} / ${fillRateValor == null ? "sem dados" : `${Math.round(fillRateValor)}%`}`;
+  const fillMuted = (fillItensDisp?.kind !== "pct" && fillValorDisp?.kind !== "pct") || (fillRate == null && fillRateValor == null);
+  const fillFooter = `Período: hoje · Amostra itens n=${fillSampleItens ?? fillItensDisp?.sampleSize ?? 0} · valor n=${fillSampleValor ?? fillValorDisp?.sampleSize ?? 0} · Fórmula: completos÷pedido e R$ recebido÷pedido (fechados)`;
 
   return (
     <div>
@@ -121,9 +136,11 @@ function AdminDashboard() {
         <Link to="/fornecedores" className="block">
           <KpiCard
             label="Fill rate hoje (itens / R$)"
-            value={`${fillRate.toFixed(0)}% / ${fillRateValor.toFixed(0)}%`}
+            value={fillLabel}
             icon={Percent}
             positiveIsGood={false}
+            muted={fillMuted}
+            footer={fillFooter}
           />
         </Link>
         <KpiCard label="Com supermercados" value={String(caixasClientes)} icon={Box} positiveIsGood={false} />
