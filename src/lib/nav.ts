@@ -252,6 +252,7 @@ export const PROFILE_PRIMARY: Record<NavProfile, NavLink[]> = {
     { id: "op-receber", label: "Receber", to: "/receber", slug: "receber", icon: PackageCheck },
     { id: "op-separar", label: "Separar", to: "/expedicao", slug: "expedicao", icon: Truck },
     { id: "op-caixas", label: "Caixas", to: "/caixas", slug: "caixas", icon: Box },
+    { id: "op-embalagens", label: "Embalagens", to: "/embalagens", slug: "embalagens", icon: Package },
     { id: "op-quebras", label: "Quebras", to: "/quebra", slug: "quebra", icon: AlertTriangle },
   ],
   motorista: [

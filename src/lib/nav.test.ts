@@ -51,7 +51,10 @@ const gestao = filterAccessibleLinks(GESTAO_LINKS, (s) => s === "gestao" || s ==
 if (gestao.some((l) => l.id === "usuarios")) throw new Error("usuarios admin-only");
 if (!gestao.some((l) => l.id === "cadastros")) throw new Error("cadastros visible");
 
-if (PROFILE_PRIMARY.operador.length !== 4) throw new Error("operador menu size");
+if (PROFILE_PRIMARY.operador.length !== 5) throw new Error("operador menu size");
+if (!PROFILE_PRIMARY.operador.some((l) => l.slug === "embalagens")) {
+  throw new Error("operador must include embalagens");
+}
 if (PROFILE_PRIMARY.motorista.length !== 3) throw new Error("motorista menu size");
 if (PROFILE_PRIMARY.admin.length !== 5) throw new Error("admin menu size");
 
