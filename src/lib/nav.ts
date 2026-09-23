@@ -124,6 +124,14 @@ export const OPS_HUBS: OpsHub[] = [
         desc: "Cargas em andamento",
       },
       {
+        id: "minha-rota",
+        label: "Minha rota",
+        to: "/expedicao/minha-rota",
+        slug: "expedicao/minha-rota",
+        icon: Route,
+        desc: "Rota do dia com entrega e vazias",
+      },
+      {
         id: "entregas",
         label: "Entregas",
         to: "/expedicao/entrega",
@@ -247,9 +255,9 @@ export const PROFILE_PRIMARY: Record<NavProfile, NavLink[]> = {
     { id: "op-quebras", label: "Quebras", to: "/quebra", slug: "quebra", icon: AlertTriangle },
   ],
   motorista: [
+    { id: "mot-rota", label: "Minha rota", to: "/expedicao/minha-rota", slug: "expedicao/minha-rota", icon: Route },
     { id: "mot-saida", label: "Saída", to: "/expedicao/saida", slug: "expedicao/saida", icon: Truck },
     { id: "mot-entrega", label: "Entrega", to: "/expedicao/entrega", slug: "expedicao/entrega", icon: CheckCircle2 },
-    { id: "mot-vazias", label: "Vazias", to: "/caixas/movimentacao", slug: "caixas/movimentacao", icon: ArrowLeftRight },
   ],
   fornecedor: [
     { id: "for-pedidos", label: "Pedidos", to: "/fornecedor", slug: "fornecedor", icon: PackageCheck },

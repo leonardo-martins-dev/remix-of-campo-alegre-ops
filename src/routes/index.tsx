@@ -3,7 +3,6 @@ import {
   Truck,
   PackageCheck,
   ClipboardCheck,
-  ArrowLeftRight,
   AlertTriangle,
   AlertCircle,
   Box,
@@ -13,6 +12,7 @@ import {
   Settings,
   UserPlus,
   LayoutDashboard,
+  MapPinned,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/lib/auth";
@@ -220,6 +220,12 @@ function MotoristaTurno({ motoristaId }: { motoristaId?: string }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Link to="/expedicao/minha-rota" search={{ saidaId: undefined }} className="card-base p-4 hover:bg-secondary/50 touch-target">
+          <div className="text-xs text-muted-foreground">Menu</div>
+          <div className="text-sm font-bold text-navy flex items-center gap-2 mt-1">
+            <MapPinned size={16} /> Minha rota
+          </div>
+        </Link>
         <Link to="/expedicao/saida" search={{ cargaId: undefined, clienteId: undefined }} className="card-base p-4 hover:bg-secondary/50 touch-target">
           <div className="text-xs text-muted-foreground">Menu</div>
           <div className="text-sm font-bold text-navy flex items-center gap-2 mt-1">
@@ -230,12 +236,6 @@ function MotoristaTurno({ motoristaId }: { motoristaId?: string }) {
           <div className="text-xs text-muted-foreground">Menu</div>
           <div className="text-sm font-bold text-navy flex items-center gap-2 mt-1">
             <CheckCircle2 size={16} /> Entrega
-          </div>
-        </Link>
-        <Link to="/caixas/movimentacao" className="card-base p-4 hover:bg-secondary/50 touch-target">
-          <div className="text-xs text-muted-foreground">Menu</div>
-          <div className="text-sm font-bold text-navy flex items-center gap-2 mt-1">
-            <ArrowLeftRight size={16} /> Vazias
           </div>
         </Link>
       </div>
@@ -257,8 +257,8 @@ function MotoristaTurno({ motoristaId }: { motoristaId?: string }) {
           {proximas.map((p) => (
             <Link
               key={`${p.carga_id}-${p.cliente_id}`}
-              to="/expedicao/entrega"
-              search={{ cargaId: p.carga_id }}
+              to="/expedicao/minha-rota"
+              search={{ saidaId: undefined }}
               className="card-base p-4 flex items-center justify-between hover:bg-secondary/50 touch-target"
             >
               <div>

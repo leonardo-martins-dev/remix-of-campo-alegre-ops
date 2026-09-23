@@ -252,6 +252,7 @@ export function invalidateOrdem(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["expedicao-por-rota"] });
   qc.invalidateQueries({ queryKey: ["saidas-expedicao"] });
   qc.invalidateQueries({ queryKey: ["entregas-sem-confirmacao"] });
+  qc.invalidateQueries({ queryKey: ["minha-rota"] });
   qc.invalidateQueries({ queryKey: ["saldos-caixa"] });
 }
 
