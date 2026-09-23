@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,11 +32,22 @@ import {
   useUpdateProfile,
   useAllPages,
   useUserPermissions,
-  useSetPermission,
+  useSetUserPermissions,
+  useActiveAdminCount,
   createUserViaEdge,
 } from "@/hooks/use-users";
 import { isSuperAdmin, SUPER_ADMIN_EMAIL } from "@/lib/super-admin";
 import { useFornecedores, useMotoristas } from "@/hooks/use-cadastros";
+import {
+  USUARIOS_SLUG,
+  completePermissionGaps,
+  counterLabel,
+  grantWithDeps,
+  groupPagesByModule,
+  incompletePermissions,
+  requiredDepsOf,
+  revokeWithDependents,
+} from "@/lib/permission-deps";
 
 type UserRow = {
   id: string;
@@ -163,8 +174,162 @@ function PermissionsSheet({
   onClose: () => void;
 }) {
   const { data: allPages = [], isLoading: loadingPages, isError: pagesError } = useAllPages();
-  const setPermission = useSetPermission();
+  const setPermissions = useSetUserPermissions();
+  const { data: adminCount = 0 } = useActiveAdminCount();
   const { data: perms = [], isLoading: loadingPerms } = useUserPermissions(open ? user?.id ?? null : null);
+
+  const enabledSlugs = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of perms) {
+      if (row.can_access !== true) continue;
+      const slug = (row as { pages?: { slug?: string } | { slug?: string }[] | null }).pages;
+      const s = Array.isArray(slug) ? slug[0]?.slug : slug?.slug;
+      // fallback: resolve via allPages
+      if (s) set.add(s);
+      else {
+        const page = allPages.find((p: { id: string }) => p.id === row.page_id);
+        if (page?.slug) set.add(page.slug);
+      }
+    }
+    return set;
+  }, [perms, allPages]);
+
+  const gaps = useMemo(() => incompletePermissions(enabledSlugs), [enabledSlugs]);
+  const groups = useMemo(
+    () =>
+      groupPagesByModule(
+        allPages.map((p: { id: string; slug: string; nome: string; grupo?: string; ordem?: number }) => ({
+          id: p.id,
+          slug: p.slug,
+          nome: p.nome,
+          grupo: p.grupo,
+          ordem: p.ordem,
+        })),
+      ),
+    [allPages],
+  );
+
+  const nomeBySlug = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of allPages) m.set(p.slug, p.nome);
+    return m;
+  }, [allPages]);
+
+  const catalogSlugs = useMemo(() => allPages.map((p: { slug: string }) => p.slug), [allPages]);
+
+  const persist = async (
+    next: Set<string>,
+    opts?: { toastAdded?: string[]; toastRemoved?: string[]; silentSuccess?: boolean },
+  ) => {
+    if (!user) return;
+    // Trava client-side do último admin (servidor confirma)
+    if (
+      user.role === "admin" &&
+      enabledSlugs.has(USUARIOS_SLUG) &&
+      !next.has(USUARIOS_SLUG) &&
+      adminCount <= 1
+    ) {
+      toast.error("Não é possível remover a permissão Usuários do último administrador");
+      return;
+    }
+    try {
+      await setPermissions.mutateAsync({
+        userId: user.id,
+        enabledSlugs: [...next],
+      });
+      if (opts?.toastAdded?.length) {
+        const names = opts.toastAdded.map((s) => nomeBySlug.get(s) ?? s);
+        toast.message("Dependências liberadas automaticamente", {
+          description: names.join(", "),
+        });
+      } else if (opts?.toastRemoved?.length) {
+        const names = opts.toastRemoved.map((s) => nomeBySlug.get(s) ?? s);
+        toast.message("Permissões removidas em cascata", {
+          description: names.join(", "),
+        });
+      } else if (!opts?.silentSuccess) {
+        toast.success("Permissões atualizadas");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar permissões");
+    }
+  };
+
+  const toggleSlug = (slug: string, turnOn: boolean) => {
+    if (!user) return;
+    if (turnOn) {
+      const { next, added } = grantWithDeps(enabledSlugs, slug);
+      if (added.length) {
+        const primary = nomeBySlug.get(slug) ?? slug;
+        const names = added.map((s) => nomeBySlug.get(s) ?? s);
+        toast.message(`${primary} também liberou`, { description: names.join(", ") });
+        void persist(next, { silentSuccess: true });
+      } else {
+        void persist(next);
+      }
+    } else {
+      if (
+        slug === USUARIOS_SLUG &&
+        user.role === "admin" &&
+        adminCount <= 1
+      ) {
+        toast.error("Não é possível remover a permissão Usuários do último administrador");
+        return;
+      }
+      const { next, removed } = revokeWithDependents(enabledSlugs, slug, catalogSlugs);
+      if (
+        user.role === "admin" &&
+        enabledSlugs.has(USUARIOS_SLUG) &&
+        !next.has(USUARIOS_SLUG) &&
+        adminCount <= 1
+      ) {
+        toast.error("Não é possível remover a permissão Usuários do último administrador (cascata)");
+        return;
+      }
+      const others = removed.filter((s) => s !== slug);
+      if (others.length > 0) {
+        const names = others.map((s) => nomeBySlug.get(s) ?? s);
+        toast.message("Também serão desmarcadas", { description: names.join(", ") });
+      }
+      void persist(next, { toastRemoved: others.length ? removed : undefined });
+    }
+  };
+
+  const toggleGroup = (slugs: string[], turnOn: boolean) => {
+    if (!user) return;
+    let next = new Set(enabledSlugs);
+    const added: string[] = [];
+    const removed: string[] = [];
+    if (turnOn) {
+      for (const slug of slugs) {
+        const r = grantWithDeps(next, slug);
+        next = r.next;
+        added.push(...r.added);
+      }
+      void persist(next, { toastAdded: [...new Set(added)] });
+    } else {
+      for (const slug of [...slugs].reverse()) {
+        const r = revokeWithDependents(next, slug, catalogSlugs);
+        next = r.next;
+        removed.push(...r.removed);
+      }
+      if (
+        user.role === "admin" &&
+        enabledSlugs.has(USUARIOS_SLUG) &&
+        !next.has(USUARIOS_SLUG) &&
+        adminCount <= 1
+      ) {
+        toast.error("Não é possível remover a permissão Usuários do último administrador");
+        return;
+      }
+      void persist(next, { toastRemoved: [...new Set(removed)] });
+    }
+  };
+
+  const completeGaps = () => {
+    const { next, added } = completePermissionGaps(enabledSlugs);
+    void persist(next, { toastAdded: added });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -176,22 +341,60 @@ function PermissionsSheet({
     }
   }, [open, loadingPages, loadingPerms, pagesError]);
 
+  const depLinked = useMemo(() => {
+    const linked = new Set<string>();
+    for (const slug of enabledSlugs) {
+      for (const d of requiredDepsOf(slug)) {
+        if (enabledSlugs.has(d)) linked.add(d);
+      }
+    }
+    return linked;
+  }, [enabledSlugs]);
+
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto z-[100]">
+      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto z-[100]">
         <SheetHeader>
           <SheetTitle>Permissões — {user?.nome ?? ""}</SheetTitle>
           <SheetDescription>
-            Defina quais páginas o usuário pode acessar.
+            Agrupadas por módulo. Dependências são resolvidas pelo sistema — combinação quebrada não
+            grava.
           </SheetDescription>
         </SheetHeader>
 
-        <div className="py-4">
+        <div className="py-4 space-y-4">
           {user?.role === "admin" ? (
             <p className="text-sm text-muted-foreground">
-              Administradores têm acesso a todas as páginas do sistema.
+              Administradores têm acesso a todas as páginas do sistema. A permissão Usuários do
+              último admin não pode ser removida.
             </p>
-          ) : loadingPages || loadingPerms ? (
+          ) : null}
+
+          {user && user.role !== "admin" && gaps.length > 0 && (
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 space-y-2">
+              <p className="text-sm font-semibold text-navy">Conjunto incompleto</p>
+              <ul className="text-xs text-muted-foreground space-y-1">
+                {gaps.map((g) => (
+                  <li key={g.slug}>
+                    <span className="font-medium text-foreground">{nomeBySlug.get(g.slug) ?? g.slug}</span>
+                    {" precisa de "}
+                    {g.missing.map((m) => nomeBySlug.get(m) ?? m).join(", ")}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                type="button"
+                size="sm"
+                className="min-h-10"
+                disabled={setPermissions.isPending}
+                onClick={completeGaps}
+              >
+                Completar dependências
+              </Button>
+            </div>
+          )}
+
+          {user?.role === "admin" ? null : loadingPages || loadingPerms ? (
             <p className="text-sm text-muted-foreground">Carregando páginas…</p>
           ) : pagesError ? (
             <p className="text-sm text-destructive">
@@ -200,26 +403,58 @@ function PermissionsSheet({
           ) : allPages.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma página cadastrada.</p>
           ) : (
-            <div className="grid grid-cols-1 gap-3">
-              {allPages.map((p: { id: string; slug: string; nome: string }) => {
-                const perm = perms.find((x: { page_id: string }) => x.page_id === p.id);
-                const checked = perm?.can_access === true;
+            <div className="space-y-4">
+              {groups.map((g) => {
+                const enabledIn = g.pages.filter((p) => enabledSlugs.has(p.slug)).length;
+                const allOn = enabledIn === g.pages.length && g.pages.length > 0;
                 return (
-                  <label key={p.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(v) =>
-                        setPermission.mutate(
-                          { userId: user!.id, pageId: p.id, canAccess: !!v },
-                          {
-                            onSuccess: () => toast.success("Permissão atualizada"),
-                            onError: (e) => toast.error(e.message),
+                  <div key={g.module} className="rounded-xl border border-border overflow-hidden">
+                    <div className="flex items-center justify-between gap-2 px-3 py-2 bg-secondary/40">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-navy text-sm">{g.module}</div>
+                        <div className="text-xs text-muted-foreground tabular-nums">
+                          {counterLabel(enabledIn, g.pages.length)}
+                        </div>
+                      </div>
+                      <label className="flex items-center gap-2 text-xs font-medium shrink-0">
+                        <Checkbox
+                          checked={allOn}
+                          disabled={setPermissions.isPending}
+                          onCheckedChange={(v) =>
+                            toggleGroup(
+                              g.pages.map((p) => p.slug),
+                              !!v,
+                            )
                           }
-                        )
-                      }
-                    />
-                    {p.nome}
-                  </label>
+                        />
+                        Grupo
+                      </label>
+                    </div>
+                    <ul className="divide-y divide-border">
+                      {g.pages.map((p) => {
+                        const checked = enabledSlugs.has(p.slug);
+                        const linked = depLinked.has(p.slug);
+                        return (
+                          <li key={p.id}>
+                            <label className="flex items-start gap-2 text-sm px-3 py-2.5 min-h-11 cursor-pointer hover:bg-secondary/30">
+                              <Checkbox
+                                className="mt-0.5"
+                                checked={checked}
+                                disabled={setPermissions.isPending}
+                                onCheckedChange={(v) => toggleSlug(p.slug, !!v)}
+                              />
+                              <span className="min-w-0">
+                                <span className="font-medium text-navy">{p.nome}</span>
+                                {linked && checked ? (
+                                  <span className="ml-2 chip chip-info text-[10px]">dependência</span>
+                                ) : null}
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 );
               })}
             </div>

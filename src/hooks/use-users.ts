@@ -64,27 +64,62 @@ export function useUserPermissions(userId: string | null) {
   });
 }
 
-export function useSetPermission() {
+/** Conta admins ativos (trava último admin / Usuários). */
+export function useActiveAdminCount() {
+  return useQuery({
+    queryKey: ["profiles", "admin-count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("role", "admin")
+        .eq("ativo", true)
+        .not("email", "ilike", SUPER_ADMIN_EMAIL);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
+/**
+ * NOP-362 — grava o conjunto completo de permissões via RPC
+ * (valida dependências + trava do último admin no servidor).
+ */
+export function useSetUserPermissions() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
       userId,
-      pageId,
-      canAccess,
+      enabledSlugs,
     }: {
       userId: string;
-      pageId: string;
-      canAccess: boolean;
+      enabledSlugs: string[];
     }) => {
-      const { error } = await supabase.from("user_page_permissions").upsert(
-        { user_id: userId, page_id: pageId, can_access: canAccess },
-        { onConflict: "user_id,page_id" }
-      );
-      if (error) throw error;
+      const { data, error } = await supabase.rpc("set_user_page_permissions", {
+        p_user_id: userId,
+        p_enabled_slugs: enabledSlugs,
+      });
+      if (error) throw new Error(error.message);
+      return data;
     },
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ["permissions", v.userId] });
     },
+  });
+}
+
+/** @deprecated use useSetUserPermissions — mantido só se algum caller legado restar */
+export function useSetPermission() {
+  const setAll = useSetUserPermissions();
+  return useMutation({
+    mutationFn: async (_args: {
+      userId: string;
+      pageId: string;
+      canAccess: boolean;
+    }) => {
+      throw new Error("Use useSetUserPermissions com o conjunto completo (NOP-362)");
+    },
+    onSuccess: () => setAll,
   });
 }
 
@@ -93,9 +128,11 @@ export async function createUserViaEdge(
   email: string,
   password: string,
   role: "admin" | "user" | "fornecedor" = "user",
-  extra?: { motorista_id?: string | null; fornecedor_id?: string | null }
+  extra?: { motorista_id?: string | null; fornecedor_id?: string | null },
 ) {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) throw new Error("Não autenticado");
 
   const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
@@ -104,7 +141,7 @@ export async function createUserViaEdge(
       "Content-Type": "application/json",
       Authorization: `Bearer ${session.access_token}`,
     },
-      body: JSON.stringify({ nome, email, password, role, ...extra }),
+    body: JSON.stringify({ nome, email, password, role, ...extra }),
   });
 
   const body = await res.json();
