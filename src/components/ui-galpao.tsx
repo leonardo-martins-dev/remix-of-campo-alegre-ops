@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Component, type ErrorInfo, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,17 +8,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  hasDetalheItems,
+  isEmptyChipValue,
+  normalizeDetalheActions,
+  type DetalheAction,
+  type NormalizedDetalhe,
+} from "@/components/ui-galpao-core";
 
-/** Valor vazio / placeholder — não renderiza chip. */
-export function isEmptyChipValue(value: unknown): boolean {
-  if (value == null) return true;
-  if (typeof value === "string") {
-    const t = value.trim();
-    return !t || t === "—" || t === "-" || t === "NaN";
-  }
-  if (typeof value === "number") return !Number.isFinite(value);
-  return false;
-}
+export {
+  hasDetalheItems,
+  isEmptyChipValue,
+  normalizeDetalheActions,
+  type DetalheAction,
+  type NormalizedDetalhe,
+};
 
 type ChipTone = "ok" | "warn" | "danger" | "muted" | "info" | "teal";
 
@@ -68,12 +72,39 @@ export function NumeroRotulo({
   );
 }
 
-export type DetalheAction = {
-  label: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  separator?: boolean;
-};
+/**
+ * Error boundary local do menu "Detalhes" (NOP-317).
+ * Se o menu quebrar (ex.: loop de render em lib de terceiros), o erro para
+ * aqui: mostra um aviso compacto no lugar do menu, em vez de desmontar a
+ * página inteira e cair no errorComponent do __root. A CTA primária fica de
+ * fora do boundary e continua utilizável.
+ */
+class MenuErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[NOP-317] falha no menu Detalhes:", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <span
+          className="chip chip-danger"
+          role="status"
+          title="O menu de detalhes falhou. Recarregue a página para tentar de novo."
+        >
+          Erro no menu
+        </span>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * Header com no máximo 1 CTA primária; o resto em "Detalhes".
@@ -88,35 +119,36 @@ export function HeaderAcoes({
   detalhes?: DetalheAction[];
   className?: string;
 }) {
-  const items = detalhes.filter((d) => d.label && !d.separator);
-  const withSeps = detalhes.filter((d) => d.label || d.separator);
+  const entries = normalizeDetalheActions(detalhes);
   return (
     <div className={`flex flex-wrap items-center gap-2 justify-end ${className}`.trim()}>
       {primary}
-      {items.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" size="sm" className="gap-1">
-              <MoreHorizontal size={14} />
-              Detalhes
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[12rem]">
-            {withSeps.map((item, i) =>
-              item.separator ? (
-                <DropdownMenuSeparator key={`sep-${i}`} />
-              ) : (
-                <DropdownMenuItem
-                  key={item.label}
-                  disabled={item.disabled}
-                  onSelect={() => item.onClick?.()}
-                >
-                  {item.label}
-                </DropdownMenuItem>
-              ),
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {hasDetalheItems(entries) && (
+        <MenuErrorBoundary>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="sm" className="gap-1">
+                <MoreHorizontal size={14} />
+                Detalhes
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[12rem]">
+              {entries.map((entry) =>
+                entry.kind === "separator" ? (
+                  <DropdownMenuSeparator key={entry.key} />
+                ) : (
+                  <DropdownMenuItem
+                    key={entry.key}
+                    disabled={entry.action.disabled}
+                    onSelect={() => entry.action.onClick?.()}
+                  >
+                    {entry.action.label}
+                  </DropdownMenuItem>
+                ),
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </MenuErrorBoundary>
       )}
     </div>
   );
