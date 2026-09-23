@@ -34,12 +34,19 @@ export function PendenciasInventarioSemanal({ origem }: { origem: "caixas" | "em
           <Box size={16} className="mt-0.5 shrink-0 text-danger" />
           <div>
             <p className="font-medium">
-              Caixas — {posicoes.length} posição(ões) sem contagem há 7 dias ou mais
+              Caixas — {posicoes.length} posição(ões) sem contagem na semana
             </p>
             <p className="text-muted-foreground">
               {posicoes
                 .slice(0, 3)
-                .map((p) => `${p.posicao_nome} (${p.dias_desde_contagem} dias)`)
+                .map((p) => {
+                  const prazo = `prazo ${formatDateBRT(p.vencimento)}`;
+                  const resp = p.responsavel ? ` · ${p.responsavel}` : "";
+                  const idade = p.nunca_contado || p.dias_desde_contagem === 999
+                    ? "nunca"
+                    : `${p.dias_desde_contagem}d`;
+                  return `${p.posicao_nome} (${idade}, ${prazo}${resp})`;
+                })
                 .join(" · ")}
               {posicoes.length > 3 ? ` · e mais ${posicoes.length - 3}` : ""}
             </p>

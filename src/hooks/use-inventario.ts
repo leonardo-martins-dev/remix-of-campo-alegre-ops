@@ -91,7 +91,11 @@ export function useRegistrarInventario() {
       if (iErr) throw iErr;
       return contagem;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["contagens-caixa"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["contagens-caixa"] });
+      qc.invalidateQueries({ queryKey: ["posicoes-contagem-pendente"] });
+      qc.invalidateQueries({ queryKey: ["painel-inventario"] });
+    },
   });
 }
 
@@ -116,6 +120,8 @@ export function useConciliarInventario() {
       qc.invalidateQueries({ queryKey: ["contagens-caixa"] });
       qc.invalidateQueries({ queryKey: ["saldos-caixa"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["posicoes-contagem-pendente"] });
+      qc.invalidateQueries({ queryKey: ["painel-inventario"] });
     },
   });
 }

@@ -283,13 +283,21 @@ function VisaoGeralInventario() {
               {items.length === 0 ? (
                 <p className="text-xs text-success">Todas as posições em dia ✓</p>
               ) : (
-                <ul className="space-y-1 text-sm">
+                <ul className="space-y-2 text-sm">
                   {items.map((p) => (
-                    <li key={p.posicao_id} className="flex justify-between items-center">
-                      <span className="truncate">{p.posicao_nome}</span>
-                      <span className="text-danger text-xs font-medium">
-                        {p.dias_desde_contagem === 999 ? "nunca" : `${p.dias_desde_contagem}d`}
-                      </span>
+                    <li key={p.posicao_id} className="space-y-0.5">
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="truncate font-medium">{p.posicao_nome}</span>
+                        <span className="text-danger text-xs font-medium shrink-0">
+                          {p.nunca_contado || p.dias_desde_contagem === 999
+                            ? "nunca"
+                            : `${p.dias_desde_contagem}d`}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Prazo sexta {formatDateBRT(p.vencimento)}
+                        {p.responsavel ? ` · ${p.responsavel}` : " · sem responsável"}
+                      </p>
                     </li>
                   ))}
                 </ul>

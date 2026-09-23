@@ -30,6 +30,13 @@ export type PosicaoPendente = {
   ultima_contagem_data: string | null;
   dias_desde_contagem: number;
   frequencia_dias: number;
+  /** Segunda-feira da semana corrente (BRT) */
+  inicio_semana: string;
+  /** Sexta-feira — prazo da contagem (BRT) */
+  vencimento: string;
+  /** Último responsável pela contagem (null se nunca contada) */
+  responsavel: string | null;
+  nunca_contado: boolean;
 };
 
 export type DivergenciaPendente = {
@@ -165,10 +172,8 @@ export function usePosicoesPendentes() {
         .from("v_posicoes_contagem_pendente")
         .select("*");
       if (error) throw error;
-      // Sem primeira contagem não é atraso — evita alerta em massa após go-live / wipe.
-      return ((data ?? []) as PosicaoPendente[]).filter(
-        (p) => p.ultima_contagem_data != null && Number(p.dias_desde_contagem) < 999,
-      );
+      // NOP-319: nunca contada OU sem contagem na semana = pendente (prazo sexta).
+      return (data ?? []) as PosicaoPendente[];
     },
   });
 }

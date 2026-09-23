@@ -82,3 +82,29 @@ export function initials(name: string): string {
     .map((w) => w[0]?.toUpperCase() ?? "")
     .join("");
 }
+
+/**
+ * NOP-319 — semana de inventário de caixas (BRT).
+ * Segunda = início; sexta = prazo. Sem contagem na semana (ou nunca) = pendente.
+ */
+export function semanaInventarioBRT(hoje: string): { inicioSemana: string; vencimento: string } {
+  const [y, m, d] = hoje.split("-").map(Number);
+  // Noon UTC avoids DST edge for BRT calendar dates
+  const dt = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1, 15, 0, 0));
+  // getUTCDay: 0=Sun … 6=Sat → ISODOW Mon=1 … Sun=7
+  const utcDay = dt.getUTCDay();
+  const isoDow = utcDay === 0 ? 7 : utcDay;
+  const inicioSemana = addDaysBRT(hoje, -(isoDow - 1));
+  const vencimento = addDaysBRT(inicioSemana, 4);
+  return { inicioSemana, vencimento };
+}
+
+/** True se nunca contou ou a última contagem é anterior à segunda da semana corrente. */
+export function isContagemCaixaPendenteSemana(
+  ultimaContagemData: string | null | undefined,
+  hoje: string = todayBRT(),
+): boolean {
+  if (!ultimaContagemData) return true;
+  const { inicioSemana } = semanaInventarioBRT(hoje);
+  return ultimaContagemData < inicioSemana;
+}
