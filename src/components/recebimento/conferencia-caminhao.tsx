@@ -36,6 +36,7 @@ import {
   itemConferenciaQtyLocked,
   podeEditarConferenciaFinalizada,
   statusItemConferencia,
+  textoParcialCaixas,
 } from "@/lib/conferir-chegada";
 import { useRegistrarHoraChegada } from "@/hooks/use-pedidos";
 import {
@@ -452,12 +453,18 @@ export function ConferenciaCaminhao({
       atual: f.itemId === itemAtivoId,
       caixasRecebidas: d.caixas,
     });
+    // NOP-340: parcial só quando há caixas e o item ainda não está conferido
+    const parcial =
+      !d.conferido && d.caixas > 0
+        ? textoParcialCaixas(d.caixas, f.esperadoCaixas)
+        : null;
     return {
       itemId: f.itemId,
       fornecedorNome: f.fornecedorNome,
       produto: f.produto,
       esperadoCaixas: f.esperadoCaixas,
       status: st,
+      parcial,
       atual: f.itemId === itemAtivoId,
     };
   });
@@ -539,6 +546,27 @@ export function ConferenciaCaminhao({
       status,
       itens: buildItensPayload(pedidoId, draftMap),
     });
+  };
+
+  /** NOP-340 — grava caixas sem marcar o item como conferido (retomável / outro aparelho). */
+  const salvarItem = async () => {
+    if (!ativo || !draftAtivo || bloqueadoAtivo) return;
+    const nextDrafts = {
+      ...drafts,
+      [ativo.itemId]: { ...draftAtivo, conferido: false },
+    };
+    setDrafts(nextDrafts);
+    try {
+      await persistPedido(ativo.pedidoId, "parcial", nextDrafts);
+      const parcial = textoParcialCaixas(draftAtivo.caixas, ativo.esperadoCaixas);
+      toast.success("Progresso do item salvo", {
+        description: parcial
+          ? `${parcial} — item Em andamento (ainda não confirmado)`
+          : "Item Em andamento (ainda não confirmado)",
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+    }
   };
 
   const confirmarItem = async () => {
@@ -772,6 +800,7 @@ export function ConferenciaCaminhao({
             <PassoItem
               item={itemView}
               onCaixas={setCaixasAtivo}
+              onSalvar={() => void salvarItem()}
               onConfirmar={() => void confirmarItem()}
               onDesmarcar={desmarcarItem}
               onDivergencia={registrarDivergencia}

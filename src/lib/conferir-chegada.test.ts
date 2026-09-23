@@ -1,5 +1,5 @@
 /**
- * NOP-318 / NOP-327 / NOP-328 — bun src/lib/conferir-chegada.test.ts
+ * NOP-318 / NOP-327 / NOP-328 / NOP-340 — bun src/lib/conferir-chegada.test.ts
  */
 import {
   caixasEsperadas,
@@ -15,6 +15,7 @@ import {
   resumoSelecao,
   statusItemConferencia,
   textoConversao,
+  textoParcialCaixas,
   unidadesDeCaixas,
 } from "./conferir-chegada";
 
@@ -168,3 +169,12 @@ assert(textoConversao(0, "un") === null, "fator zero não mostra conversão");
 assert(resumoSelecao(3, 8) === "3 selecionados de 8", "contador do passo 1");
 
 console.log("conferir-chegada.test.ts: ok");
+
+/* ───────── NOP-340 — salvar parcial ───────── */
+assert(textoParcialCaixas(7, 12) === "7 de 12 cx", "parcial com esperado");
+assert(textoParcialCaixas(1, 1) === "1 de 1 cx", "parcial unitário");
+assert(textoParcialCaixas(0, 12) === null, "zero caixas = sem parcial");
+assert(textoParcialCaixas(3, null) === "3 cx", "sem esperado mostra só recebidas");
+assert(textoParcialCaixas(-2, 10) === null, "negativo vira zero / null");
+
+console.log("conferir-chegada NOP-340: ok");

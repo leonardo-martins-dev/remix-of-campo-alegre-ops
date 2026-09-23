@@ -7,6 +7,8 @@ export type LinhaFila = {
   produto: string;
   esperadoCaixas: number | null;
   status: StatusItemConferencia;
+  /** NOP-340 — ex. "7 de 12 cx" quando há progresso salvo sem confirmar */
+  parcial: string | null;
   atual: boolean;
 };
 
@@ -61,7 +63,12 @@ export function PassoFila({
                   : `Esperado ${l.esperadoCaixas} ${l.esperadoCaixas === 1 ? "caixa" : "caixas"}`}
               </span>
             </span>
-            <span className={`chip ${TONE[l.status]} shrink-0`}>{labelStatusItem(l.status)}</span>
+            <span className="shrink-0 flex flex-col items-end gap-0.5">
+              <span className={`chip ${TONE[l.status]}`}>{labelStatusItem(l.status)}</span>
+              {l.parcial && l.status === "em_andamento" ? (
+                <span className="text-[11px] font-semibold text-navy tabular-nums">{l.parcial}</span>
+              ) : null}
+            </span>
             <ChevronRight size={16} className="text-muted-foreground shrink-0" />
           </button>
         </li>

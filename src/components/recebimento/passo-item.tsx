@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, Camera, Check, Minus, Plus, Receipt } from "lucide-react";
+import { AlertTriangle, Camera, Check, Minus, Plus, Receipt, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SemConversaoSelo } from "@/components/sem-conversao-selo";
@@ -95,6 +95,7 @@ export function PassoItem({
   item,
   editorCaixas,
   onCaixas,
+  onSalvar,
   onConfirmar,
   onDesmarcar,
   onDivergencia,
@@ -105,6 +106,8 @@ export function PassoItem({
   /** editor de tipos de caixa (só aparece quando há mais de um tipo) */
   editorCaixas?: ReactNode;
   onCaixas: (n: number) => void;
+  /** NOP-340: grava parcial sem marcar conferido */
+  onSalvar: () => void;
   onConfirmar: () => void;
   onDesmarcar: () => void;
   onDivergencia: () => void;
@@ -305,12 +308,13 @@ export function PassoItem({
         </aside>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2">
+      <div className="flex flex-col gap-2">
         <Button
           type="button"
           variant="outline"
-          className="flex-1 min-h-12 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          className="w-full min-h-12 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
           onClick={onDivergencia}
+          disabled={item.bloqueado}
         >
           <AlertTriangle size={16} className="mr-1.5" /> Registrar divergência
         </Button>
@@ -318,21 +322,32 @@ export function PassoItem({
           <Button
             type="button"
             variant="outline"
-            className="flex-1 min-h-12"
+            className="w-full min-h-12"
             onClick={onDesmarcar}
             disabled={item.bloqueado}
           >
             Desmarcar item
           </Button>
         ) : (
-          <Button
-            type="button"
-            className="flex-1 min-h-12 text-base font-bold"
-            onClick={onConfirmar}
-            disabled={salvando || item.bloqueado || item.aVincular}
-          >
-            <Check size={18} className="mr-1.5" /> Confirmar item
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 min-h-12 font-semibold"
+              onClick={onSalvar}
+              disabled={salvando || item.bloqueado || item.aVincular}
+            >
+              <Save size={16} className="mr-1.5" /> Salvar
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 min-h-12 text-base font-bold"
+              onClick={onConfirmar}
+              disabled={salvando || item.bloqueado || item.aVincular}
+            >
+              <Check size={18} className="mr-1.5" /> Confirmar item
+            </Button>
+          </div>
         )}
       </div>
       {item.valePendente && (

@@ -159,3 +159,19 @@ export function textoConversao(
 export function resumoSelecao(selecionados: number, total: number): string {
   return `${Math.max(0, selecionados)} selecionados de ${Math.max(0, total)}`;
 }
+
+/**
+ * NOP-340 — parcial na fila: "7 de 12 cx". Sem esperado, só as recebidas.
+ */
+export function textoParcialCaixas(
+  caixasRecebidas: number,
+  esperadoCaixas: number | null | undefined,
+): string | null {
+  const recebidas = Math.max(0, Math.round(Number(caixasRecebidas) || 0));
+  if (recebidas <= 0) return null;
+  if (esperadoCaixas == null || !(esperadoCaixas > 0)) {
+    return `${recebidas} ${recebidas === 1 ? "cx" : "cx"}`;
+  }
+  const esp = Math.max(0, Math.round(Number(esperadoCaixas)));
+  return `${recebidas} de ${esp} cx`;
+}
