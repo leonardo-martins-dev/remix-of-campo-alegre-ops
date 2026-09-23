@@ -1,5 +1,5 @@
 /**
- * NOP-318 — helpers puros da tela Conferir chegada.
+ * NOP-318 / NOP-328 — helpers puros da tela Conferir chegada.
  * Mantém cabeçalho enxuto, vales só do pedido aberto e sem UI de vazias.
  */
 
@@ -66,4 +66,96 @@ export function itemConferenciaQtyLocked(opts: {
   if (opts.editando) return false;
   if (opts.conferenciaAberta) return opts.temValePendente;
   return opts.readOnly || opts.conferido || opts.temValePendente;
+}
+
+/* ───────────────────────── NOP-328 — 3 passos do descarregamento ───────── */
+
+/** Número em pt-BR sem casas inúteis: 80 → "80"; 12.5 → "12,5". */
+function numeroBR(n: number): string {
+  return n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+}
+
+/**
+ * Caixas esperadas do item = unidades do pedido ÷ fator do cadastro (arredonda
+ * para cima, como a sugestão). Sem fator cadastrado devolve `null` — a tela
+ * mostra "sem conversão", nunca um fator inventado.
+ */
+export function caixasEsperadas(
+  quantidadeUnidades: number,
+  fator: number | null | undefined,
+): number | null {
+  if (fator == null || !(fator > 0)) return null;
+  if (!(quantidadeUnidades > 0)) return 0;
+  return Math.ceil(quantidadeUnidades / fator);
+}
+
+/** Unidades que N caixas representam. Sem fator, a qty já está na unidade do pedido. */
+export function unidadesDeCaixas(caixas: number, fator: number | null | undefined): number {
+  const cx = Math.max(0, Number(caixas) || 0);
+  if (fator == null || !(fator > 0)) return cx;
+  return cx * fator;
+}
+
+/** Quanto ainda falta receber (un) contando entregas anteriores. Nunca negativo. */
+export function faltamUnidades(opts: {
+  pedidoUn: number;
+  jaRecebidoUn: number;
+  caixasRecebidas: number;
+  fator: number | null | undefined;
+}): number {
+  const recebido =
+    Math.max(0, opts.jaRecebidoUn) + unidadesDeCaixas(opts.caixasRecebidas, opts.fator);
+  return Math.max(0, Math.max(0, opts.pedidoUn) - recebido);
+}
+
+/** Barra "Recebido até agora" + "Faltam" do item aberto no passo 2. */
+export function progressoItem(opts: {
+  pedidoUn: number;
+  jaRecebidoUn: number;
+  caixasRecebidas: number;
+  fator: number | null | undefined;
+}): { recebidoUn: number; faltamUn: number; pct: number } {
+  const recebidoUn =
+    Math.max(0, opts.jaRecebidoUn) + unidadesDeCaixas(opts.caixasRecebidas, opts.fator);
+  const faltamUn = faltamUnidades(opts);
+  const pedido = Math.max(0, opts.pedidoUn);
+  const bruto = pedido > 0 ? (recebidoUn / pedido) * 100 : recebidoUn > 0 ? 100 : 0;
+  return { recebidoUn, faltamUn, pct: Math.min(100, Math.max(0, Math.round(bruto))) };
+}
+
+export type StatusItemConferencia = "conferido" | "em_andamento" | "pendente";
+
+/** Status do item na fila do passo 3. */
+export function statusItemConferencia(opts: {
+  conferido: boolean;
+  atual: boolean;
+  caixasRecebidas: number;
+}): StatusItemConferencia {
+  if (opts.conferido) return "conferido";
+  if (opts.atual || opts.caixasRecebidas > 0) return "em_andamento";
+  return "pendente";
+}
+
+export function labelStatusItem(status: StatusItemConferencia): string {
+  if (status === "conferido") return "Conferido";
+  if (status === "em_andamento") return "Em andamento";
+  return "Pendente";
+}
+
+/**
+ * Bloco "Conversão" do passo 2: só com fator real do cadastro.
+ * Sem fator devolve `null` — nunca "1 caixa = 1 unidade" de mentira.
+ */
+export function textoConversao(
+  fator: number | null | undefined,
+  unidade: string | null | undefined,
+): string | null {
+  if (fator == null || !(fator > 0)) return null;
+  const un = (unidade ?? "").trim() || "un";
+  return `1 caixa = ${numeroBR(fator)} ${un}`;
+}
+
+/** Contador do passo 1: "3 selecionados de 8". */
+export function resumoSelecao(selecionados: number, total: number): string {
+  return `${Math.max(0, selecionados)} selecionados de ${Math.max(0, total)}`;
 }

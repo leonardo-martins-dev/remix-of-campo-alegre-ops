@@ -96,6 +96,7 @@ import {
   podeEditarConferenciaFinalizada,
   removerFornecedorDaSessao,
 } from "@/lib/conferir-chegada";
+import { ConferenciaCaminhao } from "@/components/recebimento/conferencia-caminhao";
 
 /** NOP-298: pedidoId (legado) ou pedidoIds CSV para sessão multi-fornecedor. */
 type ConferirSearch = { pedidoId?: string; pedidoIds?: string };
@@ -166,36 +167,15 @@ function Page() {
   const { data: emTransito = [] } = useSaidasEmTransito();
   const saidaPorPedido = new Map(emTransito.map((s) => [s.pedido_id, s]));
 
-  const clearPedidos = () => navigate({ search: {} });
   const setPedidoIds = (ids: string[]) => navigate({ search: searchFromPedidoIds(ids) });
 
-  if (pedidoIds.length === 0) {
-    return (
-      <SelecaoMultiFornecedor
-        pendentes={pendentes}
-        loading={loadingPedidos}
-        saidaPorPedido={saidaPorPedido}
-        onIniciar={setPedidoIds}
-      />
-    );
-  }
-
-  if (pedidoIds.length === 1) {
-    return (
-      <ConferenciaItens
-        key={pedidoIds[0]}
-        pedidoId={pedidoIds[0]}
-        onBack={clearPedidos}
-        onFinished={() => navigate({ to: "/recebimento" })}
-        onTrocar={(id) => setPedidoIds([id])}
-      />
-    );
-  }
-
+  /** NOP-328: tela única em 3 passos (mockup). Mantém ConferenciaItens no arquivo para fluxos legados/ADM. */
   return (
-    <SessaoMultiFornecedor
+    <ConferenciaCaminhao
+      pendentes={pendentes}
+      loadingPedidos={loadingPedidos}
+      saidaPorPedido={saidaPorPedido}
       pedidoIds={pedidoIds}
-      pedidos={pedidos}
       onChangePedidoIds={setPedidoIds}
       onAllDone={() => navigate({ to: "/recebimento" })}
     />
@@ -863,46 +843,32 @@ function mapToLinha(ic: {
   tem_problema_qualidade: boolean;
   quantidade_qualidade: number;
   foto_url: string | null;
-  itens_pedido:
-    | {
-        id?: string;
-        quantidade_pedida: number;
-        preco_unitario?: number | null;
-        nome_externo?: string | null;
-        produto_id?: string | null;
-        produtos:
-          | { nome: string; unidade: string; tolerancia_pct?: number | null }
-          | { nome: string; unidade: string; tolerancia_pct?: number | null }[]
-          | null;
-        clientes?: { nome: string } | { nome: string }[] | null;
-      }
-    | {
-        id?: string;
-        quantidade_pedida: number;
-        preco_unitario?: number | null;
-        nome_externo?: string | null;
-        produto_id?: string | null;
-        produtos: unknown;
-        clientes?: unknown;
-      }[]
-    | null;
+  itens_pedido: unknown;
 }): LinhaItem {
-  const ip = one(ic.itens_pedido);
-  const prod = one(
-    ip?.produtos as
+  type Ip = {
+    id?: string;
+    quantidade_pedida?: number;
+    preco_unitario?: number | null;
+    unidade?: string | null;
+    nome_externo?: string | null;
+    produto_id?: string | null;
+    produtos?:
       | { nome: string; unidade: string; tolerancia_pct?: number | null }
       | { nome: string; unidade: string; tolerancia_pct?: number | null }[]
-      | null,
-  );
+      | null;
+    clientes?: { nome: string } | { nome: string }[] | null;
+  };
+  const ip = one(ic.itens_pedido as Ip | Ip[] | null);
+  const prod = one(ip?.produtos ?? null);
   return {
     id: ic.id,
     itemPedidoId: ip?.id,
-    produtoId: (ip as { produto_id?: string | null })?.produto_id ?? null,
-    produto: prod?.nome ?? (ip as { nome_externo?: string | null })?.nome_externo ?? "—",
-    unid: (ip as { unidade?: string | null })?.unidade || prod?.unidade || "un",
-    aVincular: !(ip as { produto_id?: string | null })?.produto_id,
+    produtoId: ip?.produto_id ?? null,
+    produto: prod?.nome ?? ip?.nome_externo ?? "—",
+    unid: ip?.unidade || prod?.unidade || "un",
+    aVincular: !ip?.produto_id,
     pedido: Number(ip?.quantidade_pedida ?? 0),
-    cliente: one(ip?.clientes as { nome: string } | { nome: string }[] | null)?.nome ?? null,
+    cliente: one(ip?.clientes ?? null)?.nome ?? null,
     recebido: Number(ic.quantidade_recebida),
     conferido: ic.conferido,
     qualidade: ic.tem_problema_qualidade

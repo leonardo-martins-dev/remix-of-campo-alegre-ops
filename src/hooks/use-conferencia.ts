@@ -49,32 +49,66 @@ export function useConferenciaEdicoes(conferenciaId: string | null) {
   });
 }
 
+/** Item do pedido embutido na conferência (PostgREST devolve objeto ou array). */
+export type ItemPedidoEmbed = {
+  id?: string;
+  quantidade_pedida: number;
+  preco_unitario?: number | null;
+  unidade?: string | null;
+  nome_externo?: string | null;
+  produto_id?: string | null;
+  produtos?: unknown;
+  clientes?: unknown;
+};
+
+export type ItemConferenciaRow = {
+  id: string;
+  quantidade_recebida: number;
+  conferido: boolean;
+  tem_problema_qualidade: boolean;
+  quantidade_qualidade: number;
+  foto_url: string | null;
+  itens_pedido: ItemPedidoEmbed | ItemPedidoEmbed[] | null;
+};
+
+export type ConferenciaRow = {
+  id: string;
+  pedido_id: string;
+  status: string;
+  numero?: number | null;
+  editada?: boolean | null;
+  itens_conferencia?: ItemConferenciaRow[] | null;
+};
+
+/** Conferência aberta do pedido; se não houver, a última registrada. */
+export async function fetchConferencia(pedidoId: string): Promise<ConferenciaRow | null> {
+  const { data: aberta, error: openErr } = await supabase
+    .from("conferencias")
+    .select(CONFERENCIA_SELECT)
+    .eq("pedido_id", pedidoId)
+    .in("status", ["em_andamento", "parcial"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (openErr) throw openErr;
+  if (aberta) return aberta as ConferenciaRow;
+
+  const { data, error } = await supabase
+    .from("conferencias")
+    .select(CONFERENCIA_SELECT)
+    .eq("pedido_id", pedidoId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as ConferenciaRow | null;
+}
+
 export function useConferencia(pedidoId: string | null) {
   return useQuery({
     queryKey: ["conferencia", pedidoId],
     enabled: !!pedidoId,
-    queryFn: async () => {
-      const { data: aberta, error: openErr } = await supabase
-        .from("conferencias")
-        .select(CONFERENCIA_SELECT)
-        .eq("pedido_id", pedidoId!)
-        .in("status", ["em_andamento", "parcial"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (openErr) throw openErr;
-      if (aberta) return aberta;
-
-      const { data, error } = await supabase
-        .from("conferencias")
-        .select(CONFERENCIA_SELECT)
-        .eq("pedido_id", pedidoId!)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => fetchConferencia(pedidoId!),
   });
 }
 

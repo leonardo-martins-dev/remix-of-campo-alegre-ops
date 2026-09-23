@@ -142,6 +142,42 @@ export type SaidaRoca = {
  * Saída da entrega atual de um pedido (para prefill da conferência).
  * Prefere a saída já vinculada à conferência; senão a que está em trânsito.
  */
+export async function fetchSaidaRocaPedido(
+  pedidoId: string,
+  conferenciaId?: string | null,
+  conferenciaNumero?: number | null,
+): Promise<SaidaRoca | null> {
+  const { data, error } = await supabase
+    .from("saidas_roca")
+    .select(
+      `
+      id, pedido_id, conferencia_numero, conferencia_id, fornecedor_id, motorista_id,
+      veiculo_fornecedor, registrado_em, chegada_em, total_caixas, total_caixas_chegada,
+      foto_url, observacoes, status,
+      motoristas(nome),
+      itens_saida_roca(
+        id, item_pedido_id, produto_id, quantidade_pedida, quantidade_unidades, total_caixas,
+        caixas_item_saida(id, tipo_caixa_id, tipo_caixa_sigla, qtd, fator_usado)
+      )
+    `,
+    )
+    .eq("pedido_id", pedidoId)
+    .neq("status", "cancelada")
+    .order("registrado_em", { ascending: false });
+  if (error) throw error;
+
+  const saidas = (data ?? []) as unknown as SaidaRoca[];
+  if (!saidas.length) return null;
+
+  return (
+    (conferenciaId && saidas.find((s) => s.conferencia_id === conferenciaId)) ||
+    (conferenciaNumero != null &&
+      saidas.find((s) => s.status === "confirmada" && s.conferencia_numero === conferenciaNumero)) ||
+    saidas.find((s) => s.status === "confirmada") ||
+    null
+  );
+}
+
 export function useSaidaRocaPedido(
   pedidoId: string | null | undefined,
   conferenciaId?: string | null,
@@ -150,39 +186,7 @@ export function useSaidaRocaPedido(
   return useQuery({
     queryKey: ["saida-roca-pedido", pedidoId, conferenciaId ?? null, conferenciaNumero ?? null],
     enabled: !!pedidoId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("saidas_roca")
-        .select(
-          `
-          id, pedido_id, conferencia_numero, conferencia_id, fornecedor_id, motorista_id,
-          veiculo_fornecedor, registrado_em, chegada_em, total_caixas, total_caixas_chegada,
-          foto_url, observacoes, status,
-          motoristas(nome),
-          itens_saida_roca(
-            id, item_pedido_id, produto_id, quantidade_pedida, quantidade_unidades, total_caixas,
-            caixas_item_saida(id, tipo_caixa_id, tipo_caixa_sigla, qtd, fator_usado)
-          )
-        `,
-        )
-        .eq("pedido_id", pedidoId!)
-        .neq("status", "cancelada")
-        .order("registrado_em", { ascending: false });
-      if (error) throw error;
-
-      const saidas = (data ?? []) as unknown as SaidaRoca[];
-      if (!saidas.length) return null;
-
-      return (
-        (conferenciaId && saidas.find((s) => s.conferencia_id === conferenciaId)) ||
-        (conferenciaNumero != null &&
-          saidas.find(
-            (s) => s.status === "confirmada" && s.conferencia_numero === conferenciaNumero,
-          )) ||
-        saidas.find((s) => s.status === "confirmada") ||
-        null
-      );
-    },
+    queryFn: () => fetchSaidaRocaPedido(pedidoId!, conferenciaId, conferenciaNumero),
   });
 }
 

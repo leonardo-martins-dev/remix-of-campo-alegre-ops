@@ -524,18 +524,27 @@ export function useEncerrarPedido() {
   });
 }
 
+export type SaldoItemPedido = {
+  item_pedido_id: string;
+  pedido_id?: string;
+  recebido_acumulado: number;
+  saldo: number;
+};
+
+export async function fetchSaldoItensPedido(pedidoId: string): Promise<SaldoItemPedido[]> {
+  const { data, error } = await supabase
+    .from("v_saldo_item_pedido")
+    .select("*")
+    .eq("pedido_id", pedidoId);
+  if (error) throw error;
+  return (data ?? []) as SaldoItemPedido[];
+}
+
 export function useSaldoItensPedido(pedidoId: string | null) {
   return useQuery({
     queryKey: ["saldo-itens", pedidoId],
     enabled: !!pedidoId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("v_saldo_item_pedido")
-        .select("*")
-        .eq("pedido_id", pedidoId!);
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: () => fetchSaldoItensPedido(pedidoId!),
   });
 }
 

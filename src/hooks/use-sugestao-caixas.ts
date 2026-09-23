@@ -18,7 +18,7 @@ export type SugestaoItem = {
 
 export type SugestaoItemMap = Map<string, SugestaoItem>;
 
-async function resolverSugestoes(
+export async function resolverSugestoes(
   fornecedorId: string,
   itens: { produto_id: string; quantidade: number }[]
 ): Promise<SugestaoItemMap> {

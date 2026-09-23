@@ -17,51 +17,50 @@ export type CaixasItemMap = Map<
   { tipo_caixa_id: string; sigla: string; sugerida: number; real: number; fator: number | null }[]
 >;
 
+export async function fetchCaixasItemConferencia(conferenciaId: string): Promise<CaixasItemMap> {
+  const { data, error } = await supabase
+    .from("caixas_item_conferencia")
+    .select(
+      `
+      id,
+      item_conferencia_id,
+      tipo_caixa_id,
+      tipo_caixa_sigla,
+      qtd_sugerida,
+      qtd_real,
+      fator_usado,
+      registrado_por
+    `,
+    )
+    .in(
+      "item_conferencia_id",
+      (
+        await supabase.from("itens_conferencia").select("id").eq("conferencia_id", conferenciaId)
+      ).data?.map((i) => i.id) ?? [],
+    );
+
+  if (error) throw error;
+
+  const map: CaixasItemMap = new Map();
+  for (const row of data ?? []) {
+    const existing = map.get(row.item_conferencia_id) ?? [];
+    existing.push({
+      tipo_caixa_id: row.tipo_caixa_id,
+      sigla: row.tipo_caixa_sigla,
+      sugerida: row.qtd_sugerida,
+      real: row.qtd_real,
+      fator: row.fator_usado,
+    });
+    map.set(row.item_conferencia_id, existing);
+  }
+  return map;
+}
+
 export function useCaixasItemConferencia(conferenciaId: string | null | undefined) {
   return useQuery({
     queryKey: ["caixas-item-conferencia", conferenciaId],
     enabled: !!conferenciaId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("caixas_item_conferencia")
-        .select(
-          `
-          id,
-          item_conferencia_id,
-          tipo_caixa_id,
-          tipo_caixa_sigla,
-          qtd_sugerida,
-          qtd_real,
-          fator_usado,
-          registrado_por
-        `,
-        )
-        .in(
-          "item_conferencia_id",
-          (
-            await supabase
-              .from("itens_conferencia")
-              .select("id")
-              .eq("conferencia_id", conferenciaId!)
-          ).data?.map((i) => i.id) ?? [],
-        );
-
-      if (error) throw error;
-
-      const map: CaixasItemMap = new Map();
-      for (const row of data ?? []) {
-        const existing = map.get(row.item_conferencia_id) ?? [];
-        existing.push({
-          tipo_caixa_id: row.tipo_caixa_id,
-          sigla: row.tipo_caixa_sigla,
-          sugerida: row.qtd_sugerida,
-          real: row.qtd_real,
-          fator: row.fator_usado,
-        });
-        map.set(row.item_conferencia_id, existing);
-      }
-      return map;
-    },
+    queryFn: () => fetchCaixasItemConferencia(conferenciaId!),
   });
 }
 
