@@ -158,8 +158,8 @@ export function FornecedoresPage() {
   return (
     <div>
       <PageHeader
-        title="Fornecedores"
-        subtitle="Cadastro de fornecedores do galpão"
+        title="Cadastro de fornecedores"
+        subtitle="Fornecedores do Packing House"
         actions={
           <div className="flex flex-wrap gap-2">
             {isAdmin && pendFornecedor.length > 0 && (

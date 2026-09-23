@@ -50,6 +50,7 @@ import {
 } from "@/hooks/use-vales";
 import { useFornecedores } from "@/hooks/use-cadastros";
 import { formatDateBRT, todayBRT, addDaysBRT } from "@/lib/utils-date";
+import { formatBRL } from "@/lib/format";
 
 export const Route = createFileRoute("/recebimento/vales")({
   component: Page,
@@ -256,7 +257,7 @@ function Page() {
         />
         <KpiCard
           label="Valor aplicado"
-          value={kpis ? `R$ ${kpis.valorAplicado.toFixed(2)}` : "…"}
+          value={kpis ? formatBRL(kpis.valorAplicado) : "…"}
           icon={DollarSign}
         />
         <KpiCard
@@ -352,7 +353,7 @@ function Page() {
                   </span>
                 </div>
                 <span className="text-sm font-bold text-navy">
-                  R$ {grupo.total.toFixed(2)}
+                  {formatBRL(grupo.total)}
                 </span>
               </div>
 
@@ -388,7 +389,7 @@ function Page() {
                 <strong>{selectedVale.produto_nome}</strong> · {selectedVale.fornecedores?.nome}
               </div>
               <div className="text-sm text-muted-foreground">
-                Diferença: {selectedVale.diferenca} {selectedVale.preco_unitario ? `× R$ ${selectedVale.preco_unitario.toFixed(2)}` : "(preço estimado)"}
+                Diferença: {selectedVale.diferenca} {selectedVale.preco_unitario ? `× ${formatBRL(selectedVale.preco_unitario)}` : "(preço estimado)"}
               </div>
               <div className="space-y-2">
                 <Label>Valor final do vale (R$)</Label>
@@ -400,7 +401,7 @@ function Page() {
                   onChange={(e) => setValorFinal(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Valor calculado: R$ {selectedVale.valor_calculado.toFixed(2)}
+                  Valor calculado: {formatBRL(selectedVale.valor_calculado)}
                 </p>
               </div>
             </div>
@@ -428,7 +429,7 @@ function Page() {
                 <strong>{selectedVale.produto_nome}</strong> · {selectedVale.fornecedores?.nome}
               </div>
               <div className="text-sm text-muted-foreground">
-                Valor solicitado: R$ {selectedVale.valor_calculado.toFixed(2)}
+                Valor solicitado: {formatBRL(selectedVale.valor_calculado)}
               </div>
               <div className="space-y-2">
                 <Label>Motivo da recusa (obrigatório)</Label>
@@ -464,7 +465,7 @@ function Page() {
                 <strong>{selectedVale.produto_nome}</strong> · {selectedVale.fornecedores?.nome}
               </div>
               <div className="text-sm text-muted-foreground">
-                Valor aplicado: R$ {(selectedVale.valor_final ?? selectedVale.valor_calculado).toFixed(2)}
+                Valor aplicado: {formatBRL(selectedVale.valor_final ?? selectedVale.valor_calculado)}
               </div>
               <div className="space-y-2">
                 <Label>Referência no Wise (opcional)</Label>
@@ -559,7 +560,7 @@ function ValeCard({
         </div>
         <div className="text-left sm:text-right shrink-0">
           <div className="text-xl sm:text-2xl font-bold text-amber-600">
-            R$ {valor.toFixed(2)}
+            {formatBRL(valor)}
             {vale.estimado && <span className="text-[10px] sm:text-xs font-normal ml-1">(est.)</span>}
           </div>
           <div className="text-[10px] sm:text-xs text-muted-foreground">

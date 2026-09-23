@@ -4,7 +4,7 @@ import { FornecedoresPage } from "@/components/gestao/fornecedores-page";
 
 export const Route = createFileRoute("/gestao/fornecedores")({
   component: Page,
-  head: () => ({ meta: [{ title: "Fornecedores · Campo Alegre" }] }),
+  head: () => ({ meta: [{ title: "Cadastro de fornecedores · Campo Alegre" }] }),
 });
 
 function Page() {

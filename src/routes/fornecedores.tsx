@@ -5,7 +5,7 @@ import { TableWrapper } from "@/components/table-wrapper";
 import { Button } from "@/components/ui/button";
 import { exportToExcel } from "@/lib/excel";
 import { dateRangeBRT, isoWeekKeyBRT } from "@/lib/utils-date";
-import { formatBRL } from "@/lib/format";
+import { formatBRL, formatBRLOrEmpty } from "@/lib/format";
 import { useFornecedores } from "@/hooks/use-cadastros";
 import { useFaltas, useConfigValor, useFillRate } from "@/hooks/use-pedidos";
 import { useQuebras, TipoOcorrenciaQuebra } from "@/hooks/use-quebra";
@@ -18,7 +18,7 @@ import { fillRateDisplay, formatMetaLine } from "@/lib/indicadores-metricas";
 
 export const Route = createFileRoute("/fornecedores")({
   component: Page,
-  head: () => ({ meta: [{ title: "Placar de fornecedores · Campo Alegre" }] }),
+  head: () => ({ meta: [{ title: "Desempenho de fornecedores · Campo Alegre" }] }),
 });
 
 function Page() {
@@ -215,8 +215,8 @@ function Page() {
   return (
     <div>
       <PageHeader
-        title="Fornecedores"
-        subtitle="Placar: fill rate, faltas, qualidade, ocorrências no galpão, vales e caixas"
+        title="Desempenho de fornecedores"
+        subtitle="Fill rate, faltas, qualidade, ocorrências no Packing, vales e caixas"
       />
       <div className="flex gap-2 mb-4">
         <Button
@@ -234,6 +234,11 @@ function Page() {
           30 dias
         </Button>
       </div>
+      {rows.every((r) => r.pedidos === 0 && r.entregas === 0) ? (
+        <p className="text-sm text-muted-foreground mb-4">
+          Nenhuma entrega no período — aguarde pedidos conferidos ou amplie o filtro (7/30 dias).
+        </p>
+      ) : null}
       <TableWrapper stickyFirstColumn>
         <table className="w-full text-sm">
           <thead>
@@ -293,7 +298,8 @@ function Page() {
                   )}
                 </td>
                 <td className="px-2 whitespace-nowrap">
-                  {r.faltaCx} un · {formatBRL(r.faltaR)} {r.acima ? `(${r.acima} acima)` : ""}
+                  {r.faltaCx > 0 ? `${r.faltaCx} un · ${formatBRL(r.faltaR)}` : "—"}
+                  {r.acima ? ` (${r.acima} acima)` : ""}
                 </td>
                 <td className="px-2">{r.qualidadeCx}</td>
                 <td
@@ -303,7 +309,7 @@ function Page() {
                       : ""
                   }`}
                 >
-                  {r.quebraCx} · {formatBRL(r.quebraR)}
+                  {r.quebraCx > 0 ? `${r.quebraCx} · ${formatBRL(r.quebraR)}` : "—"}
                 </td>
                 <td className="px-2 whitespace-nowrap">{r.galQualCx > 0 ? `${r.galQualCx} · ${formatBRL(r.galQualR)}` : "—"}</td>
                 <td className="px-2 whitespace-nowrap">
@@ -316,7 +322,7 @@ function Page() {
                   {r.valesPend === 0 && r.valesApl === 0 && "—"}
                 </td>
                 <td className="px-2">{r.caixaAberto}</td>
-                <td className="px-2 font-semibold whitespace-nowrap">{formatBRL(r.impacto)}</td>
+                <td className="px-2 font-semibold whitespace-nowrap">{formatBRLOrEmpty(r.impacto)}</td>
               </tr>
             ))}
           </tbody>

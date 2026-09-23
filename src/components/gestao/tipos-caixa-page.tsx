@@ -11,6 +11,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { PageHeader } from "@/components/page-header";
+import { formatBRL } from "@/lib/format";
 import {
   useTiposCaixa,
   useCreateTipoCaixa,
@@ -133,7 +134,7 @@ export function TiposCaixaPage() {
                 <span className="font-mono font-semibold">{t.sigla}</span>
                 <span className="text-muted-foreground"> · </span>
                 {t.nome}
-                <span className="text-muted-foreground"> · R$ {t.custo_unitario.toFixed(2)}</span>
+                <span className="text-muted-foreground"> · {formatBRL(t.custo_unitario)}</span>
                 {t.ativo === false && <span className="text-muted-foreground"> · inativo</span>}
               </span>
               <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>

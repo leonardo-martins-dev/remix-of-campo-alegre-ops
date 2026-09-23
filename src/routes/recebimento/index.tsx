@@ -113,7 +113,7 @@ function pedidoActionLink(p: PedidoDia) {
           : "inline-flex items-center gap-1 text-muted-foreground text-xs font-semibold hover:underline"
       }
     >
-      {isConferir ? "Conferir" : "Ver"} <ChevronRight size={12} />
+      {isConferir ? "Iniciar chegada" : "Ver"} <ChevronRight size={12} />
     </Link>
   );
 }
@@ -362,7 +362,7 @@ function Page() {
                 to="/recebimento/conferir"
                 className="inline-flex items-center justify-center gap-1.5 min-h-11 lg:min-h-9 h-11 lg:h-9 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary-dark"
               >
-                <PackageCheck size={14} /> Conferir
+                <PackageCheck size={14} /> Iniciar chegada
               </Link>
             }
             detalhes={[

@@ -4,6 +4,7 @@ import { todayISO } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { capitalNaRua, computeFifoAging } from "@/lib/caixas-map";
 import { addDaysBRT, formatDateBRT, todayBRT } from "@/lib/utils-date";
+import { formatBRL } from "@/lib/format";
 import {
   averageDurationMinutes,
   durationMinutes,
@@ -321,7 +322,7 @@ export function useAlertas(enabled = true) {
       if (capital < 0) {
         danger.push({
           tone: "danger",
-          title: `Capital na rua negativo (R$ ${capital.toLocaleString("pt-BR", { maximumFractionDigits: 0 })})`,
+          title: `Capital na rua negativo (${formatBRL(capital)})`,
           desc: "O valor em caixas na rua está abaixo de zero.",
         });
       }

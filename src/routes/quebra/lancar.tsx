@@ -19,6 +19,8 @@ import {
   TipoOcorrenciaQuebra,
 } from "@/hooks/use-quebra";
 import { supabase } from "@/lib/supabase";
+import { formatBRL } from "@/lib/format";
+import { formatDateBRT } from "@/lib/utils-date";
 
 export const Route = createFileRoute("/quebra/lancar")({
   component: Page,
@@ -354,7 +356,7 @@ function ProdutoLinha({
               const preco = e.itens_pedido?.preco_unitario ?? 0;
               return (
                 <option key={e.id} value={`${e.id}|${preco}`}>
-                  {ped?.data_pedido} · {ped?.codigo} · rec {e.quantidade_recebida} · R$ {preco}
+                  {formatDateBRT(ped?.data_pedido)} · {ped?.codigo} · rec {e.quantidade_recebida} · {formatBRL(preco)}
                 </option>
               );
             })}

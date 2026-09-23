@@ -1167,7 +1167,7 @@ function FilaConciliacao({
         return (
           <div key={c.id} className="border-t border-border pt-2 text-sm">
             <div className="flex justify-between">
-              <span>{c.data} · {statusLabel(pos?.tipo)} · {statusLabel(c.origem)}</span>
+              <span>{formatDateBRT(c.data)} · {statusLabel(pos?.tipo)} · {statusLabel(c.origem)}</span>
               <span className="chip">{statusLabel(c.status)}</span>
             </div>
             {c.contagem_caixa_itens?.map((it) => (

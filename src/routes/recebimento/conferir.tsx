@@ -88,6 +88,7 @@ import {
   useSaidaRocaPedido,
   useSaidasEmTransito,
 } from "@/hooks/use-saida-roca";
+import { formatBRL } from "@/lib/format";
 import {
   chipsFornecedoresSessao,
   filterValesDoPedido,
@@ -597,7 +598,7 @@ function SelecaoMultiFornecedor({
             onClick={() => void iniciarMulti()}
           >
             <CheckCircle2 size={16} className="mr-1.5" />
-            {iniciando ? "Abrindo…" : "Iniciar conferência"}
+            {iniciando ? "Abrindo…" : "Iniciar chegada"}
           </Button>
         </div>
       </div>
@@ -2258,13 +2259,13 @@ function ConferenciaItens({
                   <span className="text-muted-foreground ml-2">· {v.diferenca} un</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold">R$ {v.valor_calculado.toFixed(2)}</span>
+                  <span className="font-semibold">{formatBRL(v.valor_calculado)}</span>
                   {v.status === "pendente" && (
                     <span className="chip chip-warn">Pendente</span>
                   )}
                   {v.status === "aplicado" && (
                     <span className="chip chip-ok">
-                      Aplicado · R$ {v.valor_final?.toFixed(2)}
+                      Aplicado · {v.valor_final != null ? formatBRL(v.valor_final) : "—"}
                     </span>
                   )}
                   {v.status === "recusado" && (
@@ -2333,7 +2334,7 @@ function ConferenciaItens({
                       className="flex-1 lg:flex-none inline-flex items-center justify-center gap-2 min-h-12 lg:min-h-11 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary-dark active:scale-[0.99] transition disabled:opacity-50"
                     >
                       <CheckCircle2 size={16} />{" "}
-                      {embedded ? "Finalizar entrega" : "Finalizar"}
+                      "Finalizar entrega"
                     </button>
                   }
                   detalhes={[
@@ -2571,12 +2572,12 @@ function ConferenciaItens({
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Valor calculado:</span>
                   <span className="text-lg font-bold text-primary-dark">
-                    R$ {(diferencaUn * preco).toFixed(2)}
+                    {formatBRL(diferencaUn * preco)}
                     {!itLive.preco && <span className="text-xs font-normal ml-1">(estimado)</span>}
                   </span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {diferencaUn} {itLive.unid} × R$ {preco.toFixed(2)}
+                  {diferencaUn} {itLive.unid} × {formatBRL(preco)}
                 </div>
               </div>
 
@@ -2894,7 +2895,7 @@ function ItemConferirSheet({
                   void conferirIgualPedido(idx).then(onClose);
                 }}
               >
-                <Check size={16} className="mr-1.5" /> Conferir
+                <Check size={16} className="mr-1.5" /> Conferir item
               </Button>
             )}
             {(!readOnly || editando) && (

@@ -118,11 +118,12 @@
   letter-spacing: -0.03em;
   margin: 0 0 0.75rem;
   max-width: none;
+  color: #ffffff;
 }
 
 .login-brand-title span {
   display: block;
-  color: var(--login-muted);
+  color: #c8d2da;
   font-weight: 600;
   font-size: 0.55em;
   letter-spacing: 0.02em;
@@ -277,6 +278,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0 0 0.35rem;
+  color: #ffffff;
 }
 
 .login-card-header p {

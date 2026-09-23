@@ -450,7 +450,7 @@ function Page() {
                 key={t.id}
                 color={tipoColor(i)}
                 label={t.nome}
-                value={`${totais.byTipo[t.sigla] ?? 0} · R$ ${((totais.byTipo[t.sigla] ?? 0) * (custoById[t.sigla] ?? 0)).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`}
+                value={`${totais.byTipo[t.sigla] ?? 0} · ${formatBRL((totais.byTipo[t.sigla] ?? 0) * (custoById[t.sigla] ?? 0))}`}
               />
             ))}
           </div>
@@ -526,7 +526,7 @@ function Page() {
                       <div>
                         <div className="text-xs text-muted-foreground">Total: <span className="font-bold text-navy">{saldo} cx</span></div>
                         <div className="font-bold text-sm" style={{ color: "var(--danger)" }}>
-                          R$ {valor.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                          {formatBRL(valor)}
                         </div>
                       </div>
                       <button
@@ -582,7 +582,7 @@ function Page() {
                           })}
                           <td className="px-3 py-3 text-right font-bold text-navy">{saldo}</td>
                           <td className="px-3 py-3 text-right font-bold whitespace-nowrap" style={{ color: "var(--danger)" }}>
-                            R$ {valor.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                            {formatBRL(valor)}
                           </td>
                           <td className="px-3 py-3 text-center">
                             <Sparkline data={trend} />
@@ -633,7 +633,7 @@ function Page() {
                 <tbody>
                   {movimentacoes.map((m) => (
                     <tr key={m.id} className="border-t border-border">
-                      <td className="py-2 px-2 text-muted-foreground whitespace-nowrap">{m.data_movimento}</td>
+                      <td className="py-2 px-2 text-muted-foreground whitespace-nowrap">{formatDateBRT(m.data_movimento)}</td>
                       <td className="py-2 px-2 whitespace-nowrap">{statusLabel(m.natureza || m.tipo)}</td>
                       <td className="py-2 px-2 text-center font-semibold">{m.tipo_caixa}</td>
                       <td className="py-2 px-2 text-right font-bold">{m.quantidade}</td>

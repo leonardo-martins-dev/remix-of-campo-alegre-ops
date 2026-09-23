@@ -5,7 +5,7 @@ import { CreateUserForm, UsersList } from "@/components/gestao/user-management";
 
 export const Route = createFileRoute("/gestao/usuarios")({
   component: Page,
-  head: () => ({ meta: [{ title: "Criar Usuários · Campo Alegre" }] }),
+  head: () => ({ meta: [{ title: "Usuários · Campo Alegre" }] }),
 });
 
 function Page() {
@@ -18,7 +18,7 @@ function Page() {
   return (
     <div>
       <PageHeader
-        title="Criar Usuários"
+        title="Usuários"
         subtitle="Cadastro de novos usuários e permissões de acesso"
       />
       <div className="space-y-6">

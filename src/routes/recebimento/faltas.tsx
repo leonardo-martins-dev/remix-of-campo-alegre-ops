@@ -15,6 +15,7 @@ import { useCreateVale, useValesPendentes } from "@/hooks/use-vales";
 import { exportToExcel } from "@/lib/excel";
 import { formatDateBRT, todayBRT } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
+import { formatBRL } from "@/lib/format";
 import {
   Select,
   SelectContent,
@@ -157,7 +158,7 @@ function Page() {
         Falta: i.falta,
         Tipo: i.tipo,
         Preco: i.preco,
-        "Impacto R$": i.impacto.toFixed(2),
+        "Impacto R$": i.impacto,
         Estimado: i.estimado ? "sim" : "nao",
         Tolerancia: i.dentro_tolerancia === false ? "acima" : i.dentro_tolerancia === true ? "dentro" : "",
         Encerrado: i.encerrado_em
@@ -258,7 +259,7 @@ function Page() {
         />
         <KpiCard
           label="Impacto total"
-          value={isLoading ? "…" : `R$ ${impactoTotal.toFixed(2)}`}
+          value={isLoading ? "…" : formatBRL(impactoTotal)}
           icon={DollarSign}
         />
         <KpiCard
@@ -298,7 +299,7 @@ function Page() {
                 )}
                 <div className="pt-2 border-t border-border flex items-center justify-between">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide">Impacto</span>
-                  <span className="font-bold text-navy">R$ {r.impacto.toFixed(2)}</span>
+                  <span className="font-bold text-navy">{formatBRL(r.impacto)}</span>
                 </div>
               </div>
             ))}
@@ -331,7 +332,7 @@ function Page() {
                           ))}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right font-bold whitespace-nowrap">R$ {r.impacto.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-bold whitespace-nowrap">{formatBRL(r.impacto)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -362,7 +363,7 @@ function Page() {
                   </div>
                   <div className="p-2 rounded-lg bg-amber-50 border border-amber-200">
                     <div className="text-xs text-amber-600">Impacto</div>
-                    <div className="font-bold text-navy text-sm">R$ {i.impacto.toFixed(2)}</div>
+                    <div className="font-bold text-navy text-sm">{formatBRL(i.impacto)}</div>
                   </div>
                 </div>
                 {i.encerrado_em && (
@@ -446,7 +447,7 @@ function Page() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right font-bold whitespace-nowrap">R$ {i.impacto.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-bold whitespace-nowrap">{formatBRL(i.impacto)}</td>
                       {isAdmin && (
                         <td className="px-4 py-3 text-right">
                           {i.tipo === "falta" && i.pedido_id && i.fornecedor_id && !valeItemIds.has(i.item_conferencia_id) ? (
@@ -492,16 +493,16 @@ function Page() {
         </>
       )}
 
-      {modo === "itens" && !isLoading && faltasComImpacto.length > 0 && (
+      {modo === "itens" && !isLoading && faltasComImpacto.length > 0 && (resumoFiltrado[0]?.impacto ?? 0) > 0 && (
         <div className="mt-6 card-base p-4">
           <h3 className="text-sm font-bold text-navy mb-3">Ranking de impacto por fornecedor</h3>
-          {resumoFiltrado.slice(0, 5).map((r) => (
+          {resumoFiltrado.filter((r) => r.impacto > 0).slice(0, 5).map((r) => (
             <BarRow
               key={r.fornecedor}
               label={r.fornecedor}
               value={r.impacto}
               max={piorFornecedor?.impacto ?? 1}
-              suffix={`R$ ${r.impacto.toFixed(0)}`}
+              suffix={formatBRL(r.impacto)}
             />
           ))}
         </div>

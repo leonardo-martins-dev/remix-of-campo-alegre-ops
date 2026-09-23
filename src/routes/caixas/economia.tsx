@@ -13,7 +13,7 @@ import { exportToExcel } from "@/lib/excel";
 import { parseCustoValor, shouldSaveCusto } from "@/lib/custo-unitario";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { formatBRL } from "@/lib/format";
+import { formatBRL, formatBRLOrEmpty, formatPercentBR } from "@/lib/format";
 
 export const Route = createFileRoute("/caixas/economia")({
   component: Page,
@@ -150,7 +150,7 @@ function Page() {
       });
       setCobradoIds((prev) => new Set(prev).add(c.cliente_id));
       toast.success(`Cobrança registrada · ${c.cliente}`, {
-        description: `R$ ${(c.perdidas * custo).toFixed(2)} em caixas ${c.pior}.`,
+        description: `${formatBRL(c.perdidas * custo)} em caixas ${c.pior}.`,
       });
     } catch {
       toast.error("Não foi possível registrar a cobrança.");
@@ -190,7 +190,7 @@ function Page() {
         actions={
           <>
             <div className="text-xs text-muted-foreground">
-              Custo médio: <span className="font-bold text-navy">R$ {custoMedio.toFixed(2)}</span>
+              Custo médio: <span className="font-bold text-navy">{formatBRL(custoMedio)}</span>
             </div>
             <button
               onClick={handleExport}
@@ -242,31 +242,35 @@ function Page() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <KpiCard
           label="Campo Alegre (natureza perda)"
-          value={formatBRL(perdaCampo)}
+          value={formatBRLOrEmpty(perdaCampo, "Sem perdas")}
+          muted={perdaCampo <= 0}
           icon={DollarSign}
           positiveIsGood={false}
         />
         <KpiCard
           label="Perda estimada"
-          value={`R$ ${perdaTotal.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`}
+          value={formatBRLOrEmpty(perdaTotal, "Sem perdas")}
+          muted={perdaTotal <= 0}
           icon={DollarSign}
           positiveIsGood={false}
         />
         <KpiCard
           label="Taxa de perda média"
-          value={`${taxaMedia.toFixed(2)}%`}
+          value={dados.length ? formatPercentBR(taxaMedia, 2) : "—"}
+          muted={!dados.length}
           icon={TrendingDown}
           positiveIsGood={false}
         />
         <KpiCard
           label="Economia potencial"
-          value={`R$ ${economia.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`}
+          value={formatBRLOrEmpty(economia, "Sem economia")}
+          muted={economia <= 0}
           icon={PiggyBank}
           accent="var(--success)"
         />
       </div>
 
-      {pior && (
+      {pior && pior.custoPerda > 0 && pior.taxa > benchmark ? (
         <div
           className="card-base p-5 mb-5 flex items-start gap-4 border-l-4"
           style={{ borderLeftColor: "var(--warning)" }}
@@ -281,25 +285,26 @@ function Page() {
             <div className="text-sm font-bold text-navy">Onde está o dinheiro</div>
             <div className="text-sm text-ink mt-1">
               <strong>{pior.cliente}</strong> é o cliente que mais perde —{" "}
-              <strong>R$ {pior.custoPerda.toFixed(0)}</strong> no tipo <strong>{pior.pior}</strong>.
-              Levando a taxa de <strong>{pior.taxa}%</strong> para o benchmark de{" "}
-              <strong>{benchmark}%</strong>, dá para economizar cerca de{" "}
+              <strong>{formatBRL(pior.custoPerda)}</strong> no tipo <strong>{pior.pior}</strong>.
+              Levando a taxa de <strong>{formatPercentBR(pior.taxa, 0)}</strong> para o benchmark de{" "}
+              <strong>{formatPercentBR(benchmark, 0)}</strong>, dá para economizar cerca de{" "}
               <strong style={{ color: "var(--success)" }}>
-                R${" "}
-                {(((pior.taxa - benchmark) / 100) * pior.enviadas * custoMedio).toLocaleString(
-                  "pt-BR",
-                  { maximumFractionDigits: 0 }
-                )}
+                {formatBRL(((pior.taxa - benchmark) / 100) * pior.enviadas * custoMedio)}
               </strong>
               .
             </div>
           </div>
         </div>
-      )}
+      ) : dados.length === 0 ? (
+        <div className="card-base p-5 mb-5 text-sm text-muted-foreground">
+          Nenhuma perda registrada neste período. Quando houver movimentação de caixas, o ranking
+          aparece aqui.
+        </div>
+      ) : null}
 
       <div className="card-base">
         {dados.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">Nenhum dado de perda.</p>
+          <p className="text-sm text-muted-foreground text-center py-8">Nenhuma perda neste período — confira o saldo de caixas ou aguarde movimentações.</p>
         ) : (
           <TableWrapper stickyFirstColumn>
             <table className="w-full text-sm">

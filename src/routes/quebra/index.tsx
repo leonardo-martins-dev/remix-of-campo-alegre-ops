@@ -19,6 +19,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { one } from "@/lib/embed";
+import { formatBRL } from "@/lib/format";
 
 export const Route = createFileRoute("/quebra/")({
   component: Page,
@@ -163,7 +164,7 @@ function Page() {
         <Kpi label="Total un" value={String(totais.cx)} />
         <Kpi
           label="R$ real"
-          value={totais.real.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+          value={formatBRL(totais.real)}
         />
         <Kpi label="% ocorrência" value={`${totais.pct.toFixed(1)}%`} />
       </div>
@@ -266,10 +267,7 @@ function Page() {
                       </div>
                     </div>
                     <span className="font-semibold">
-                      {Number(it.valor ?? 0).toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      })}
+                      {formatBRL(it.valor)}
                     </span>
                     {isAdmin && (
                       <Button

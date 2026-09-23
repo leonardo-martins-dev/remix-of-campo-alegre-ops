@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState, Outlet } from "@tanstack/react-router";
 import {
-  ChevronDown, Bell, Search, Sprout, LogOut, Settings, UserPlus, Eye, EyeOff, ChevronRight,
+  ChevronDown, Bell, Search, Sprout, LogOut, Settings, Eye, EyeOff, ChevronRight,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -399,11 +399,6 @@ export function AppShell() {
                       <EyeOff size={14} className="mr-2" />
                     )}
                     {viewMode === "operador" ? "Modo administrador" : "Modo operador"}
-                  </DropdownMenuItem>
-                )}
-                {isAdmin && (
-                  <DropdownMenuItem onClick={() => navigate({ to: "/gestao/usuarios" })}>
-                    <UserPlus size={14} className="mr-2" /> Criar Usuários
                   </DropdownMenuItem>
                 )}
                 {isAdmin && (
