@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SemConversaoSelo } from "@/components/sem-conversao-selo";
 import { ChipLabel } from "@/components/ui-galpao";
-import { progressoItem, textoConversao } from "@/lib/conferir-chegada";
+import { labelUnidadeProduto, progressoItem, textoConversao } from "@/lib/conferir-chegada";
 
 export type ItemEmConferencia = {
   itemId: string;
@@ -114,7 +114,8 @@ export function PassoItem({
   onFoto: () => void;
   salvando: boolean;
 }) {
-  const conversao = textoConversao(item.fator, item.unidade);
+  const un = labelUnidadeProduto(item.unidade);
+  const conversao = textoConversao(item.fator, un);
   const { recebidoUn, faltamUn, pct } = progressoItem({
     pedidoUn: item.pedidoQtd,
     jaRecebidoUn: item.jaRecebidoUn,
@@ -164,7 +165,7 @@ export function PassoItem({
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             <BlocoLeitura titulo="Pedido">
-              <span className="tabular-nums">{item.pedidoQtd}</span> {item.unidade}
+              <span className="tabular-nums">{item.pedidoQtd}</span> {un}
             </BlocoLeitura>
             <BlocoLeitura titulo="Esperado">
               {item.esperadoCaixas == null ? (
@@ -259,7 +260,7 @@ export function PassoItem({
           <div className="label-group">Recebido até agora</div>
           <div className="text-2xl font-bold text-navy tabular-nums">
             {recebidoUn}{" "}
-            <span className="text-sm font-semibold text-muted-foreground">{item.unidade}</span>
+            <span className="text-sm font-semibold text-muted-foreground">{un}</span>
           </div>
           <div
             className="h-2.5 w-full rounded-full bg-border overflow-hidden"
@@ -279,7 +280,7 @@ export function PassoItem({
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="tabular-nums">{pct}%</span>
             <span className="tabular-nums">
-              de {item.pedidoQtd} {item.unidade}
+              de {item.pedidoQtd} {un}
             </span>
           </div>
           <div className="rounded-lg border border-border bg-card px-3 py-2 flex items-center justify-between gap-2">
@@ -288,12 +289,12 @@ export function PassoItem({
               className="font-bold tabular-nums"
               style={{ color: faltamUn > 0 ? "var(--warning)" : "var(--success)" }}
             >
-              {faltamUn} {item.unidade}
+              {faltamUn} {un}
             </span>
           </div>
           {item.jaRecebidoUn > 0 && (
             <p className="text-xs text-muted-foreground">
-              Inclui {item.jaRecebidoUn} {item.unidade} de entregas anteriores.
+              Inclui {item.jaRecebidoUn} {un} de entregas anteriores.
             </p>
           )}
           <Button

@@ -16,6 +16,7 @@ import {
   statusItemConferencia,
   textoConversao,
   textoParcialCaixas,
+  labelUnidadeProduto,
   unidadesDeCaixas,
 } from "./conferir-chegada";
 
@@ -178,3 +179,19 @@ assert(textoParcialCaixas(3, null) === "3 cx", "sem esperado mostra só recebida
 assert(textoParcialCaixas(-2, 10) === null, "negativo vira zero / null");
 
 console.log("conferir-chegada NOP-340: ok");
+
+/* ───────── NOP-349 — unidade de mercadoria (não cx) ───────── */
+assert(labelUnidadeProduto("UND") === "un", "UND → un");
+assert(labelUnidadeProduto("un") === "un", "un permanece");
+assert(labelUnidadeProduto("CX") === "un", "CX não é rótulo de mercadoria");
+assert(labelUnidadeProduto("caixa") === "un", "caixa → un nestes blocos");
+assert(labelUnidadeProduto("kg") === "kg", "kg permanece");
+assert(labelUnidadeProduto("KG") === "kg", "KG → kg");
+assert(labelUnidadeProduto("maço") === "maço", "maço permanece");
+assert(labelUnidadeProduto("") === "un", "vazio → un");
+assert(labelUnidadeProduto(null) === "un", "null → un");
+assert(textoConversao(30, "cx") === "1 caixa = 30 un", "conversão não mostra cx");
+assert(textoConversao(30, "UND") === "1 caixa = 30 un", "conversão UND → un");
+assert(textoConversao(12.5, "KG") === "1 caixa = 12,5 kg", "conversão KG");
+
+console.log("conferir-chegada NOP-349: ok");

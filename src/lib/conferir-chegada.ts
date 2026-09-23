@@ -142,6 +142,45 @@ export function labelStatusItem(status: StatusItemConferencia): string {
   return "Pendente";
 }
 
+
+/**
+ * NOP-349 — rótulo da unidade de mercadoria (Pedido / Conversão / Recebido / Faltam).
+ * Normaliza UND/UN/PC → "un"; nunca devolve "cx"/"caixa" (isso é só Esperado / Caixas recebidas).
+ * Preserva kg, g, maço e demais unidades do cadastro.
+ */
+export function labelUnidadeProduto(unidade: string | null | undefined): string {
+  const raw = (unidade ?? "").trim();
+  if (!raw) return "un";
+  const key = raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "");
+
+  // NFD: "pç" → "pc". UND/UN/PC do cadastro/Wise viram "un".
+  const asUn = new Set([
+    "un",
+    "und",
+    "unid",
+    "unidade",
+    "unidades",
+    "pc",
+    "pcs",
+    "peca",
+    "pecas",
+  ]);
+  if (asUn.has(key)) return "un";
+
+  // Sinônimos de caixa NÃO são unidade de mercadoria nesta tela (NOP-349).
+  if (key === "cx" || key === "caixa" || key === "caixas") return "un";
+
+  if (key === "kg" || key === "quilograma" || key === "quilogramas") return "kg";
+  if (key === "g" || key === "grama" || key === "gramas") return "g";
+  if (key === "maco" || key === "macos") return "maço";
+
+  // Mantém o texto do cadastro (ex.: "bdj", "fd"); short forms em minúsculas.
+  return raw.length <= 4 ? key : raw;
+}
+
 /**
  * Bloco "Conversão" do passo 2: só com fator real do cadastro.
  * Sem fator devolve `null` — nunca "1 caixa = 1 unidade" de mentira.
@@ -151,7 +190,7 @@ export function textoConversao(
   unidade: string | null | undefined,
 ): string | null {
   if (fator == null || !(fator > 0)) return null;
-  const un = (unidade ?? "").trim() || "un";
+  const un = labelUnidadeProduto(unidade);
   return `1 caixa = ${numeroBR(fator)} ${un}`;
 }
 

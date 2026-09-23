@@ -34,6 +34,7 @@ import { formatTime, dateKeyBRT } from "@/lib/utils-date";
 import {
   caixasEsperadas,
   itemConferenciaQtyLocked,
+  labelUnidadeProduto,
   podeEditarConferenciaFinalizada,
   statusItemConferencia,
   textoParcialCaixas,
@@ -289,7 +290,8 @@ export function ConferenciaCaminhao({
           fotoUrl: ic.foto_url,
           cliente: one(ip?.clientes ?? null)?.nome ?? null,
           pedidoQtd,
-          unidade: ip?.unidade || prod?.unidade || "un",
+          // NOP-349: unidade de mercadoria do produto (UND→un); nunca "cx" nestes rótulos
+          unidade: labelUnidadeProduto(prod?.unidade || ip?.unidade),
           fator,
           esperadoCaixas: esperado,
           jaRecebidoUn: ja,
