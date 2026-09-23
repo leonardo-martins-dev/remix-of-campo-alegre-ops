@@ -92,6 +92,8 @@ import { formatBRL } from "@/lib/format";
 import {
   chipsFornecedoresSessao,
   filterValesDoPedido,
+  itemConferenciaQtyLocked,
+  podeEditarConferenciaFinalizada,
   removerFornecedorDaSessao,
 } from "@/lib/conferir-chegada";
 
@@ -1051,7 +1053,7 @@ function ConferenciaItens({
   /** NOP-298: bloco dentro da sessão multi — finaliza só este pedido. */
   embedded?: boolean;
 }) {
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const { data: pedidos = [] } = usePedidosDia();
   const { data: pedido } = usePedido(pedidoId);
   const { data: conferencia, isLoading, error } = useConferencia(pedidoId);
@@ -1390,32 +1392,53 @@ function ConferenciaItens({
     return meusVales.some((v) => v.item_conferencia_id === itemId && v.status === "pendente");
   };
 
-  const itemQtyLocked = (it: LinhaItem) => {
-    if (editando) return false;
-    return readOnly || it.conferido || itemJaSolicitouVale(it.id);
-  };
+  const itemQtyLocked = (it: LinhaItem) =>
+    itemConferenciaQtyLocked({
+      conferenciaAberta,
+      editando,
+      readOnly,
+      conferido: it.conferido,
+      temValePendente: itemJaSolicitouVale(it.id),
+    });
 
   const updateCaixasItem = useCallback(
     (itemId: string, entries: CaixaItemEntry[]) => {
       const it = itens.find((x) => x.id === itemId);
+      if (!it) return;
+      const valePend = meusVales.some(
+        (v) => v.item_conferencia_id === itemId && v.status === "pendente",
+      );
       if (
-        it &&
-        !editando &&
-        (it.conferido || meusVales.some((v) => v.item_conferencia_id === itemId && v.status === "pendente"))
+        itemConferenciaQtyLocked({
+          conferenciaAberta,
+          editando,
+          readOnly,
+          conferido: it.conferido,
+          temValePendente: valePend,
+        })
       ) {
         return;
       }
       applyCaixasAndSyncQty(itemId, entries);
     },
-    [applyCaixasAndSyncQty, itens, meusVales, editando],
+    [applyCaixasAndSyncQty, itens, meusVales, editando, conferenciaAberta, readOnly],
   );
 
   /** Nesta entr.: só mexe em recebido (cx) — não marca conferido nem altera Caixas. */
   const update = (idx: number, v: number) => {
-    if (readOnly && !editando) return;
     const it = itens[idx];
     if (!it) return;
-    if (!editando && (it.conferido || itemJaSolicitouVale(it.id))) return;
+    if (
+      itemConferenciaQtyLocked({
+        conferenciaAberta,
+        editando,
+        readOnly,
+        conferido: it.conferido,
+        temValePendente: itemJaSolicitouVale(it.id),
+      })
+    ) {
+      return;
+    }
     const newVal = Math.max(0, Math.round(v));
     setItens((prev) =>
       prev.map((row, i) => (i === idx ? { ...row, recebido: newVal } : row)),
@@ -1507,6 +1530,14 @@ function ConferenciaItens({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao creditar galpão");
     }
+  };
+
+  /** NOP-327: desmarca item concluído enquanto a conferência está aberta (ou em edição ADM). */
+  const desmarcarConferido = (idx: number) => {
+    if (readOnly && !editando) return;
+    setItens((prev) =>
+      prev.map((row, i) => (i === idx ? { ...row, conferido: false } : row)),
+    );
   };
 
   const toggleQualidade = (idx: number) => {
@@ -1786,6 +1817,10 @@ function ConferenciaItens({
   };
 
   const iniciarEdicao = () => {
+    if (!podeEditarConferenciaFinalizada(isAdmin)) {
+      toast.error("Só o administrador pode editar conferência finalizada");
+      return;
+    }
     if (valesLancadosNaConf.length > 0) {
       setValeWiseWarn(true);
       return;
@@ -1991,20 +2026,24 @@ function ConferenciaItens({
             <strong className="text-navy">Conferência encerrada.</strong>{" "}
             {aguardandoLiberacao
               ? "Pedido com divergência aguarda liberação do administrador para expedição."
-              : "Visualização somente leitura."}
+              : podeEditarConferenciaFinalizada(isAdmin)
+                ? "Visualização somente leitura — ADM pode editar com motivo."
+                : "Visualização somente leitura. Correções após finalizar passam pelo ADM."}
             {editada && (
               <span className="chip chip-warn ml-2">editada</span>
             )}
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={iniciarEdicao}
-            className="gap-1.5"
-          >
-            <Pencil size={14} /> Editar conferência
-          </Button>
+          {podeEditarConferenciaFinalizada(isAdmin) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={iniciarEdicao}
+              className="gap-1.5"
+            >
+              <Pencil size={14} /> Editar conferência
+            </Button>
+          )}
         </div>
       )}
 
@@ -2205,6 +2244,7 @@ function ConferenciaItens({
         update={update}
         updateCaixasItem={updateCaixasItem}
         conferirIgualPedido={conferirIgualPedido}
+        desmarcarConferido={desmarcarConferido}
         toggleQualidade={toggleQualidade}
         onFoto={(id) => {
           setFotoItemId(id);
@@ -2741,6 +2781,7 @@ function ItemConferirSheet({
   update,
   updateCaixasItem,
   conferirIgualPedido,
+  desmarcarConferido,
   toggleQualidade,
   onFoto,
   openValeDialog,
@@ -2764,6 +2805,7 @@ function ItemConferirSheet({
   update: (idx: number, v: number) => void;
   updateCaixasItem: (itemId: string, entries: CaixaItemEntry[]) => void;
   conferirIgualPedido: (idx: number) => Promise<void>;
+  desmarcarConferido: (idx: number) => void;
   toggleQualidade: (idx: number) => void;
   onFoto: (itemId: string) => void;
   openValeDialog: (it: LinhaItem, jaRecebido: number, entries: CaixaItemEntry[]) => void;
@@ -2854,7 +2896,8 @@ function ItemConferirSheet({
           <div className="mb-4 text-sm">
             <span className="text-muted-foreground">Nesta entrega: </span>
             <span className="font-semibold">{it.aVincular ? "—" : nestaEntr} cx</span>
-            {it.conferido && <ChipLabel value="Travado" tone="ok" className="ml-2" />}
+            {it.conferido && qtyLocked && <ChipLabel value="Travado" tone="ok" className="ml-2" />}
+            {it.conferido && !qtyLocked && <ChipLabel value="Conferido" tone="ok" className="ml-2" />}
           </div>
         )}
 
@@ -2896,6 +2939,16 @@ function ItemConferirSheet({
                 }}
               >
                 <Check size={16} className="mr-1.5" /> Conferir item
+              </Button>
+            )}
+            {(!readOnly || editando) && it.conferido && !it.aVincular && (
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 min-h-11"
+                onClick={() => desmarcarConferido(idx)}
+              >
+                Desmarcar concluído
               </Button>
             )}
             {(!readOnly || editando) && (

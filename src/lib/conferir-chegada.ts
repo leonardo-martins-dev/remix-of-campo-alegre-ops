@@ -45,3 +45,25 @@ export function isAvisoCaixasVazias(text: string): boolean {
     (t.includes("packing") && t.includes("fornecedor") && t.includes("moviment"))
   );
 }
+
+/** NOP-327: só ADM reabre conferência já finalizada. */
+export function podeEditarConferenciaFinalizada(isAdmin: boolean): boolean {
+  return !!isAdmin;
+}
+
+/**
+ * NOP-327: enquanto a conferência está aberta, o conferente edita livremente
+ * (inclusive itens já conferidos). Depois de finalizada, qty só libera no modo
+ * edição ADM. Vale pendente continua travando o item.
+ */
+export function itemConferenciaQtyLocked(opts: {
+  conferenciaAberta: boolean;
+  editando: boolean;
+  readOnly: boolean;
+  conferido: boolean;
+  temValePendente: boolean;
+}): boolean {
+  if (opts.editando) return false;
+  if (opts.conferenciaAberta) return opts.temValePendente;
+  return opts.readOnly || opts.conferido || opts.temValePendente;
+}

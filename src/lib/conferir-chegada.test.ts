@@ -1,10 +1,12 @@
 /**
- * NOP-318 — bun test src/lib/conferir-chegada.test.ts
+ * NOP-318 / NOP-327 — bun src/lib/conferir-chegada.test.ts
  */
 import {
   chipsFornecedoresSessao,
   filterValesDoPedido,
   isAvisoCaixasVazias,
+  itemConferenciaQtyLocked,
+  podeEditarConferenciaFinalizada,
   removerFornecedorDaSessao,
 } from "./conferir-chegada";
 
@@ -45,5 +47,49 @@ assert(
 assert(isAvisoCaixasVazias("Caixas vazias devolvidas"), "menção explícita");
 assert(!isAvisoCaixasVazias("cheias → galpão"), "resumo de cheias ok");
 assert(!isAvisoCaixasVazias("Resumo de caixas desta entrega"), "título resumo ok");
+
+assert(podeEditarConferenciaFinalizada(true), "ADM edita finalizada");
+assert(!podeEditarConferenciaFinalizada(false), "conferente não edita finalizada");
+
+assert(
+  !itemConferenciaQtyLocked({
+    conferenciaAberta: true,
+    editando: false,
+    readOnly: false,
+    conferido: true,
+    temValePendente: false,
+  }),
+  "aberto + conferido = editável",
+);
+assert(
+  itemConferenciaQtyLocked({
+    conferenciaAberta: true,
+    editando: false,
+    readOnly: false,
+    conferido: false,
+    temValePendente: true,
+  }),
+  "vale pendente trava mesmo aberta",
+);
+assert(
+  itemConferenciaQtyLocked({
+    conferenciaAberta: false,
+    editando: false,
+    readOnly: true,
+    conferido: true,
+    temValePendente: false,
+  }),
+  "finalizada readOnly trava",
+);
+assert(
+  !itemConferenciaQtyLocked({
+    conferenciaAberta: false,
+    editando: true,
+    readOnly: false,
+    conferido: true,
+    temValePendente: false,
+  }),
+  "modo edição ADM libera",
+);
 
 console.log("conferir-chegada.test.ts: ok");
