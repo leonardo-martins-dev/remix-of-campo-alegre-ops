@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && npm run build --prefix wise-sync-service",
     "build:dev": "vite build --mode development",
     "start": "node dist/server/index.mjs",
     "preview": "vite preview",
