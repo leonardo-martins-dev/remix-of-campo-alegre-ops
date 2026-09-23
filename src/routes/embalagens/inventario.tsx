@@ -1,16 +1,29 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, Package, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { FluxoPassos } from "@/components/fluxo-passos";
 import { TableWrapper } from "@/components/table-wrapper";
 import { NumberStepper } from "@/components/number-stepper";
+import { ConfirmarContagemDialog } from "@/components/confirmar-contagem-dialog";
+import { ChipNaoInformado, ProgressoContagem } from "@/components/contagem-progresso";
 import { PendenciasInventarioSemanal } from "@/components/pendencias-inventario-semanal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
+import { useConfigValor } from "@/hooks/use-pedidos";
+import { useContagemRascunho } from "@/hooks/use-contagem-rascunho";
+import {
+  buildConfirmacoes,
+  countInformados,
+  isInformado,
+  loadRascunho,
+  RASCUNHO_EMBALAGENS_KEY,
+  type Confirmacao,
+  type ContagemValues,
+} from "@/lib/contagem-rascunho";
 import { useTiposEmbalagem } from "@/hooks/use-tipos-embalagem";
 import {
   SITUACAO_LABEL,
@@ -126,14 +139,54 @@ function ContagemView() {
   const { profile } = useAuth();
   const { data: tipos = [], isLoading } = useContagemAtualEmbalagem();
   const registrar = useRegistrarContagemEmbalagem();
+  const { data: tolerancia = 5 } = useConfigValor("diferenca_contagem_tolerada", 5);
+  const { salvar: salvarRascunho, limpar: limparRascunho } =
+    useContagemRascunho(RASCUNHO_EMBALAGENS_KEY);
 
   const [data, setData] = useState(todayBRT());
   const [observacao, setObservacao] = useState("");
-  const [quantidades, setQuantidades] = useState<Record<string, number>>({});
+  // NOP-322: chave ausente = não informado. Zero só quando digitado.
+  const [quantidades, setQuantidades] = useState<ContagemValues>({});
+  const [confirmacoes, setConfirmacoes] = useState<Confirmacao[] | null>(null);
+  const [rascunhoCarregado, setRascunhoCarregado] = useState(false);
 
-  const salvar = () => {
-    if (!tipos.length) {
-      toast.error("Nenhum tipo de embalagem ativo — cadastre em Configurações");
+  // Retoma o rascunho da contagem em andamento (sair e voltar não perde nada).
+  useEffect(() => {
+    const salvo = loadRascunho(RASCUNHO_EMBALAGENS_KEY);
+    if (salvo) {
+      setQuantidades(salvo.values);
+      if (salvo.data) setData(salvo.data);
+      if (salvo.observacao) setObservacao(salvo.observacao);
+    }
+    setRascunhoCarregado(true);
+  }, []);
+
+  useEffect(() => {
+    if (!rascunhoCarregado) return;
+    salvarRascunho({ values: quantidades, data, observacao });
+  }, [rascunhoCarregado, quantidades, data, observacao, salvarRascunho]);
+
+  const setQtd = (id: string, n: number | null) =>
+    setQuantidades((prev) => {
+      const next = { ...prev };
+      if (n == null) delete next[id];
+      else next[id] = n;
+      return next;
+    });
+
+  const ids = useMemo(() => tipos.map((t) => t.tipo_embalagem_id), [tipos]);
+  const progresso = useMemo(() => countInformados(quantidades, ids), [quantidades, ids]);
+
+  const registrarAgora = () => {
+    // Só o que foi informado vai para o RPC — nenhum tipo entra como 0 por omissão.
+    const itens = tipos
+      .filter((t) => isInformado(quantidades, t.tipo_embalagem_id))
+      .map((t) => ({
+        tipo_embalagem_id: t.tipo_embalagem_id,
+        quantidade: Number(quantidades[t.tipo_embalagem_id]),
+      }));
+    if (!itens.length) {
+      toast.error("Informe ao menos um tipo antes de fechar a contagem");
       return;
     }
     registrar.mutate(
@@ -141,20 +194,47 @@ function ContagemView() {
         data,
         contado_por: profile?.id ?? null,
         observacao,
-        itens: tipos.map((t) => ({
-          tipo_embalagem_id: t.tipo_embalagem_id,
-          quantidade: quantidades[t.tipo_embalagem_id] ?? 0,
-        })),
+        itens,
       },
       {
         onSuccess: () => {
           toast.success("Contagem de embalagens registrada");
           setQuantidades({});
           setObservacao("");
+          limparRascunho();
         },
         onError: (e: Error) => toast.error(e.message),
       }
     );
+  };
+
+  const salvar = () => {
+    if (!tipos.length) {
+      toast.error("Nenhum tipo de embalagem ativo — cadastre em Configurações");
+      return;
+    }
+    if (progresso.contados === 0) {
+      toast.error("Informe ao menos um tipo antes de fechar a contagem");
+      return;
+    }
+    // Referência para zero/diferença: a última contagem do tipo.
+    const pendentes = buildConfirmacoes(
+      tipos.map((t) => ({
+        id: t.tipo_embalagem_id,
+        label: t.nome,
+        informado: isInformado(quantidades, t.tipo_embalagem_id),
+        qtd: isInformado(quantidades, t.tipo_embalagem_id)
+          ? quantidades[t.tipo_embalagem_id]
+          : null,
+        esperado: Number(t.ultima_quantidade ?? 0),
+      })),
+      tolerancia
+    );
+    if (pendentes.length) {
+      setConfirmacoes(pendentes);
+      return;
+    }
+    registrarAgora();
   };
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
@@ -188,40 +268,51 @@ function ContagemView() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ProgressoContagem contados={progresso.contados} total={progresso.total} />
+        <p className="text-xs text-muted-foreground">
+          Campo em branco = não informado: o tipo fica de fora do fechamento (não vira 0).
+        </p>
+      </div>
+
       <div className="space-y-2">
-        {tipos.map((t) => (
-          <div
-            key={t.tipo_embalagem_id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
-          >
-            <div className="min-w-0">
-              <p className="font-semibold text-navy">{t.nome}</p>
-              <p className="text-xs text-muted-foreground">
-                {t.unidade_contagem}
-                {t.qty_por_pacote != null ? ` · ${qtd(t.qty_por_pacote)} un/pacote` : ""}
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Anterior</p>
-                <p className="text-sm font-bold tabular-nums text-navy">
-                  {qtd(t.ultima_quantidade)}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  {t.ultima_data ? formatDateBRT(t.ultima_data) : "sem contagem"}
+        {tipos.map((t) => {
+          const informado = isInformado(quantidades, t.tipo_embalagem_id);
+          const anterior = Number(t.ultima_quantidade ?? 0);
+          return (
+            <div
+              key={t.tipo_embalagem_id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
+            >
+              <div className="min-w-0">
+                <p className="font-semibold text-navy">{t.nome}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t.unidade_contagem}
+                  {t.qty_por_pacote != null ? ` · ${qtd(t.qty_por_pacote)} un/pacote` : ""}
                 </p>
               </div>
-              <NumberStepper
-                size="touch"
-                inputMode="decimal"
-                value={quantidades[t.tipo_embalagem_id] ?? 0}
-                onChange={(n) =>
-                  setQuantidades((prev) => ({ ...prev, [t.tipo_embalagem_id]: n }))
-                }
-              />
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">Anterior</p>
+                  <p className="text-sm font-bold tabular-nums text-navy">
+                    {qtd(t.ultima_quantidade)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {t.ultima_data ? formatDateBRT(t.ultima_data) : "sem contagem"}
+                  </p>
+                </div>
+                {!informado && <ChipNaoInformado destacar={anterior > 0} />}
+                <NumberStepper
+                  nullable
+                  size="touch"
+                  inputMode="decimal"
+                  value={informado ? quantidades[t.tipo_embalagem_id] : null}
+                  onChange={(n: number | null) => setQtd(t.tipo_embalagem_id, n)}
+                />
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="space-y-1.5 max-w-xl">
@@ -240,7 +331,20 @@ function ContagemView() {
       </Button>
       <p className="text-xs text-muted-foreground">
         Fecha só a contagem de embalagens — o inventário de caixas é fechado na tela dele.
+        {progresso.contados > 0 && progresso.contados < progresso.total
+          ? ` ${progresso.total - progresso.contados} tipo(s) não informado(s) ficam de fora.`
+          : ""}
       </p>
+
+      <ConfirmarContagemDialog
+        confirmacoes={confirmacoes}
+        acao="Fechar assim"
+        onCancel={() => setConfirmacoes(null)}
+        onConfirm={() => {
+          setConfirmacoes(null);
+          registrarAgora();
+        }}
+      />
     </div>
   );
 }

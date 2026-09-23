@@ -11,7 +11,16 @@ import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { useConfirmarMovimento, useMovimentosFornecedor, usePosicoes, useRegistrarMovimentoFornecedor, useSaldosCaixa } from "@/hooks/use-ledger";
 import { useRegistrarInventario } from "@/hooks/use-inventario";
 import { enqueueFornecedorMov, getFornecedorQueue, removeFornecedorFromQueue } from "@/lib/offline-queue";
+import { useContagemRascunho } from "@/hooks/use-contagem-rascunho";
+import {
+  countInformados,
+  isInformado,
+  loadRascunho,
+  rascunhoCaixasKey,
+  type ContagemValues,
+} from "@/lib/contagem-rascunho";
 import { NumberStepper } from "@/components/number-stepper";
+import { ChipNaoInformado, ProgressoContagem } from "@/components/contagem-progresso";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { SugestaoCaixas } from "@/components/sugestao-caixas";
 import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
@@ -50,12 +59,36 @@ function Page() {
   const [tipo, setTipo] = useState("");
   const [qtd, setQtd] = useState(0);
   const [contest, setContest] = useState<Record<string, number>>({});
-  const [inv, setInv] = useState<Record<string, number>>({});
+  // NOP-322: chave ausente = não informado; só o que foi contado vai no envio.
+  const [inv, setInv] = useState<ContagemValues>({});
   const { data: posicoes = [] } = usePosicoes();
   const { data: saldosInv = [] } = useSaldosCaixa();
   const registrarInv = useRegistrarInventario();
   const posForn = (posicoes as { id: string; tipo: string; ref_id: string | null }[])
     .find((p) => p.tipo === "fornecedor" && p.ref_id === fornecedorId);
+
+  const rascunhoKey = posForn ? rascunhoCaixasKey(posForn.id) : null;
+  const { salvar: salvarRascunho, limpar: limparRascunho } = useContagemRascunho(rascunhoKey);
+  const [rascunhoCarregado, setRascunhoCarregado] = useState(false);
+
+  useEffect(() => {
+    if (!rascunhoKey) return;
+    setInv(loadRascunho(rascunhoKey)?.values ?? {});
+    setRascunhoCarregado(true);
+  }, [rascunhoKey]);
+
+  useEffect(() => {
+    if (!rascunhoCarregado) return;
+    salvarRascunho({ values: inv });
+  }, [rascunhoCarregado, inv, salvarRascunho]);
+
+  const setInvQtd = (sigla: string, n: number | null) =>
+    setInv((prev) => {
+      const next = { ...prev };
+      if (n == null) delete next[sigla];
+      else next[sigla] = n;
+      return next;
+    });
 
   const { data: pedidosPendentes = [] } = useQuery({
     queryKey: ["pedidos-fornecedor", fornecedorId],
@@ -216,13 +249,31 @@ function Page() {
       {posForn && (
         <div className="mt-8 rounded-xl border p-4 space-y-3">
           <h3 className="font-semibold">Inventário no meu pátio</h3>
-          <p className="text-xs text-muted-foreground">Contagem cega — o saldo do sistema não muda até Campo Alegre conciliar.</p>
-          {tipos.map((t) => (
-            <div key={t.id} className="flex items-center justify-between gap-3">
-              <span className="text-sm">{t.sigla}</span>
-              <NumberStepper value={inv[t.sigla] ?? 0} onChange={(n) => setInv((s) => ({ ...s, [t.sigla]: n }))} />
-            </div>
-          ))}
+          <p className="text-xs text-muted-foreground">
+            Contagem cega — o saldo do sistema não muda até Campo Alegre conciliar. Campo em
+            branco = não informado: o tipo fica de fora do envio (não vira 0).
+          </p>
+          <ProgressoContagem
+            contados={countInformados(inv, tipos.map((t) => t.sigla)).contados}
+            total={tipos.length}
+          />
+          {tipos.map((t) => {
+            const informado = isInformado(inv, t.sigla);
+            return (
+              <div key={t.id} className="flex items-center justify-between gap-3">
+                <span className="text-sm">{t.sigla}</span>
+                <div className="flex items-center gap-2">
+                  {!informado && <ChipNaoInformado />}
+                  <NumberStepper
+                    nullable
+                    width="w-20"
+                    value={informado ? inv[t.sigla] : null}
+                    onChange={(n: number | null) => setInvQtd(t.sigla, n)}
+                  />
+                </div>
+              </div>
+            );
+          })}
           <Button
             className="min-h-11 w-full"
             disabled={registrarInv.isPending}
@@ -232,17 +283,28 @@ function Page() {
               for (const s of saldosInv as { posicao_id: string; tipo_caixa: string; saldo: number }[]) {
                 if (s.posicao_id === posForn.id) calc[s.tipo_caixa] = Number(s.saldo ?? 0);
               }
+              // Contagem cega: não dá para confirmar diferença sem entregar o
+              // esperado para o fornecedor — aqui basta não enviar o que não foi contado.
+              const itens = tipos
+                .filter((t) => isInformado(inv, t.sigla))
+                .map((t) => ({
+                  tipo_caixa: t.sigla,
+                  qtd_contada: Number(inv[t.sigla]),
+                  qtd_calculada: Number(calc[t.sigla] ?? 0),
+                }));
+              if (!itens.length) {
+                toast.error("Informe ao menos um tipo antes de enviar");
+                return;
+              }
               try {
                 await registrarInv.mutateAsync({
                   posicao_id: posForn.id,
                   origem: "fornecedor",
                   contado_por: user.id,
-                  itens: tipos.map((t) => ({
-                    tipo_caixa: t.sigla,
-                    qtd_contada: Number(inv[t.sigla] ?? 0),
-                    qtd_calculada: Number(calc[t.sigla] ?? 0),
-                  })),
+                  itens,
                 });
+                setInv({});
+                limparRascunho();
                 toast.success("Contagem enviada");
               } catch (e) {
                 toast.error(e instanceof Error ? e.message : "Erro ao registrar inventário");

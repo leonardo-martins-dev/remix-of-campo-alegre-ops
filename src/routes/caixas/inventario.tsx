@@ -32,6 +32,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { NumberStepper } from "@/components/number-stepper";
+import { ConfirmarContagemDialog } from "@/components/confirmar-contagem-dialog";
+import { ChipNaoInformado, ProgressoContagem } from "@/components/contagem-progresso";
 import { KpiCard } from "@/components/kpi-card";
 import { PendenciasInventarioSemanal } from "@/components/pendencias-inventario-semanal";
 import { useAuth } from "@/lib/auth";
@@ -60,6 +62,17 @@ import {
   type Entidade,
   type PosicaoTipo,
 } from "@/hooks/use-movimentacao";
+import { useConfigValor } from "@/hooks/use-pedidos";
+import { useContagemRascunho } from "@/hooks/use-contagem-rascunho";
+import {
+  buildConfirmacoes,
+  countInformados,
+  isInformado,
+  loadRascunho,
+  rascunhoCaixasKey,
+  type ContagemValues,
+  type Confirmacao,
+} from "@/lib/contagem-rascunho";
 import { one } from "@/lib/embed";
 import { formatDateBRT } from "@/lib/utils-date";
 import { formatBRL } from "@/lib/format";
@@ -476,22 +489,73 @@ function useInventarioState(initialTipo?: string) {
   const [busca, setBusca] = useState("");
   const [posicaoId, setPosicaoId] = useState("");
   const [parceiroNome, setParceiroNome] = useState("");
-  const [contagem, setContagem] = useState<Record<string, number>>({});
+  // NOP-322: a contagem carrega junto a posição a que pertence, para o rascunho
+  // de uma posição nunca ser gravado por cima do de outra na troca de posição.
+  const [contagemState, setContagemState] = useState<{ key: string | null; values: ContagemValues }>({
+    key: null,
+    values: {},
+  });
   const [submitted, setSubmitted] = useState(false);
   const [motivoId, setMotivoId] = useState("");
   const [obs, setObs] = useState("");
   const [contrariaId, setContrariaId] = useState("");
   const [picking, setPicking] = useState(false);
+  const [confirmacoes, setConfirmacoes] = useState<Confirmacao[] | null>(null);
 
-  const resetContagem = () => {
-    setContagem({});
+  const contagem = contagemState.values;
+  const rascunhoKey = posicaoId ? rascunhoCaixasKey(posicaoId) : null;
+  const { salvar: salvarRascunho, limpar: limparRascunho } = useContagemRascunho(rascunhoKey);
+  const { data: tolerancia = 5 } = useConfigValor("diferenca_contagem_tolerada", 5);
+
+  // Troca de posição: a contagem vem do rascunho salvo (sair e voltar não perde nada).
+  useEffect(() => {
     setSubmitted(false);
-  };
+    setConfirmacoes(null);
+    if (!rascunhoKey) {
+      setContagemState({ key: null, values: {} });
+      return;
+    }
+    const salvo = loadRascunho(rascunhoKey);
+    setContagemState((prev) =>
+      prev.key === rascunhoKey ? prev : { key: rascunhoKey, values: salvo?.values ?? {} }
+    );
+  }, [rascunhoKey]);
+
+  useEffect(() => {
+    if (!rascunhoKey || contagemState.key !== rascunhoKey) return;
+    salvarRascunho({ values: contagemState.values });
+  }, [rascunhoKey, contagemState, salvarRascunho]);
+
+  const atualizarContagem = (fn: (prev: ContagemValues) => ContagemValues) =>
+    setContagemState((prev) => (prev.key ? { key: prev.key, values: fn(prev.values) } : prev));
+
+  /** `null` apaga a chave — o tipo volta a ser "não informado" e sai do payload. */
+  const setQtd = (sigla: string, n: number | null) =>
+    atualizarContagem((prev) => {
+      const next = { ...prev };
+      if (n == null) delete next[sigla];
+      else next[sigla] = n;
+      return next;
+    });
+
+  const ajustarQtd = (sigla: string, delta: number) =>
+    atualizarContagem((prev) => {
+      const atual: number | undefined = prev[sigla];
+      const next = { ...prev };
+      if (atual === undefined) {
+        if (delta <= 0) return prev; // − em "não informado" não faz nada
+        next[sigla] = delta; // + parte do passo: zero só quando digitado
+        return next;
+      }
+      const somado = atual + delta;
+      if (somado < 0) delete next[sigla]; // − no zero volta para "não informado"
+      else next[sigla] = somado;
+      return next;
+    });
 
   const pickTipo = async (tipo: PosicaoTipo) => {
     setTipoSel(tipo);
     setBusca("");
-    resetContagem();
     if (tipo === "galpao") {
       setPicking(true);
       try {
@@ -520,7 +584,6 @@ function useInventarioState(initialTipo?: string) {
         (await ensurePosicao(ent.tipo, ent.tipo === "galpao" ? null : ent.id));
       setPosicaoId(id);
       setParceiroNome(ent.nome);
-      resetContagem();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao selecionar");
     } finally {
@@ -529,17 +592,16 @@ function useInventarioState(initialTipo?: string) {
   };
 
   const voltarSelecao = () => {
+    // O rascunho fica salvo: voltar para a seleção não descarta a contagem.
     if (posicaoId && tipoSel && tipoSel !== "galpao") {
       setPosicaoId("");
       setParceiroNome("");
-      resetContagem();
       return;
     }
     setTipoSel(null);
     setPosicaoId("");
     setParceiroNome("");
     setBusca("");
-    resetContagem();
   };
 
   useEffect(() => {
@@ -580,9 +642,27 @@ function useInventarioState(initialTipo?: string) {
       ? "motorista"
       : "interna";
 
-  async function handleRegistrar() {
+  const siglas = useMemo(() => tipos.map((t) => t.sigla), [tipos]);
+  const progresso = useMemo(() => countInformados(contagem, siglas), [contagem, siglas]);
+
+  /** Só os tipos informados entram no fechamento — nada vai como 0 por omissão. */
+  const itensInformados = () =>
+    tipos
+      .filter((t) => isInformado(contagem, t.sigla))
+      .map((t) => ({
+        tipo_caixa: t.sigla,
+        qtd_contada: Number(contagem[t.sigla]),
+        qtd_calculada: Number(calculado[t.sigla] ?? 0),
+      }));
+
+  async function registrarAgora() {
     if (!user || !posicaoId) {
       toast.error("Selecione a posição");
+      return;
+    }
+    const itens = itensInformados();
+    if (!itens.length) {
+      toast.error("Informe ao menos um tipo antes de registrar");
       return;
     }
     try {
@@ -590,17 +670,41 @@ function useInventarioState(initialTipo?: string) {
         posicao_id: posicaoId,
         origem,
         contado_por: user.id,
-        itens: tipos.map((t) => ({
-          tipo_caixa: t.sigla,
-          qtd_contada: Number(contagem[t.sigla] ?? 0),
-          qtd_calculada: Number(calculado[t.sigla] ?? 0),
-        })),
+        itens,
       });
       setSubmitted(true);
+      limparRascunho();
       toast.success("Contagem registrada — saldo não foi alterado");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao registrar");
     }
+  }
+
+  /** Passa pela confirmação quando há zero em cima de saldo ou diferença grande. */
+  function handleRegistrar() {
+    if (!user || !posicaoId) {
+      toast.error("Selecione a posição");
+      return;
+    }
+    if (progresso.contados === 0) {
+      toast.error("Informe ao menos um tipo antes de registrar");
+      return;
+    }
+    const pendentes = buildConfirmacoes(
+      tipos.map((t) => ({
+        id: t.id,
+        label: `${t.nome} (${t.sigla})`,
+        informado: isInformado(contagem, t.sigla),
+        qtd: isInformado(contagem, t.sigla) ? contagem[t.sigla] : null,
+        esperado: Number(calculado[t.sigla] ?? 0),
+      })),
+      tolerancia
+    );
+    if (pendentes.length) {
+      setConfirmacoes(pendentes);
+      return;
+    }
+    void registrarAgora();
   }
 
   return {
@@ -624,7 +728,12 @@ function useInventarioState(initialTipo?: string) {
     picking,
     posicoes: posicoesAtivas,
     contagem,
-    setContagem,
+    setQtd,
+    ajustarQtd,
+    progresso,
+    confirmacoes,
+    setConfirmacoes,
+    registrarAgora,
     submitted,
     motivoId,
     setMotivoId,
@@ -752,24 +861,31 @@ function PainelInventario({ initialTipo }: { initialTipo?: string }) {
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Informe o que há no local, por tipo. O saldo esperado aparece após o registro.
+              Informe o que há no local, por tipo. Campo em branco = não informado: o tipo
+              fica de fora do fechamento (não vira 0).
             </p>
-            {s.tipos.map((t) => (
-              <div key={t.id} className="flex items-center justify-between gap-3">
-                <span className="font-medium">
-                  {t.nome} · {t.sigla}
-                </span>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">
-                    Esperado: {s.calculado[t.sigla] ?? 0}
+            <ProgressoContagem contados={s.progresso.contados} total={s.progresso.total} />
+            {s.tipos.map((t) => {
+              const informado = isInformado(s.contagem, t.sigla);
+              const esperado = Number(s.calculado[t.sigla] ?? 0);
+              return (
+                <div key={t.id} className="flex items-center justify-between gap-3">
+                  <span className="font-medium">
+                    {t.nome} · {t.sigla}
                   </span>
-                  <NumberStepper
-                    value={s.contagem[t.sigla] ?? 0}
-                    onChange={(n) => s.setContagem((prev) => ({ ...prev, [t.sigla]: n }))}
-                  />
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">Esperado: {esperado}</span>
+                    {!informado && <ChipNaoInformado destacar={esperado > 0} />}
+                    <NumberStepper
+                      nullable
+                      width="w-20"
+                      value={informado ? s.contagem[t.sigla] : null}
+                      onChange={(n: number | null) => s.setQtd(t.sigla, n)}
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <Button className="min-h-11 w-full" onClick={s.handleRegistrar} disabled={s.registrar.isPending || !s.posicaoId}>
               Registrar
             </Button>
@@ -777,7 +893,8 @@ function PainelInventario({ initialTipo }: { initialTipo?: string }) {
               <div className="text-sm space-y-1 p-3 bg-secondary/50 rounded-lg">
                 <p className="font-medium mb-2">Divergência esperado × contado:</p>
                 {s.tipos.map((t) => {
-                  const c = Number(s.contagem[t.sigla] ?? 0);
+                  if (!isInformado(s.contagem, t.sigla)) return null;
+                  const c = Number(s.contagem[t.sigla]);
                   const calc = Number(s.calculado[t.sigla] ?? 0);
                   const diff = c - calc;
                   return (
@@ -787,12 +904,26 @@ function PainelInventario({ initialTipo }: { initialTipo?: string }) {
                     </p>
                   );
                 })}
+                {s.progresso.contados < s.progresso.total && (
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {s.progresso.total - s.progresso.contados} tipo(s) não informado(s) ficaram
+                    de fora desta contagem.
+                  </p>
+                )}
               </div>
             )}
           </>
         )}
       </div>
       <FilaConciliacao s={s} motivoSel={motivoSel} />
+      <ConfirmarContagemDialog
+        confirmacoes={s.confirmacoes}
+        onCancel={() => s.setConfirmacoes(null)}
+        onConfirm={() => {
+          s.setConfirmacoes(null);
+          void s.registrarAgora();
+        }}
+      />
     </div>
   );
 }
@@ -884,36 +1015,54 @@ function CampoInventario({ initialTipo }: { initialTipo?: string }) {
                 <p className="text-sm opacity-80">
                   {s.tipoSel ? TIPO_LABEL[s.tipoSel] : ""} · {s.parceiroNome}
                 </p>
-                {s.tipos.map((t) => (
-                  <div key={t.id} className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.06)" }}>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs uppercase tracking-wider opacity-60">
-                        {t.nome} · {t.sigla}
-                      </span>
-                      <span className="text-xs opacity-50">Esperado: {s.calculado[t.sigla] ?? 0}</span>
+                <ProgressoContagem contados={s.progresso.contados} total={s.progresso.total} escuro />
+                {s.tipos.map((t) => {
+                  const informado = isInformado(s.contagem, t.sigla);
+                  const esperado = Number(s.calculado[t.sigla] ?? 0);
+                  return (
+                    <div key={t.id} className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.06)" }}>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs uppercase tracking-wider opacity-60">
+                          {t.nome} · {t.sigla}
+                        </span>
+                        <span className="text-xs opacity-50">Esperado: {esperado}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          aria-label={`Diminuir ${t.nome}`}
+                          onClick={() => s.ajustarQtd(t.sigla, -1)}
+                          className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center"
+                        >
+                          <Minus size={18} />
+                        </button>
+                        {informado ? (
+                          <span className="text-5xl font-bold tabular-nums">{s.contagem[t.sigla]}</span>
+                        ) : (
+                          <span
+                            className={`text-sm font-semibold ${esperado > 0 ? "text-warning" : "opacity-50"}`}
+                          >
+                            não informado
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={`Aumentar ${t.nome}`}
+                          onClick={() => s.ajustarQtd(t.sigla, 1)}
+                          className="h-12 w-12 rounded-2xl flex items-center justify-center"
+                          style={{ background: "var(--primary)" }}
+                        >
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                      {informado && s.contagem[t.sigla] === 0 && (
+                        <p className="mt-2 text-[11px] opacity-60">
+                          0 contado — toque em − de novo para voltar a “não informado”.
+                        </p>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between">
-                      <button
-                        type="button"
-                        aria-label={`Diminuir ${t.nome}`}
-                        onClick={() => s.setContagem((prev) => ({ ...prev, [t.sigla]: Math.max(0, (prev[t.sigla] ?? 0) - 1) }))}
-                        className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center"
-                      >
-                        <Minus size={18} />
-                      </button>
-                      <span className="text-5xl font-bold tabular-nums">{s.contagem[t.sigla] ?? 0}</span>
-                      <button
-                        type="button"
-                        aria-label={`Aumentar ${t.nome}`}
-                        onClick={() => s.setContagem((prev) => ({ ...prev, [t.sigla]: (prev[t.sigla] ?? 0) + 1 }))}
-                        className="h-12 w-12 rounded-2xl flex items-center justify-center"
-                        style={{ background: "var(--primary)" }}
-                      >
-                        <Plus size={18} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <Button className="min-h-12 w-full" onClick={s.handleRegistrar} disabled={s.registrar.isPending || !s.posicaoId}>
                   Registrar
                 </Button>
@@ -921,7 +1070,8 @@ function CampoInventario({ initialTipo }: { initialTipo?: string }) {
                   <div className="text-xs opacity-70 space-y-1">
                     <p>Contagem enviada. O admin concilia no painel.</p>
                     {s.tipos.map((t) => {
-                      const c = Number(s.contagem[t.sigla] ?? 0);
+                      if (!isInformado(s.contagem, t.sigla)) return null;
+                      const c = Number(s.contagem[t.sigla]);
                       const calc = Number(s.calculado[t.sigla] ?? 0);
                       const diff = c - calc;
                       if (diff === 0) return null;
@@ -943,6 +1093,14 @@ function CampoInventario({ initialTipo }: { initialTipo?: string }) {
           <FilaConciliacao s={s} motivoSel={s.motivos.find((m) => m.id === s.motivoId)} />
         </div>
       )}
+      <ConfirmarContagemDialog
+        confirmacoes={s.confirmacoes}
+        onCancel={() => s.setConfirmacoes(null)}
+        onConfirm={() => {
+          s.setConfirmacoes(null);
+          void s.registrarAgora();
+        }}
+      />
     </div>
   );
 }

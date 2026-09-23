@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef, type KeyboardEvent, type Ref } from "react";
 import { Plus, Minus } from "lucide-react";
 
-interface Props {
-  value: number;
-  onChange: (n: number) => void;
+interface BaseProps {
   min?: number;
   step?: number;
   /** `touch` = alvo grande que não encolhe no lg (telas de campo em tablet) */
@@ -13,24 +11,47 @@ interface Props {
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
   inputRef?: Ref<HTMLInputElement>;
   autoFocus?: boolean;
+  /** Texto do campo vazio — só aparece no modo `nullable`. */
+  placeholder?: string;
 }
+
+type Props =
+  | (BaseProps & {
+      /** NOP-322: campo em branco = "não informado"; zero só quando digitado. */
+      nullable: true;
+      value: number | null;
+      onChange: (n: number | null) => void;
+    })
+  | (BaseProps & {
+      nullable?: false;
+      value: number;
+      onChange: (n: number) => void;
+    });
 
 /**
  * Stepper numérico. Enquanto o campo está focado, permite string vazia sem
  * disparar onChange(0) — evita zerar qty/caixas no meio da digitação.
+ *
+ * Com `nullable`, o campo vazio vale "não informado" (`null`) em vez de `min`:
+ * o + parte de `step` (nunca zero) e o − no mínimo volta para "não informado".
  */
-export function NumberStepper({
-  value,
-  onChange,
-  min = 0,
-  step = 1,
-  size = "md",
-  width,
-  inputMode,
-  onKeyDown,
-  inputRef,
-  autoFocus,
-}: Props) {
+export function NumberStepper(props: Props) {
+  const {
+    min = 0,
+    step = 1,
+    size = "md",
+    width,
+    inputMode,
+    onKeyDown,
+    inputRef,
+    autoFocus,
+  } = props;
+  const nullable = props.nullable === true;
+  const value: number | null = props.value;
+  const placeholder = props.placeholder ?? (nullable ? "não informado" : undefined);
+  // O union garante que só chamamos com null quando nullable.
+  const onChange = props.onChange as (n: number | null) => void;
+
   const h =
     size === "sm"
       ? "h-9 w-9 lg:h-6 lg:w-6"
@@ -41,23 +62,33 @@ export function NumberStepper({
   const icSm = size === "sm" ? 11 : size === "touch" ? 20 : 12;
   const w = width ?? (size === "sm" ? "w-14 lg:w-10" : size === "touch" ? "w-16" : "w-16 lg:w-12");
   const clamp = (n: number) => (Number.isFinite(n) ? Math.max(min, n) : min);
+  const texto = (n: number | null) => (n == null ? "" : String(n));
 
   const [focused, setFocused] = useState(false);
-  const [draft, setDraft] = useState(String(value));
+  const [draft, setDraft] = useState(texto(value));
   const focusedRef = useRef(false);
 
   useEffect(() => {
-    if (!focusedRef.current) setDraft(String(value));
+    if (!focusedRef.current) setDraft(texto(value));
   }, [value]);
 
+  const vazio = (raw: string) => {
+    const t = raw.trim();
+    return t === "" || t === "-" || t === "." || t === "-.";
+  };
+
   const commitDraft = (raw: string) => {
-    const trimmed = raw.trim();
-    if (trimmed === "" || trimmed === "-" || trimmed === "." || trimmed === "-.") {
+    if (vazio(raw)) {
+      if (nullable) {
+        if (value !== null) onChange(null);
+        setDraft("");
+        return;
+      }
       if (value !== min) onChange(min);
       setDraft(String(min));
       return;
     }
-    const n = clamp(parseFloat(trimmed.replace(",", ".")));
+    const n = clamp(parseFloat(raw.trim().replace(",", ".")));
     if (n !== value) onChange(n);
     setDraft(String(n));
   };
@@ -68,7 +99,14 @@ export function NumberStepper({
         type="button"
         aria-label="Diminuir"
         onClick={() => {
+          if (value === null) return; // nada a diminuir em "não informado"
           const next = clamp(value - step);
+          // No mínimo (normalmente 0), o − devolve o campo para "não informado".
+          if (nullable && next === value) {
+            onChange(null);
+            setDraft("");
+            return;
+          }
           onChange(next);
           setDraft(String(next));
         }}
@@ -82,20 +120,21 @@ export function NumberStepper({
         type="text"
         inputMode={inputMode ?? "numeric"}
         autoFocus={autoFocus}
-        value={focused ? draft : String(value)}
+        placeholder={placeholder}
+        value={focused ? draft : texto(value)}
         onChange={(e) => {
           const raw = e.target.value;
           // Só dígitos, vírgula/ponto e sinal — evita lixo no meio da digitação.
           if (raw !== "" && !/^-?\d*[.,]?\d*$/.test(raw)) return;
           setDraft(raw);
-          if (raw.trim() === "" || raw === "-" || raw === "." || raw === "-.") return;
+          if (vazio(raw)) return;
           const n = parseFloat(raw.replace(",", "."));
           if (Number.isFinite(n)) onChange(clamp(n));
         }}
         onFocus={(e) => {
           focusedRef.current = true;
           setFocused(true);
-          setDraft(String(value));
+          setDraft(texto(value));
           e.currentTarget.select();
         }}
         onBlur={() => {
@@ -104,7 +143,7 @@ export function NumberStepper({
           commitDraft(draft);
         }}
         onKeyDown={onKeyDown}
-        className={`${w} text-center font-bold text-navy bg-transparent border border-transparent rounded focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30 px-1 ${
+        className={`${w} text-center font-bold text-navy bg-transparent border border-transparent rounded focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30 px-1 placeholder:text-[10px] placeholder:font-normal placeholder:text-muted-foreground ${
           size === "sm"
             ? "text-sm h-9 lg:text-xs lg:h-6"
             : size === "touch"
@@ -116,7 +155,8 @@ export function NumberStepper({
         type="button"
         aria-label="Aumentar"
         onClick={() => {
-          const next = clamp(value + step);
+          // Vindo de "não informado" o + vai para o step: zero só quando digitado.
+          const next = value === null ? Math.max(min, step) : clamp(value + step);
           onChange(next);
           setDraft(String(next));
         }}
