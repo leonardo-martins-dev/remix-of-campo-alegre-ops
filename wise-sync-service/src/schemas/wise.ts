@@ -77,6 +77,7 @@ export const RpcPedidoSchema = z.object({
   wise_pedido_id: z.string(),
   fornecedor_id: z.string().uuid().nullable(),
   data_prevista: z.string().nullable(),
+  data_pedido: z.string().nullable().optional(),
   itens: z.array(RpcPedidoItemSchema),
   pendencias: z.array(RpcPendenciaSchema),
 });

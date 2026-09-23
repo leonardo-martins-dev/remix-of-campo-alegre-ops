@@ -213,6 +213,7 @@ function SelecaoMultiFornecedor({
 }) {
   const [selectedPedidoIds, setSelectedPedidoIds] = useState<Set<string>>(() => new Set());
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [buscaForn, setBuscaForn] = useState("");
   const registrarHora = useRegistrarHoraChegada();
   const [iniciando, setIniciando] = useState(false);
 
@@ -267,6 +268,16 @@ function SelecaoMultiFornecedor({
       return a.nome.localeCompare(b.nome, "pt-BR");
     });
   }, [pendentes, saidaPorPedido]);
+
+  const gruposFiltrados = useMemo(() => {
+    const q = buscaForn.trim().toLowerCase();
+    if (!q) return grupos;
+    return grupos.filter(
+      (g) =>
+        g.nome.toLowerCase().includes(q) ||
+        g.pedidos.some((p) => p.codigo.toLowerCase().includes(q)),
+    );
+  }, [grupos, buscaForn]);
 
   const fornecedoresComPedido = useMemo(
     () =>
@@ -398,6 +409,13 @@ function SelecaoMultiFornecedor({
       </div>
 
       <div className="mb-4 space-y-2">
+        <Input
+          value={buscaForn}
+          onChange={(e) => setBuscaForn(e.target.value)}
+          placeholder="Buscar pedido ou fornecedor… (ex. 30628)"
+          className="h-11"
+          aria-label="Buscar pedido ou fornecedor"
+        />
         <SeletorCadastro
           tipo="fornecedor"
           label="Buscar fornecedor"
@@ -422,9 +440,12 @@ function SelecaoMultiFornecedor({
       {!loading && grupos.length === 0 && (
         <p className="text-sm text-muted-foreground">Nenhum pedido pendente hoje.</p>
       )}
+      {!loading && grupos.length > 0 && gruposFiltrados.length === 0 && (
+        <p className="text-sm text-muted-foreground">Nenhum resultado para “{buscaForn}”.</p>
+      )}
 
       <div className="grid grid-cols-1 gap-3">
-        {grupos.map((g) => {
+        {gruposFiltrados.map((g) => {
           const selecionadosNoGrupo = g.pedidos.filter((p) => selectedPedidoIds.has(p.id));
           const marcado = selecionadosNoGrupo.length > 0;
           const todosMarcados = selecionadosNoGrupo.length === g.pedidos.length;

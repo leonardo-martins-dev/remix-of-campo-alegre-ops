@@ -118,10 +118,24 @@ export function groupCompraToRpc(rows: WiseCompraRow[], aliases: AliasRow[]): Rp
       seen.add(k);
       return true;
     });
+    // Wise costuma mandar prevista = emissão+1; no dia da emissão o galpão já recebe.
+    // Só colapsa D+1 → emissão quando a emissão é hoje (não mexe no lote de ontem).
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    const emissao = head.DATA_EMISSAO ?? null;
+    const prev = head.DATA_PREV_ENTREGA ?? null;
+    const data_prevista =
+      emissao && prev && prev > emissao && emissao === today ? emissao : (prev ?? emissao);
+
     out.push({
       wise_pedido_id: wiseId,
       fornecedor_id,
-      data_prevista: head.DATA_PREV_ENTREGA ?? null,
+      data_prevista,
+      data_pedido: emissao,
       itens,
       pendencias: pendUnique,
     });
