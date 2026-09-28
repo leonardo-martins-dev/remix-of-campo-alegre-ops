@@ -353,14 +353,14 @@ export function useAlertas(enabled = true) {
             danger.push({
               tone: "danger",
               title: `Pedido ${p.codigo} vencido para encerrar`,
-              desc: `Data prevista ${p.data_prevista} + ${diasEncerrar} dia(s).`,
+              desc: `Data prevista ${formatDateBRT(p.data_prevista)} + ${diasEncerrar} dia(s).`,
               href: "/recebimento",
             });
           } else if (addDaysBRT(p.data_prevista, Math.max(0, diasEncerrar - 1)) <= hoje) {
             warn.push({
               tone: "warn",
               title: `Pedido ${p.codigo} próximo do encerramento`,
-              desc: `Encerra em ${limite}.`,
+              desc: `Encerra em ${formatDateBRT(limite)}.`,
               href: "/recebimento",
             });
           }
