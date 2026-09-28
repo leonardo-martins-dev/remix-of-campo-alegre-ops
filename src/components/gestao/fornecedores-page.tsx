@@ -24,6 +24,7 @@ import { useAuth } from "@/lib/auth";
 import { normalizeKey } from "@/lib/normalize";
 import { MesclarCadastrosPanel } from "@/components/gestao/mesclar-cadastros";
 import { EstoqueMinimoEditor } from "@/components/gestao/estoque-minimo-editor";
+import { AplicarSugestoesGiroPanel } from "@/components/gestao/aplicar-sugestoes-giro-panel";
 import { useFornecedoresAbaixoMinimo } from "@/hooks/use-minimo-estoque";
 import { formatBRL } from "@/lib/format";
 import {
@@ -262,6 +263,8 @@ export function FornecedoresPage() {
           </CardContent>
         </Card>
       )}
+
+      <AplicarSugestoesGiroPanel />
 
       {abaixoMinimo.length > 0 && (
         <Card className="mb-4 border-warning/40">

@@ -10,7 +10,10 @@ import {
   useMinimosEstoque,
   useSaveMinimosBatch,
 } from "@/hooks/use-minimo-estoque";
-import { sugerirMinimoDoGiro } from "@/lib/estoque-minimo";
+import {
+  buildItensAplicarSugestaoGiro,
+  sugerirMinimoDoGiro,
+} from "@/lib/estoque-minimo";
 
 type Props = {
   fornecedorIds: string[];
@@ -32,7 +35,9 @@ export function EstoqueMinimoEditor({ fornecedorIds, title }: Props) {
   const singleId = ids.length === 1 ? ids[0] : undefined;
 
   const { data: tipos = [] } = useTiposCaixa();
-  const { data: minimos = [] } = useMinimosEstoque(singleId);
+  const { data: minimos = [] } = useMinimosEstoque(
+    ids.length <= 1 ? singleId : undefined,
+  );
   // Sempre busca o giro completo e filtra no cliente (individual ou lote).
   const { data: girosAll = [] } = useGiroFornecedorCaixa();
   const saveBatch = useSaveMinimosBatch();
@@ -109,56 +114,83 @@ export function EstoqueMinimoEditor({ fornecedorIds, title }: Props) {
     setValor(sigla, String(sug));
   };
 
-  const usarGiroTodos = () => {
+  const preencherCamposComGiro = () => {
     const next = { ...valores };
-    let applied = 0;
+    let filled = 0;
     for (const t of tipos) {
       const sug = giroPorTipo.get(t.sigla);
       if (sug != null && sug > 0) {
         next[t.sigla] = String(sug);
-        applied += 1;
+        filled += 1;
       }
     }
     setValores(next);
-    if (!applied) toast.message("Nenhuma sugestão de giro disponível");
-    else toast.success(`Sugestão aplicada em ${applied} tipo(s)`);
+    if (!filled) toast.message("Nenhuma sugestão de giro disponível");
+    else
+      toast.message(
+        `Campos preenchidos com giro (${filled}). Confirme em Salvar mínimos.`,
+      );
   };
 
-  /** Em lote: grava a sugestão de giro de cada fornecedor (não a média). */
-  const aplicarGiroIndividual = () => {
+  /** Persiste sugestão_minimo do giro (aceite admin) — individual ou lote. */
+  const aplicarSugestoesDoGiro = () => {
     if (!isAdmin) {
       toast.error("Só administrador pode alterar estoque mínimo");
       return;
     }
     const idSet = new Set(ids);
-    const items: {
-      fornecedor_id: string;
-      tipo_caixa: string;
-      qtd_minima: number;
-    }[] = [];
-    for (const g of girosAll) {
-      if (!idSet.has(g.fornecedor_id)) continue;
-      const sug =
-        g.sugestao_minimo ??
-        sugerirMinimoDoGiro(g.total_movimentado, g.periodo_dias);
-      if (sug <= 0) continue;
-      items.push({
-        fornecedor_id: g.fornecedor_id,
-        tipo_caixa: g.tipo_caixa,
-        qtd_minima: sug,
-      });
-    }
+    const girosEscopo = girosAll.filter((g) => idSet.has(g.fornecedor_id));
+    const minimosEscopo = singleId
+      ? minimos.filter((m) => m.fornecedor_id === singleId)
+      : minimos.filter((m) => idSet.has(m.fornecedor_id));
+    // Em lote sem minimos carregados (query all só no single): usar só giros ≠ 0
+    const items = buildItensAplicarSugestaoGiro(girosEscopo, minimosEscopo).map(
+      ({ fornecedor_id, tipo_caixa, qtd_minima }) => ({
+        fornecedor_id,
+        tipo_caixa,
+        qtd_minima,
+      }),
+    );
     if (!items.length) {
-      toast.message("Nenhuma sugestão de giro para os selecionados");
+      toast.message("Nenhuma sugestão diferente do mínimo atual");
       return;
     }
+    const ok = window.confirm(
+      `Aplicar sugestão do giro em ${items.length} mínimo(s) de ${ids.length} fornecedor(es)?\n\nIsso grava qtd_minima = sugestão_minimo (não dá para desfazer em lote).`,
+    );
+    if (!ok) return;
     saveBatch.mutate(items, {
-      onSuccess: () =>
-        toast.success(
-          `Giro aplicado: ${items.length} mínimo(s) em ${ids.length} fornecedor(es)`,
-        ),
+      onSuccess: () => {
+        toast.success(`Sugestões aplicadas: ${items.length} mínimo(s)`);
+        // Atualiza campos locais no individual
+        if (singleId) {
+          const next = { ...valores };
+          for (const it of items) next[it.tipo_caixa] = String(it.qtd_minima);
+          setValores(next);
+        }
+      },
       onError: (e) => toast.error(e.message),
     });
+  };
+
+  const aplicarSugestaoTipo = (sigla: string) => {
+    if (!isAdmin || !singleId) {
+      usarGiro(sigla);
+      return;
+    }
+    const sug = giroPorTipo.get(sigla);
+    if (sug == null || sug <= 0) {
+      toast.message("Sem giro neste tipo no período");
+      return;
+    }
+    setValor(sigla, String(sug));
+    saveBatch.mutate(
+      [{ fornecedor_id: singleId, tipo_caixa: sigla, qtd_minima: sug }],
+      {
+        onSuccess: () => toast.success(`Mínimo ${sigla} = ${sug} (giro)`),
+        onError: (e) => toast.error(e.message),
+      },
+    );
   };
 
   const salvar = () => {
@@ -216,27 +248,26 @@ export function EstoqueMinimoEditor({ fornecedorIds, title }: Props) {
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
+            variant="default"
+            size="sm"
+            onClick={aplicarSugestoesDoGiro}
+            disabled={!isAdmin || saveBatch.isPending}
+          >
+            Aplicar sugestões do giro
+          </Button>
+          <Button
+            type="button"
             variant="outline"
             size="sm"
-            onClick={usarGiroTodos}
+            onClick={preencherCamposComGiro}
             disabled={!isAdmin}
           >
-            Usar giro em todos
+            Preencher campos
           </Button>
-          {ids.length > 1 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={aplicarGiroIndividual}
-              disabled={!isAdmin || saveBatch.isPending}
-            >
-              Aplicar giro de cada um
-            </Button>
-          )}
           <Button
             type="button"
             size="sm"
+            variant="secondary"
             onClick={salvar}
             disabled={!isAdmin || saveBatch.isPending}
           >
@@ -288,10 +319,11 @@ export function EstoqueMinimoEditor({ fornecedorIds, title }: Props) {
                 variant="secondary"
                 size="sm"
                 className="h-9"
-                disabled={!isAdmin || sug == null || sug <= 0}
-                onClick={() => usarGiro(t.sigla)}
+                disabled={!isAdmin || sug == null || sug <= 0 || saveBatch.isPending}
+                onClick={() => aplicarSugestaoTipo(t.sigla)}
+                title="Grava o mínimo sugerido pelo giro neste tipo"
               >
-                Usar giro
+                Aplicar
               </Button>
             </div>
           );

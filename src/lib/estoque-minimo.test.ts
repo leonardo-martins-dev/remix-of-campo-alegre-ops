@@ -4,6 +4,7 @@ import {
   isFornecedorTeste,
   sugerirMinimoDoGiro,
   textoAcaoAlerta,
+  buildItensAplicarSugestaoGiro,
 } from "./estoque-minimo";
 
 if (!isFornecedorTeste("FORNECEDOR TESTE")) {
@@ -69,4 +70,22 @@ if (isFornecedorElegivelAlerta({ nome: "TESTE LAB", ativo: true })) {
   throw new Error("teste não elegível");
 }
 
+const applyItems = buildItensAplicarSugestaoGiro(
+  [
+    { fornecedor_id: "f1", tipo_caixa: "A", sugestao_minimo: 1, total_movimentado: 2, periodo_dias: 14 },
+    { fornecedor_id: "f1", tipo_caixa: "V", sugestao_minimo: 1 },
+    { fornecedor_id: "f2", tipo_caixa: "A", sugestao_minimo: 25 }, // já igual
+  ],
+  [
+    { fornecedor_id: "f1", tipo_caixa: "A", qtd_minima: 25 },
+    { fornecedor_id: "f1", tipo_caixa: "V", qtd_minima: 25 },
+    { fornecedor_id: "f2", tipo_caixa: "A", qtd_minima: 25 },
+  ],
+);
+if (applyItems.length !== 2) throw new Error(`apply items esperado 2, veio ${applyItems.length}`);
+if (applyItems[0].qtd_minima !== 1 || applyItems[0].qtd_atual !== 25) {
+  throw new Error("apply item deve trocar 25→1");
+}
+
 console.log("estoque-minimo ok");
+
