@@ -119,6 +119,7 @@ function StatusStrip() {
           : "card-base"
       }`}
     >
+      <span className="font-semibold text-navy shrink-0">Inventário de embalagens</span>
       <span className={`chip ${CHIP_SITUACAO[status.situacao]}`}>{SITUACAO_LABEL[status.situacao]}</span>
       <span className="text-muted-foreground">
         Última contagem:{" "}

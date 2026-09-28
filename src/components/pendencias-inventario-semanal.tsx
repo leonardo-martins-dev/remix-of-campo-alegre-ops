@@ -23,10 +23,17 @@ export function PendenciasInventarioSemanal({ origem }: { origem: "caixas" | "em
   const mostrarEmbalagens = origem !== "embalagens" && status?.pendente === true;
   if (!mostrarCaixas && !mostrarEmbalagens) return null;
 
+  const titulo =
+    mostrarCaixas && mostrarEmbalagens
+      ? "Inventários semanais pendentes"
+      : mostrarCaixas
+        ? "Inventário de caixas pendente"
+        : "Inventário de embalagens pendente";
+
   return (
     <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 space-y-3">
       <h3 className="font-semibold text-danger flex items-center gap-2">
-        <AlertTriangle size={18} /> Inventário semanal pendente
+        <AlertTriangle size={18} /> {titulo}
       </h3>
 
       {mostrarCaixas && (
@@ -34,7 +41,8 @@ export function PendenciasInventarioSemanal({ origem }: { origem: "caixas" | "em
           <Box size={16} className="mt-0.5 shrink-0 text-danger" />
           <div>
             <p className="font-medium">
-              Caixas — {posicoes.length} posição(ões) sem contagem na semana
+              Inventário de caixas — {posicoes.length} posição(ões) sem contagem na
+              semana
             </p>
             <p className="text-muted-foreground">
               {posicoes
@@ -62,7 +70,7 @@ export function PendenciasInventarioSemanal({ origem }: { origem: "caixas" | "em
           <Package size={16} className="mt-0.5 shrink-0 text-danger" />
           <div>
             <p className="font-medium">
-              Embalagens — inventário {SITUACAO_LABEL[status.situacao].toLowerCase()}
+              Inventário de embalagens — {SITUACAO_LABEL[status.situacao].toLowerCase()}
             </p>
             <p className="text-muted-foreground">
               {status.nunca_contado

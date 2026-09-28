@@ -181,6 +181,7 @@ function Page() {
             status.pendente ? "rounded-xl border border-danger/30 bg-danger/5" : "card-base"
           }`}
         >
+          <span className="font-semibold text-navy shrink-0">Inventário de embalagens</span>
           <span className={`chip ${CHIP_SITUACAO[status.situacao]}`}>
             {SITUACAO_LABEL[status.situacao]}
           </span>
