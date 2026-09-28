@@ -134,11 +134,7 @@ export function useStartConferencia() {
         .maybeSingle();
 
       if (existing) {
-        await supabase
-          .from("pedidos_recebimento")
-          .update({ hora_chegada: nowISO() })
-          .eq("id", pedidoId)
-          .is("hora_chegada", null);
+        // NOP-450: não carimba hora_chegada aqui — só ação explícita (registrarHora)
         return existing;
       }
 
@@ -180,11 +176,7 @@ export function useStartConferencia() {
         throw cErr;
       }
 
-      await supabase
-        .from("pedidos_recebimento")
-        .update({ hora_chegada: nowISO() })
-        .eq("id", pedidoId)
-        .is("hora_chegada", null);
+      // NOP-450: hora_chegada fica a cargo de useRegistrarHoraChegada / UI explícita
 
       const itens = pedido?.itens_pedido ?? [];
       if (itens.length) {
@@ -303,10 +295,20 @@ export function useSaveConferenciaItens() {
       let cargasGeradas: { carga_id: string; codigo: string }[] = [];
 
       if (status === "finalizada") {
+        // NOP-450 / NOP-320: chegada ≠ conclusão — usa hora_chegada do pedido (carimbada
+        // na ação explícita) e agora só para hora_conferencia_ok.
+        const { data: pedCiclo } = await supabase
+          .from("pedidos_recebimento")
+          .select("hora_chegada")
+          .eq("id", pedidoId)
+          .maybeSingle();
+        const horaChegada =
+          (pedCiclo?.hora_chegada as string | null | undefined) ?? null;
+        const horaOk = nowISO();
         const { error: cicloErr } = await supabase.from("registros_ciclo").insert({
           pedido_id: pedidoId,
-          hora_chegada_fornecedor: nowISO(),
-          hora_conferencia_ok: nowISO(),
+          hora_chegada_fornecedor: horaChegada ?? horaOk,
+          hora_conferencia_ok: horaOk,
           data_registro: todayBRT(),
         });
         if (cicloErr) console.warn("registros_ciclo:", cicloErr.message);

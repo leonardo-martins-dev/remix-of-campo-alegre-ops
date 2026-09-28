@@ -201,26 +201,8 @@ export function ConferenciaCaminhao({
   const confQueries = useConferenciasPorPedido(pedidoIds);
   const saldoQueries = useSaldosPorPedido(pedidoIds);
 
-  // Garante conferência aberta por pedido selecionado
-  useEffect(() => {
-    if (!user?.id) return;
-    pedidoIds.forEach((id, idx) => {
-      const q = confQueries[idx];
-      if (!q || q.isLoading || q.isFetching) return;
-      const conf = q.data as ConferenciaRow | null | undefined;
-      const ped = pendentes.find((p) => p.id === id);
-      if (!ped) return;
-      if (!["pendente", "parcial", "em_transito"].includes(ped.status)) return;
-      if (conf && (conf.status === "em_andamento" || conf.status === "parcial")) return;
-      if (conf && conf.status === "finalizada" && !editandoFinalizada) return;
-      if (startMut.isPending) return;
-      void startMut.mutateAsync({ pedidoId: id, conferenteId: user.id, user }).catch((e) => {
-        const msg = e instanceof Error ? e.message : "";
-        if (!/já|aberta|encerrado/i.test(msg)) toast.error(msg || "Erro ao iniciar conferência");
-      });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pedidoIds.join(","), confQueries.map((q) => q.dataUpdatedAt).join(","), user?.id, editandoFinalizada]);
+  // NOP-450: seleção NÃO cria conferência nem carimba hora_chegada.
+  // Isso só ocorre em iniciarSelecao ("Atualizar hora de chegada").
 
   const sugestaoArgs = useMemo(
     () =>
@@ -362,20 +344,36 @@ export function ConferenciaCaminhao({
   }, [fila, itemAtivoId, drafts]);
 
   const iniciarSelecao = async () => {
+    if (!user?.id) {
+      toast.error("Faça login para registrar a chegada");
+      return;
+    }
     if (pedidoIds.length === 0) {
       toast.error("Selecione ao menos um fornecedor");
       return;
     }
     try {
+      // 1) Carimba hora_chegada (mesmo instante p/ todos os pedidos selecionados)
       await registrarHora.mutateAsync({ pedidoIds, onlyIfNull: true });
-    } catch {
-      /* segue */
+      // 2) Cria conferências + itens só agora (ação explícita)
+      for (const id of pedidoIds) {
+        const ped = pendentes.find((p) => p.id === id);
+        if (!ped) continue;
+        if (!["pendente", "parcial", "em_transito"].includes(ped.status)) continue;
+        const idx = pedidoIds.indexOf(id);
+        const conf = confQueries[idx]?.data as ConferenciaRow | null | undefined;
+        if (conf && (conf.status === "em_andamento" || conf.status === "parcial")) continue;
+        if (conf && conf.status === "finalizada" && !editandoFinalizada) continue;
+        await startMut.mutateAsync({ pedidoId: id, conferenteId: user.id, user });
+      }
+      toast.success(
+        pedidoIds.length === 1
+          ? "Chegada registrada — conferência pronta"
+          : `Chegada registrada — ${pedidoIds.length} pedidos na conferência`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao iniciar conferência");
     }
-    toast.success(
-      pedidoIds.length === 1
-        ? "Conferência pronta"
-        : `${pedidoIds.length} pedidos na conferência do caminhão`,
-    );
   };
 
   const salvarHora = async () => {
@@ -887,7 +885,8 @@ export function ConferenciaCaminhao({
           />
           {pedidoIds.length === 0 && grupos.length > 0 && (
             <p className="text-xs text-muted-foreground mt-2">
-              Toque nos cards e continue — a conferência inicia ao selecionar.
+              Toque nos cards para selecionar. Nada é gravado até você tocar em
+              &quot;Atualizar hora de chegada&quot;.
             </p>
           )}
           {pedidoIds.length > 0 && (
@@ -925,7 +924,9 @@ export function ConferenciaCaminhao({
             <p className="text-sm text-muted-foreground">
               {pedidoIds.length === 0
                 ? "Selecione os fornecedores no passo 1 para começar."
-                : "Carregando itens da conferência…"}
+                : startMut.isPending || confQueries.some((q) => q.isLoading || q.isFetching)
+                  ? "Carregando itens da conferência…"
+                  : 'Toque em "Atualizar hora de chegada" no passo 1 para registrar a chegada e abrir a conferência.'}
             </p>
           )}
           {itemView && (
