@@ -67,6 +67,7 @@ import { useConfigValor } from "@/hooks/use-pedidos";
 import { useContagemRascunho } from "@/hooks/use-contagem-rascunho";
 import {
   buildConfirmacoes,
+  buildPayloadCaixas,
   countInformados,
   isInformado,
   loadRascunho,
@@ -660,14 +661,7 @@ function useInventarioState(initialTipo?: string) {
   const progresso = useMemo(() => countInformados(contagem, siglas), [contagem, siglas]);
 
   /** Só os tipos informados entram no fechamento — nada vai como 0 por omissão. */
-  const itensInformados = () =>
-    tipos
-      .filter((t) => isInformado(contagem, t.sigla))
-      .map((t) => ({
-        tipo_caixa: t.sigla,
-        qtd_contada: Number(contagem[t.sigla]),
-        qtd_calculada: Number(calculado[t.sigla] ?? 0),
-      }));
+  const itensInformados = () => buildPayloadCaixas(contagem, tipos, calculado);
 
   async function registrarAgora() {
     if (!user || !posicaoId) {

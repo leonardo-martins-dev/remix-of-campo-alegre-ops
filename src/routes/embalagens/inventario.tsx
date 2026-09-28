@@ -17,6 +17,7 @@ import { useConfigValor } from "@/hooks/use-pedidos";
 import { useContagemRascunho } from "@/hooks/use-contagem-rascunho";
 import {
   buildConfirmacoes,
+  buildPayloadEmbalagens,
   countInformados,
   isInformado,
   loadRascunho,
@@ -180,12 +181,7 @@ function ContagemView() {
 
   const registrarAgora = () => {
     // Só o que foi informado vai para o RPC — nenhum tipo entra como 0 por omissão.
-    const itens = tipos
-      .filter((t) => isInformado(quantidades, t.tipo_embalagem_id))
-      .map((t) => ({
-        tipo_embalagem_id: t.tipo_embalagem_id,
-        quantidade: Number(quantidades[t.tipo_embalagem_id]),
-      }));
+    const itens = buildPayloadEmbalagens(quantidades, tipos);
     if (!itens.length) {
       toast.error("Informe ao menos um tipo antes de fechar a contagem");
       return;

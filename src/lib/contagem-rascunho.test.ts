@@ -1,9 +1,12 @@
 import {
   buildConfirmacoes,
+  buildPayloadCaixas,
+  buildPayloadEmbalagens,
   clearRascunho,
   countInformados,
   isInformado,
   loadRascunho,
+  needsConfirm,
   rascunhoCaixasKey,
   RASCUNHO_EMBALAGENS_KEY,
   RASCUNHO_MAX_IDADE_MS,
@@ -73,6 +76,42 @@ ok(
 
 ok(textoConfirmacao(confs[0]).includes("zerar o saldo"), "texto do zero avisa que zera o saldo");
 ok(textoConfirmacao(confs[1]).includes("+18"), "texto da diferença mostra o sinal");
+
+
+/* ── payload: só informados (fechamento não zera em branco) ── */
+
+const tiposEmb = [
+  { tipo_embalagem_id: "e1" },
+  { tipo_embalagem_id: "e2" },
+  { tipo_embalagem_id: "e3" },
+];
+const mapEmb = { e1: 0, e3: 4.5 }; // e2 ausente = não informado
+const payloadEmb = buildPayloadEmbalagens(mapEmb, tiposEmb);
+ok(payloadEmb.length === 2, `embalagens: esperado 2 itens, veio ${payloadEmb.length}`);
+ok(payloadEmb[0].tipo_embalagem_id === "e1" && payloadEmb[0].quantidade === 0, "zero digitado entra no payload");
+ok(payloadEmb[1].tipo_embalagem_id === "e3" && payloadEmb[1].quantidade === 4.5, "quantidade informada entra");
+ok(!payloadEmb.some((i) => i.tipo_embalagem_id === "e2"), "tipo não informado NÃO entra (não vira 0)");
+ok(buildPayloadEmbalagens({}, tiposEmb).length === 0, "nada informado → payload vazio");
+
+const tiposCx = [{ sigla: "G" }, { sigla: "P" }, { sigla: "I" }];
+const mapCx = { G: 0, P: 12 }; // I ausente
+const calc = { G: 40, P: 10, I: 99 };
+const payloadCx = buildPayloadCaixas(mapCx, tiposCx, calc);
+ok(payloadCx.length === 2, `caixas: esperado 2 itens, veio ${payloadCx.length}`);
+ok(payloadCx[0].tipo_caixa === "G" && payloadCx[0].qtd_contada === 0 && payloadCx[0].qtd_calculada === 40, "G zero + esperado");
+ok(payloadCx[1].tipo_caixa === "P" && payloadCx[1].qtd_contada === 12 && payloadCx[1].qtd_calculada === 10, "P informado");
+ok(!payloadCx.some((i) => i.tipo_caixa === "I"), "sigla não informada NÃO entra (não zera saldo I)");
+ok(buildPayloadCaixas({}, tiposCx, calc).length === 0, "nada informado → payload caixas vazio");
+
+ok(needsConfirm(itens, 5) === true, "needsConfirm true quando há zero/diff");
+ok(
+  needsConfirm([{ id: "2", label: "I", informado: true, qtd: 0, esperado: 0 }], 5) === false,
+  "needsConfirm false quando zero sem saldo e sem diff"
+);
+ok(
+  needsConfirm([{ id: "5", label: "X", informado: false, qtd: null, esperado: 99 }], 5) === false,
+  "não informado nunca pede confirmação"
+);
 
 /* ── rascunho ───────────────────────────────────────────────── */
 

@@ -85,6 +85,52 @@ export function buildConfirmacoes(itens: ItemConfirmacao[], threshold: number): 
   return out;
 }
 
+
+/**
+ * Payload de embalagens: só chaves informadas entram. Chave ausente/null nunca
+ * vira 0 — o tipo fica de fora do fechamento (NOP-322).
+ */
+export function buildPayloadEmbalagens(
+  map: ContagemValues,
+  tipos: readonly { tipo_embalagem_id: string }[]
+): { tipo_embalagem_id: string; quantidade: number }[] {
+  const out: { tipo_embalagem_id: string; quantidade: number }[] = [];
+  for (const t of tipos) {
+    if (!isInformado(map, t.tipo_embalagem_id)) continue;
+    out.push({
+      tipo_embalagem_id: t.tipo_embalagem_id,
+      quantidade: Number(map[t.tipo_embalagem_id]),
+    });
+  }
+  return out;
+}
+
+/**
+ * Payload de caixas: só siglas informadas entram. O saldo esperado segue no
+ * item para a conciliação, mas tipos em branco não são enviados como 0.
+ */
+export function buildPayloadCaixas(
+  map: ContagemValues,
+  tipos: readonly { sigla: string }[],
+  calculado: Record<string, number> = {}
+): { tipo_caixa: string; qtd_contada: number; qtd_calculada: number }[] {
+  const out: { tipo_caixa: string; qtd_contada: number; qtd_calculada: number }[] = [];
+  for (const t of tipos) {
+    if (!isInformado(map, t.sigla)) continue;
+    out.push({
+      tipo_caixa: t.sigla,
+      qtd_contada: Number(map[t.sigla]),
+      qtd_calculada: Number(calculado[t.sigla] ?? 0),
+    });
+  }
+  return out;
+}
+
+/** True quando zero-com-saldo ou diferença grande pedem o diálogo antes de persistir. */
+export function needsConfirm(itens: ItemConfirmacao[], threshold: number): boolean {
+  return buildConfirmacoes(itens, threshold).length > 0;
+}
+
 export function textoConfirmacao(c: Confirmacao): string {
   if (c.tipo === "zero") {
     return `${c.label}: contagem 0 com ${c.esperado} esperado(s) — vai zerar o saldo.`;
