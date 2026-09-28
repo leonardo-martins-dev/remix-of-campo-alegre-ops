@@ -255,9 +255,8 @@ export function useTotalGeralCaixas() {
   return useQuery({
     queryKey: ["total-geral-caixas"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("v_total_geral_caixas")
-        .select("*");
+      // NOP-159: view revogada — só admin via RPC
+      const { data, error } = await supabase.rpc("admin_v_total_geral_caixas");
       if (error) throw error;
       return (data ?? []) as TotalGeralCaixas[];
     },

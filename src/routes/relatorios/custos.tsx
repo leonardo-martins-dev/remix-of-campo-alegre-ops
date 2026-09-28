@@ -107,7 +107,7 @@ function Page() {
 
   const perdaPorRotaMotorista = useMemo(() => {
     return perdaRota
-      .filter((r) => r.valor_perda_total > 0)
+      .filter((r) => Number(r.valor_perda_total ?? 0) > 0)
       .sort((a, b) => Number(b.valor_perda_total) - Number(a.valor_perda_total))
       .slice(0, 10);
   }, [perdaRota]);

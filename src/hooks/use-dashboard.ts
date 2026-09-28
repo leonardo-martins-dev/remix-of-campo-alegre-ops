@@ -24,7 +24,7 @@ export function useDashboard() {
         supabase.from("cargas").select("status").eq("data_carga", date),
         supabase.from("v_fill_rate_pedido").select("*").gte("data_pedido", date).lte("data_pedido", date),
         supabase.from("v_saldo_caixas_cliente").select("*"),
-        supabase.from("tipos_caixa").select("id, sigla, custo_unitario"),
+        supabase.rpc("admin_tipos_caixa_custos"),
         supabase.from("v_saldos_caixa").select("*"),
         supabase.from("quebra_itens").select("valor, quebras!inner(registrado_em)").gte("quebras.registrado_em", `${date}T00:00:00`),
         supabase.from("pendencias_vinculo").select("id", { count: "exact", head: true }).eq("status", "aberta"),
@@ -33,6 +33,7 @@ export function useDashboard() {
         supabase.from("contagens_caixa").select("conciliado_em, created_at, posicoes_caixa(tipo)").eq("status", "conciliada").order("conciliado_em", { ascending: false }).limit(5),
       ]);
 
+      if (configs.error) throw configs.error;
       const custos: Record<string, number> = {};
       (configs.data ?? []).forEach((t: { id: string; sigla?: string; custo_unitario: number }) => {
         custos[t.sigla ?? t.id] = t.custo_unitario;
@@ -212,11 +213,11 @@ export function useAlertas(enabled = true) {
     queryKey: ["alertas"],
     enabled,
     queryFn: async () => {
-      const [{ data: configs }, { data: saldo }, { data: cargas }, { data: tipos }, { data: pend }, { data: parciais }, { count: contestacoes }, { data: movs }, { data: lastCount }, { data: vencendo }, { data: lastInvAll }, { data: invEmbalagem }] = await Promise.all([
+      const [{ data: configs }, { data: saldo }, { data: cargas }, tiposRes, { data: pend }, { data: parciais }, { count: contestacoes }, { data: movs }, { data: lastCount }, { data: vencendo }, { data: lastInvAll }, { data: invEmbalagem }] = await Promise.all([
         supabase.from("configuracoes").select("chave, valor").in("chave", ["aging_critico_dias", "aging_alerta_dias", "lembrete_contagem_dias", "benchmark_quebra_fornecedor", "dias_confirmacao_fornecedor", "dias_encerrar_pedido", "lembrete_inventario_galpao_dias", "lembrete_inventario_cliente_dias", "lembrete_inventario_fornecedor_dias", "dias_conciliar_inventario"]),
         supabase.from("v_saldo_caixas_cliente").select("*"),
         supabase.from("cargas").select("codigo, status, clientes(nome), hora_inicio").eq("status", "aguardando"),
-        supabase.from("tipos_caixa").select("id, sigla, custo_unitario"),
+        supabase.rpc("admin_tipos_caixa_custos"),
         supabase.from("pendencias_vinculo").select("id, nome_externo").eq("status", "aberta").limit(5),
         supabase.from("pedidos_recebimento").select("codigo, data_prevista, status").in("status", ["parcial", "pendente"]).limit(20),
         supabase.from("movimentacoes_caixa").select("id", { count: "exact", head: true }).eq("confirmacao_status", "contestado"),
@@ -233,6 +234,8 @@ export function useAlertas(enabled = true) {
       const diasConf = Number(configs?.find((c) => c.chave === "dias_confirmacao_fornecedor")?.valor ?? 3);
       const diasEncerrar = Number(configs?.find((c) => c.chave === "dias_encerrar_pedido")?.valor ?? 1);
       const diasConciliar = Number(configs?.find((c) => c.chave === "dias_conciliar_inventario")?.valor ?? 2);
+      if (tiposRes.error) throw tiposRes.error;
+      const tipos = tiposRes.data;
       const custos: Record<string, number> = {};
       (tipos ?? []).forEach((t: { id: string; sigla?: string; custo_unitario: number }) => {
         custos[t.id] = t.custo_unitario;
