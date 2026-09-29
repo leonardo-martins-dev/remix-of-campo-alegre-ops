@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Check, Truck } from "lucide-react";
+import { AlertTriangle, Check, Truck } from "lucide-react";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
-import { resumoSelecao } from "@/lib/conferir-chegada";
+import { avisosCorDuplicadaNaSelecao, resumoSelecao } from "@/lib/conferir-chegada";
 import { FornecedorCorBadge } from "@/components/fornecedor-cor-badge";
 import { fornecedorCorDef } from "@/lib/fornecedor-cores";
 import { labelJanela, type JanelaPedidos } from "@/lib/pedidos-abertos";
@@ -62,6 +62,17 @@ export function PassoFornecedores({
 
   const sugeridos = useMemo(
     () => grupos.filter((g) => g.emTransito || g.pedidoIdsSelecionados.length > 0),
+    [grupos],
+  );
+
+  // NOP-463: dois fornecedores na mesma cor no caminhão — avisa antes de descarregar.
+  const avisosCor = useMemo(
+    () =>
+      avisosCorDuplicadaNaSelecao(
+        grupos
+          .filter((g) => g.pedidoIdsSelecionados.length > 0)
+          .map((g) => ({ fornecedorId: g.fornecedorId, nome: g.nome, cor: g.cor })),
+      ),
     [grupos],
   );
 
@@ -127,6 +138,23 @@ export function PassoFornecedores({
           {todosMarcados ? "Limpar seleção" : "Selecionar todos"}
         </button>
       </div>
+
+      {avisosCor.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-xl border border-warning/50 bg-warning/10 p-3 space-y-1"
+        >
+          <p className="text-sm font-bold text-navy flex items-center gap-1.5">
+            <AlertTriangle size={14} className="text-warning" />
+            Cor repetida entre fornecedores selecionados
+          </p>
+          <ul className="text-xs text-navy/80 space-y-0.5">
+            {avisosCor.map((a) => (
+              <li key={a.cor}>{a.texto}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {grupos.length > CARDS_INICIAIS && (
         <SeletorCadastro

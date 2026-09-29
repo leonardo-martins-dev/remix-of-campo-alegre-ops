@@ -1,27 +1,28 @@
 /**
- * NOP-360 — paleta fechada de cores de fornecedor (sólidas, legíveis a distância).
+ * NOP-360 / NOP-463 — paleta fechada de cores de fornecedor.
+ *
+ * NOP-463: a paleta operacional passou a ser exatamente as 11 cores físicas
+ * que existem de adesivo no galpão (na ordem em que chegaram do fornecedor de
+ * adesivos). As 10 cores da paleta antiga de 18 que não têm adesivo físico
+ * (bordô, verde-limão, verde escuro, azul claro, azul-marinho, roxo, lilás,
+ * marrom, bege, cinza) saíram do seletor, da sugestão em lote e do CHECK do
+ * banco — nenhum fornecedor tinha cor gravada, então não há legado a migrar.
+ *
  * Chaves estáveis no banco; rótulos em pt-BR para UI e erros.
  */
 
 export type FornecedorCorId =
-  | "vermelho"
-  | "bordo"
-  | "rosa"
-  | "laranja"
+  | "preto"
   | "amarelo"
-  | "verde_limao"
-  | "verde"
-  | "verde_escuro"
-  | "ciano"
-  | "azul_claro"
   | "azul"
-  | "azul_marinho"
-  | "roxo"
-  | "lilas"
-  | "marrom"
-  | "bege"
-  | "cinza"
-  | "preto";
+  | "ciano"
+  | "rosa"
+  | "verde"
+  | "branco"
+  | "lilas_claro"
+  | "cinza_palido"
+  | "vermelho"
+  | "laranja";
 
 export type FornecedorCorDef = {
   id: FornecedorCorId;
@@ -33,29 +34,29 @@ export type FornecedorCorDef = {
 };
 
 export const FORNECEDOR_CORES: readonly FornecedorCorDef[] = [
-  { id: "vermelho", nome: "Vermelho", hex: "#C62828", onHex: "#fff" },
-  { id: "bordo", nome: "Bordô", hex: "#6A1B2A", onHex: "#fff" },
-  { id: "rosa", nome: "Rosa", hex: "#E91E8C", onHex: "#fff" },
-  { id: "laranja", nome: "Laranja", hex: "#EF6C00", onHex: "#fff" },
-  { id: "amarelo", nome: "Amarelo", hex: "#F9A825", onHex: "#1a1a1a" },
-  { id: "verde_limao", nome: "Verde-limão", hex: "#C0CA33", onHex: "#1a1a1a" },
-  { id: "verde", nome: "Verde", hex: "#2E7D32", onHex: "#fff" },
-  { id: "verde_escuro", nome: "Verde escuro", hex: "#1B5E20", onHex: "#fff" },
-  { id: "ciano", nome: "Ciano", hex: "#00838F", onHex: "#fff" },
-  { id: "azul_claro", nome: "Azul claro", hex: "#29B6F6", onHex: "#1a1a1a" },
-  { id: "azul", nome: "Azul", hex: "#1565C0", onHex: "#fff" },
-  { id: "azul_marinho", nome: "Azul-marinho", hex: "#0D47A1", onHex: "#fff" },
-  { id: "roxo", nome: "Roxo", hex: "#6A1B9A", onHex: "#fff" },
-  { id: "lilas", nome: "Lilás", hex: "#9575CD", onHex: "#1a1a1a" },
-  { id: "marrom", nome: "Marrom", hex: "#5D4037", onHex: "#fff" },
-  { id: "bege", nome: "Bege", hex: "#D7CCC8", onHex: "#1a1a1a" },
-  { id: "cinza", nome: "Cinza", hex: "#616161", onHex: "#fff" },
   { id: "preto", nome: "Preto", hex: "#212121", onHex: "#fff" },
+  { id: "amarelo", nome: "Amarelo", hex: "#F9A825", onHex: "#1a1a1a" },
+  { id: "azul", nome: "Azul", hex: "#1565C0", onHex: "#fff" },
+  { id: "ciano", nome: "Ciano", hex: "#00838F", onHex: "#fff" },
+  { id: "rosa", nome: "Rosa", hex: "#E91E8C", onHex: "#fff" },
+  { id: "verde", nome: "Verde", hex: "#2E7D32", onHex: "#fff" },
+  { id: "branco", nome: "Branco", hex: "#FAFAFA", onHex: "#1a1a1a" },
+  { id: "lilas_claro", nome: "Lilás claro", hex: "#E1BEE7", onHex: "#1a1a1a" },
+  { id: "cinza_palido", nome: "Cinza pálido", hex: "#BDBDBD", onHex: "#1a1a1a" },
+  { id: "vermelho", nome: "Vermelho", hex: "#C62828", onHex: "#fff" },
+  { id: "laranja", nome: "Laranja", hex: "#EF6C00", onHex: "#fff" },
 ] as const;
 
 const BY_ID = new Map(FORNECEDOR_CORES.map((c) => [c.id, c]));
 
 export const FORNECEDOR_COR_IDS: readonly FornecedorCorId[] = FORNECEDOR_CORES.map((c) => c.id);
+
+/**
+ * NOP-463 — paleta operacional usada pelo seletor e pela sugestão em lote.
+ * Alias explícito de `FORNECEDOR_COR_IDS` para deixar claro nos chamadores
+ * (algoritmo de coloração, RPC) que são as 11 cores com adesivo físico.
+ */
+export const PALETA_OPERACIONAL: readonly string[] = FORNECEDOR_COR_IDS;
 
 export function isFornecedorCorId(v: unknown): v is FornecedorCorId {
   return typeof v === "string" && BY_ID.has(v as FornecedorCorId);
@@ -68,6 +69,11 @@ export function fornecedorCorDef(id: string | null | undefined): FornecedorCorDe
 
 export function nomeFornecedorCor(id: string | null | undefined): string | null {
   return fornecedorCorDef(id)?.nome ?? null;
+}
+
+/** Rótulo para exibição mesmo quando a chave não é da paleta atual (histórico/auditoria). */
+export function labelFornecedorCor(id: string | null | undefined): string {
+  return nomeFornecedorCor(id) ?? id ?? "—";
 }
 
 /** Mensagem de conflito (espelha o servidor). */

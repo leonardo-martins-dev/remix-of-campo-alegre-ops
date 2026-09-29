@@ -25,6 +25,8 @@ import { normalizeKey } from "@/lib/normalize";
 import { MesclarCadastrosPanel } from "@/components/gestao/mesclar-cadastros";
 import { EstoqueMinimoEditor } from "@/components/gestao/estoque-minimo-editor";
 import { AplicarSugestoesGiroPanel } from "@/components/gestao/aplicar-sugestoes-giro-panel";
+import { AplicarSugestoesCoresPanel } from "@/components/gestao/aplicar-sugestoes-cores-panel";
+import { ConflitosCorFornecedor } from "@/components/gestao/conflitos-cor-fornecedor";
 import { useFornecedoresAbaixoMinimo } from "@/hooks/use-minimo-estoque";
 import { formatBRL } from "@/lib/format";
 import {
@@ -264,6 +266,8 @@ export function FornecedoresPage() {
           </CardContent>
         </Card>
       )}
+
+      <AplicarSugestoesCoresPanel />
 
       <AplicarSugestoesGiroPanel />
 
@@ -528,6 +532,7 @@ export function FornecedoresPage() {
             <SheetTitle>{editId ? "Editar fornecedor" : "Novo fornecedor"}</SheetTitle>
           </SheetHeader>
           <div className="py-4 space-y-4">
+            {editId && <ConflitosCorFornecedor fornecedorId={editId} />}
             <div className="space-y-1">
               <Label>Código Wise</Label>
               <Input

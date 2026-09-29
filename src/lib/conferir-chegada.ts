@@ -2,6 +2,8 @@
  * NOP-318 / NOP-328 — helpers puros da tela Conferir chegada.
  * Mantém cabeçalho enxuto, vales só do pedido aberto e sem UI de vazias.
  */
+import { nomeFornecedorCor } from "./fornecedor-cores";
+import { conflitosCorNaSelecao } from "./sugerir-cores-fornecedores";
 
 /** Vales exibidos na conferência: só os do pedido aberto (fila completa fica em Vales). */
 export function filterValesDoPedido<T extends { pedido_id: string }>(
@@ -197,6 +199,36 @@ export function textoConversao(
 /** Contador do passo 1: "3 selecionados de 8". */
 export function resumoSelecao(selecionados: number, total: number): string {
   return `${Math.max(0, selecionados)} selecionados de ${Math.max(0, total)}`;
+}
+
+/* ───────────────────── NOP-463 — cor repetida no caminhão ──────────────── */
+
+export type AvisoCorDuplicada = {
+  cor: string;
+  corNome: string;
+  nomes: string[];
+  texto: string;
+};
+
+/**
+ * Aviso do passo 1 quando dois fornecedores selecionados usam a MESMA cor.
+ * Desde NOP-463 o vínculo com cor repetida é aceito (vira pendência), então a
+ * conferência precisa avisar antes de descarregar — senão ninguém distingue as
+ * caixas na doca.
+ */
+export function avisosCorDuplicadaNaSelecao(
+  gruposSelecionados: readonly { fornecedorId: string; nome: string; cor: string | null }[],
+): AvisoCorDuplicada[] {
+  return conflitosCorNaSelecao(gruposSelecionados).map((a) => {
+    const corNome = nomeFornecedorCor(a.cor) ?? a.cor;
+    const nomes = a.fornecedores.map((f) => f.nome);
+    return {
+      cor: a.cor,
+      corNome,
+      nomes,
+      texto: `${corNome}: ${nomes.join(" e ")} no mesmo caminhão — confirme de quem é cada caixa.`,
+    };
+  });
 }
 
 

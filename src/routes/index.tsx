@@ -13,6 +13,7 @@ import {
   UserPlus,
   LayoutDashboard,
   MapPinned,
+  Palette,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/lib/auth";
@@ -23,6 +24,7 @@ import { usePosicoesPendentes } from "@/hooks/use-minimo-estoque";
 import { useQuebras } from "@/hooks/use-quebra";
 import { useContarValesPendentes } from "@/hooks/use-vales";
 import { useStatusInventarioEmbalagem } from "@/hooks/use-inventario-embalagens";
+import { useConflitosCorAbertos } from "@/hooks/use-fornecedor-cor";
 import { useParadasMotoristaDia } from "@/hooks/use-motorista-caixas";
 import { useAlertas, useDashboard } from "@/hooks/use-dashboard";
 import { todayBRT } from "@/lib/utils-date";
@@ -283,6 +285,7 @@ function AdminTurno({ showMoney }: { showMoney: boolean }) {
   const { data: valesCount = 0 } = useContarValesPendentes();
   const { data: invEmb } = useStatusInventarioEmbalagem();
   const { data: contagens = [] } = usePosicoesPendentes();
+  const { data: conflitosCor = [] } = useConflitosCorAbertos();
 
   if (lAlertas || lDash) {
     return <p className="text-sm text-muted-foreground py-8">Carregando pendências…</p>;
@@ -296,6 +299,15 @@ function AdminTurno({ showMoney }: { showMoney: boolean }) {
       count: Array.isArray(pendVinculo) ? pendVinculo.length : Number(dash?.pendenciasVinculo ?? 0),
       to: "/gestao",
       icon: Settings,
+    },
+    {
+      // NOP-463: vínculo com cor repetida é aceito e cai aqui como pendência.
+      id: "conflitos-cor",
+      title: "Conflitos de cor",
+      desc: "Mesmo produto, mesma cor em dois fornecedores",
+      count: conflitosCor.length,
+      to: "/gestao/fornecedores",
+      icon: Palette,
     },
     {
       id: "divergencias",
