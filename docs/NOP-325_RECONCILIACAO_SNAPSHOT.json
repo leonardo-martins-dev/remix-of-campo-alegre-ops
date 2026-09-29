@@ -1,0 +1,148 @@
+{
+  "cutoff": "2026-09-29T01:49:09.527Z",
+  "custos": {
+    "P": 18,
+    "A": 22,
+    "V": 55
+  },
+  "capital_na_rua": {
+    "qty": 8691,
+    "valor": 447711,
+    "by": {
+      "cliente": {
+        "qty": 60,
+        "valor": 3102,
+        "by_tipo": {
+          "A": 6,
+          "V": 54
+        }
+      },
+      "fornecedor": {
+        "qty": 12,
+        "valor": 462,
+        "by_tipo": {
+          "A": 6,
+          "V": 6
+        }
+      },
+      "galpao": {
+        "qty": 8619,
+        "valor": 444147,
+        "by_tipo": {
+          "A": 906,
+          "V": 7713
+        }
+      }
+    }
+  },
+  "inventario_signed": {
+    "qty": 8676,
+    "by": {
+      "motorista": {
+        "qty": 0,
+        "valor": 0,
+        "by_tipo": {
+          "V": 0
+        }
+      },
+      "fornecedor": {
+        "qty": -3,
+        "valor": -363,
+        "by_tipo": {
+          "V": -9,
+          "A": 6
+        }
+      },
+      "cliente": {
+        "qty": 60,
+        "valor": 3102,
+        "by_tipo": {
+          "A": 6,
+          "V": 54
+        }
+      },
+      "galpao": {
+        "qty": 8619,
+        "valor": 444147,
+        "by_tipo": {
+          "A": 906,
+          "V": 7713
+        }
+      }
+    }
+  },
+  "delta_qty_capital_vs_inventario": 15,
+  "negativos": [
+    {
+      "posicao_id": "2979a16b-d398-436f-82be-0f4ca591fe90",
+      "posicao_tipo": "fornecedor",
+      "ref_id": "18a9771b-1e86-4a2e-9bfb-ea8a3b70040f",
+      "tipo_caixa": "V",
+      "saldo": -15,
+      "enviadas": 0,
+      "retornadas": 0,
+      "perdidas": 0,
+      "ajustes": 0,
+      "nome": "CAMPO ALEGRE LAVOURA"
+    }
+  ],
+  "qa_fornecedores": [
+    {
+      "id": "f2d6cdae-edd5-489b-a1c0-322e83da1422",
+      "nome": "TESTE QA 1",
+      "ativo": true,
+      "motivo": "teste_qa_seed"
+    },
+    {
+      "id": "ede826dd-fba2-4d79-b583-0a516545c5ea",
+      "nome": "FORN REGRESS TEST",
+      "ativo": true,
+      "motivo": "forn_test_seed"
+    },
+    {
+      "id": "ffea2b1f-7b4c-4294-bc55-6f6e5423bb2d",
+      "nome": "FORN V4 TEST",
+      "ativo": true,
+      "motivo": "forn_test_seed"
+    },
+    {
+      "id": "ea179333-1a89-41d3-9005-02490c3d9a11",
+      "nome": "Aguardando vínculo",
+      "ativo": true,
+      "motivo": "aguardando_vinculo_fantasma"
+    },
+    {
+      "id": "c6e51c6c-a109-4c00-8250-3b06f6d8dcfb",
+      "nome": "BOB 1",
+      "ativo": false,
+      "motivo": "bob_seed"
+    },
+    {
+      "id": "1bf077bc-b8b7-4128-acbb-cd7f7273a9b2",
+      "nome": "BOB 3",
+      "ativo": false,
+      "motivo": "bob_seed"
+    },
+    {
+      "id": "ba51e2d4-8c9a-4265-a69e-bccd094ad50d",
+      "nome": "BOB 2",
+      "ativo": false,
+      "motivo": "bob_seed"
+    },
+    {
+      "id": "cbacd7ff-9400-448b-8d77-a9f4cd00a0f4",
+      "nome": "BOB 4",
+      "ativo": false,
+      "motivo": "bob_seed"
+    }
+  ],
+  "orphan_cliente_posicoes": [
+    {
+      "id": "3afbbdb4-82e3-4a21-a860-b39d928952df",
+      "tipo": "cliente",
+      "ref_id": null
+    }
+  ],
+  "open_calc_bug_for_capital_formula": false,
+  "recommend_posting_bug_orphan_cliente": true
+}

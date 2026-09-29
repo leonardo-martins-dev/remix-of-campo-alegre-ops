@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { todayISO } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { capitalNaRua, computeFifoAging } from "@/lib/caixas-map";
+import { excludeTesteSaldos } from "@/lib/qa-teste";
 import { addDaysBRT, formatDateBRT, todayBRT } from "@/lib/utils-date";
 import { formatBRL } from "@/lib/format";
 import {
@@ -40,7 +41,7 @@ export function useDashboard() {
         custos[t.id] = t.custo_unitario;
       });
       let caixasClientes = 0, caixasFornecedores = 0, caixasGalpao = 0;
-      (saldosAll.data ?? []).forEach((s: { posicao_tipo: string; saldo: number }) => {
+      excludeTesteSaldos(saldosAll.data ?? []).forEach((s: { posicao_tipo: string; saldo: number }) => {
         const n = Number(s.saldo ?? 0);
         if (s.posicao_tipo === "cliente") caixasClientes += n;
         if (s.posicao_tipo === "fornecedor") caixasFornecedores += n;
@@ -53,7 +54,7 @@ export function useDashboard() {
       };
 
       const rua = capitalNaRua(
-        (saldosAll.data ?? []) as { posicao_tipo: string; tipo_caixa: string; saldo: number }[],
+        excludeTesteSaldos(saldosAll.data ?? []) as { posicao_tipo: string; tipo_caixa: string; saldo: number }[],
         custos
       );
       let caixasAbertas = rua.qty;
@@ -250,7 +251,7 @@ export function useAlertas(enabled = true) {
         porCliente[r.cliente] = (porCliente[r.cliente] ?? 0) + r.saldo;
       });
       const { data: saldosAlert } = await supabase.from("v_saldos_caixa").select("posicao_tipo, tipo_caixa, saldo");
-      const rua = capitalNaRua((saldosAlert ?? []) as { posicao_tipo: string; tipo_caixa: string; saldo: number }[], custos);
+      const rua = capitalNaRua(excludeTesteSaldos(saldosAlert ?? []) as { posicao_tipo: string; tipo_caixa: string; saldo: number }[], custos);
       const totalCaixas = rua.qty;
       const capital = rua.valor;
 

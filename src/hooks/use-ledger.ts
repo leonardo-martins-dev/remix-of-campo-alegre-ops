@@ -4,15 +4,21 @@ import { todayBRT } from "@/lib/utils-date";
 import type { CaixasMap } from "@/lib/caixas-map";
 import { normalizeResponsavelPosicao } from "@/lib/responsavel-posicao";
 import { ensurePosicao, type PosicaoTipo } from "@/hooks/use-movimentacao";
+import { excludeTesteSaldos } from "@/lib/qa-teste";
+
+/** NOP-325: prefer operação limpa (sem is_teste); fallback + filtro client-side. */
+async function fetchSaldosCaixaOperacao() {
+  const operacao = await supabase.from("v_saldos_caixa_operacao").select("*");
+  if (!operacao.error) return operacao.data ?? [];
+  const all = await supabase.from("v_saldos_caixa").select("*");
+  if (all.error) throw all.error;
+  return excludeTesteSaldos(all.data ?? []);
+}
 
 export function useSaldosCaixa() {
   return useQuery({
     queryKey: ["saldos-caixa"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("v_saldos_caixa").select("*");
-      if (error) throw error;
-      return data ?? [];
-    },
+    queryFn: fetchSaldosCaixaOperacao,
   });
 }
 

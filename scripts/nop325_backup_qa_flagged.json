@@ -1,0 +1,297 @@
+{
+  "generated_at_brt": "2026-09-28T22:47:44",
+  "cutoff_note": "Snapshot before NOP-325 is_teste soft-exclusion. Evidence preserved; no mass-delete.",
+  "qa_fornecedores_flagged": [
+    {
+      "id": "ea179333-1a89-41d3-9005-02490c3d9a11",
+      "nome": "Aguardando vínculo",
+      "ativo": true,
+      "created_at": "2026-09-09T00:00:24.540251+00:00",
+      "codigo_wise": null,
+      "mesclado_em_id": null,
+      "cor": null,
+      "teste_motivo": "aguardando_vinculo_fantasma"
+    },
+    {
+      "id": "c6e51c6c-a109-4c00-8250-3b06f6d8dcfb",
+      "nome": "BOB 1",
+      "ativo": false,
+      "created_at": "2026-06-02T22:50:36.962499+00:00",
+      "codigo_wise": null,
+      "mesclado_em_id": null,
+      "cor": null,
+      "teste_motivo": "bob_seed"
+    },
+    {
+      "id": "ba51e2d4-8c9a-4265-a69e-bccd094ad50d",
+      "nome": "BOB 2",
+      "ativo": false,
+      "created_at": "2026-06-02T22:50:44.900933+00:00",
+      "codigo_wise": null,
+      "mesclado_em_id": null,
+      "cor": null,
+      "teste_motivo": "bob_seed"
+    },
+    {
+      "id": "1bf077bc-b8b7-4128-acbb-cd7f7273a9b2",
+      "nome": "BOB 3",
+      "ativo": false,
+      "created_at": "2026-06-02T22:50:50.275285+00:00",
+      "codigo_wise": null,
+      "mesclado_em_id": null,
+      "cor": null,
+      "teste_motivo": "bob_seed"
+    },
+    {
+      "id": "cbacd7ff-9400-448b-8d77-a9f4cd00a0f4",
+      "nome": "BOB 4",
+      "ativo": false,
+      "created_at": "2026-06-02T22:50:54.69603+00:00",
+      "codigo_wise": null,
+      "mesclado_em_id": null,
+      "cor": null,
+      "teste_motivo": "bob_seed"
+    },
+    {
+      "id": "ede826dd-fba2-4d79-b583-0a516545c5ea",
+      "nome": "FORN REGRESS TEST",
+      "ativo": true,
+      "created_at": "2026-06-08T16:58:49.288727+00:00",
+      "codigo_wise": null,
+      "mesclado_em_id": null,
+      "cor": null,
+      "teste_motivo": "forn_test_seed"
+    },
+    {
+      "id": "ffea2b1f-7b4c-4294-bc55-6f6e5423bb2d",
+      "nome": "FORN V4 TEST",
+      "ativo": true,
+      "created_at": "2026-06-09T01:47:47.540405+00:00",
+      "codigo_wise": null,
+      "mesclado_em_id": null,
+      "cor": null,
+      "teste_motivo": "forn_test_seed"
+    },
+    {
+      "id": "f2d6cdae-edd5-489b-a1c0-322e83da1422",
+      "nome": "TESTE QA 1",
+      "ativo": true,
+      "created_at": "2026-06-03T03:03:35.515293+00:00",
+      "codigo_wise": null,
+      "mesclado_em_id": null,
+      "cor": null,
+      "teste_motivo": "teste_qa_seed"
+    }
+  ],
+  "qa_posicoes_flagged": [
+    {
+      "id": "85e1e9cc-4d2b-4e2f-be68-cab9cdfe503e",
+      "tipo": "fornecedor",
+      "ref_id": "c6e51c6c-a109-4c00-8250-3b06f6d8dcfb",
+      "created_at": "2026-09-08T20:23:32.274009+00:00",
+      "responsavel": null
+    },
+    {
+      "id": "c2842186-04c2-44a4-8f1e-01b8bce0bd53",
+      "tipo": "fornecedor",
+      "ref_id": "ba51e2d4-8c9a-4265-a69e-bccd094ad50d",
+      "created_at": "2026-09-08T20:23:32.274009+00:00",
+      "responsavel": null
+    },
+    {
+      "id": "921a4104-3edc-458e-a411-6f3973d9395b",
+      "tipo": "fornecedor",
+      "ref_id": "1bf077bc-b8b7-4128-acbb-cd7f7273a9b2",
+      "created_at": "2026-09-08T20:23:32.274009+00:00",
+      "responsavel": null
+    },
+    {
+      "id": "6774628a-a67d-43be-ad50-a3c77f4530e9",
+      "tipo": "fornecedor",
+      "ref_id": "cbacd7ff-9400-448b-8d77-a9f4cd00a0f4",
+      "created_at": "2026-09-08T20:23:32.274009+00:00",
+      "responsavel": null
+    },
+    {
+      "id": "1488efdd-e71e-4df3-8ad0-1b8987520e56",
+      "tipo": "fornecedor",
+      "ref_id": "f2d6cdae-edd5-489b-a1c0-322e83da1422",
+      "created_at": "2026-09-08T20:23:32.274009+00:00",
+      "responsavel": null
+    },
+    {
+      "id": "c5f3e6c4-1c28-49d4-9407-af46839a95ab",
+      "tipo": "fornecedor",
+      "ref_id": "ede826dd-fba2-4d79-b583-0a516545c5ea",
+      "created_at": "2026-09-08T20:23:32.274009+00:00",
+      "responsavel": null
+    },
+    {
+      "id": "b6798163-5d2d-4a7f-bbc4-20cebefa1482",
+      "tipo": "fornecedor",
+      "ref_id": "ffea2b1f-7b4c-4294-bc55-6f6e5423bb2d",
+      "created_at": "2026-09-08T20:23:32.274009+00:00",
+      "responsavel": null
+    },
+    {
+      "id": "98bfdb2c-7ad9-4044-b6a5-a7325077c7c6",
+      "tipo": "fornecedor",
+      "ref_id": "ea179333-1a89-41d3-9005-02490c3d9a11",
+      "created_at": "2026-09-09T00:00:24.540251+00:00",
+      "responsavel": null
+    }
+  ],
+  "qa_movimentacoes": [],
+  "anomalies_not_flagged_as_teste": {
+    "orphan_cliente_posicoes": [
+      {
+        "id": "3afbbdb4-82e3-4a21-a860-b39d928952df",
+        "tipo": "cliente",
+        "ref_id": null,
+        "created_at": "2026-09-22T02:12:16.492544+00:00",
+        "responsavel": null
+      }
+    ],
+    "orphan_movimentacoes": [
+      {
+        "id": "7c259b85-b012-47f0-ba7d-8344e6d31326",
+        "cliente_id": null,
+        "tipo": "envio",
+        "tipo_caixa": "V",
+        "quantidade": 54,
+        "carga_id": "2ef5ac26-8f97-4a27-ac64-cd8e4b47c67f",
+        "retorno_id": null,
+        "registrado_por": null,
+        "observacoes": null,
+        "data_movimento": "2026-09-21",
+        "created_at": "2026-09-22T02:12:16.492544+00:00",
+        "origem_posicao_id": "88d5ce28-7a73-4b15-8ded-bee64381a3d6",
+        "destino_posicao_id": "3afbbdb4-82e3-4a21-a860-b39d928952df",
+        "natureza": "envio",
+        "documento_tipo": "carga",
+        "documento_id": "2ef5ac26-8f97-4a27-ac64-cd8e4b47c67f",
+        "confirmacao_status": "nao_aplicavel",
+        "confirmado_por": null,
+        "confirmado_em": null,
+        "qtd_contestada": null,
+        "fornecedor_id": null,
+        "motorista_id": null,
+        "rota_id": null,
+        "carga_parada_id": null,
+        "destino_fornecedor_id": null,
+        "hora_registro": null
+      },
+      {
+        "id": "72a744a6-6d03-467b-a142-5bd332c62916",
+        "cliente_id": null,
+        "tipo": "envio",
+        "tipo_caixa": "A",
+        "quantidade": 6,
+        "carga_id": "2ef5ac26-8f97-4a27-ac64-cd8e4b47c67f",
+        "retorno_id": null,
+        "registrado_por": null,
+        "observacoes": null,
+        "data_movimento": "2026-09-21",
+        "created_at": "2026-09-22T02:12:16.492544+00:00",
+        "origem_posicao_id": "88d5ce28-7a73-4b15-8ded-bee64381a3d6",
+        "destino_posicao_id": "3afbbdb4-82e3-4a21-a860-b39d928952df",
+        "natureza": "envio",
+        "documento_tipo": "carga",
+        "documento_id": "2ef5ac26-8f97-4a27-ac64-cd8e4b47c67f",
+        "confirmacao_status": "nao_aplicavel",
+        "confirmado_por": null,
+        "confirmado_em": null,
+        "qtd_contestada": null,
+        "fornecedor_id": null,
+        "motorista_id": null,
+        "rota_id": null,
+        "carga_parada_id": null,
+        "destino_fornecedor_id": null,
+        "hora_registro": null
+      }
+    ],
+    "note": "Posição tipo=cliente com ref_id NULL recebeu envios da carga 150986 (SÃO VICENTE LOJA 20). Não é seed QA — possível bug de postagem; não marcado is_teste para não esconder estoque real."
+  },
+  "saldo_resumo_corte": {
+    "custos_unitarios": {
+      "P": 18.0,
+      "A": 22.0,
+      "V": 55.0
+    },
+    "signed": {
+      "motorista": {
+        "qty": 0.0,
+        "valor": 0.0,
+        "by_tipo": {
+          "V": 0.0
+        }
+      },
+      "fornecedor": {
+        "qty": -3.0,
+        "valor": -363.0,
+        "by_tipo": {
+          "V": -9.0,
+          "A": 6.0
+        }
+      },
+      "cliente": {
+        "qty": 60.0,
+        "valor": 3102.0,
+        "by_tipo": {
+          "A": 6.0,
+          "V": 54.0
+        }
+      },
+      "galpao": {
+        "qty": 8619.0,
+        "valor": 444147.0,
+        "by_tipo": {
+          "A": 906.0,
+          "V": 7713.0
+        }
+      }
+    },
+    "positive_only_capital_na_rua_style": {
+      "cliente": {
+        "qty": 60.0,
+        "valor": 3102.0,
+        "by_tipo": {
+          "A": 6.0,
+          "V": 54.0
+        }
+      },
+      "fornecedor": {
+        "qty": 12.0,
+        "valor": 462.0,
+        "by_tipo": {
+          "A": 6.0,
+          "V": 6.0
+        }
+      },
+      "galpao": {
+        "qty": 8619.0,
+        "valor": 444147.0,
+        "by_tipo": {
+          "A": 906.0,
+          "V": 7713.0
+        }
+      }
+    },
+    "negativos": [
+      {
+        "posicao_id": "2979a16b-d398-436f-82be-0f4ca591fe90",
+        "posicao_tipo": "fornecedor",
+        "ref_id": "18a9771b-1e86-4a2e-9bfb-ea8a3b70040f",
+        "tipo_caixa": "V",
+        "saldo": -15,
+        "enviadas": 0,
+        "retornadas": 0,
+        "perdidas": 0,
+        "ajustes": 0
+      }
+    ],
+    "capital_na_rua_qty": 8691.0,
+    "capital_na_rua_valor": 447711.0,
+    "inventario_signed_qty": 8676.0
+  }
+}
