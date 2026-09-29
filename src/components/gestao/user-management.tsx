@@ -37,7 +37,6 @@ import {
   createUserViaEdge,
 } from "@/hooks/use-users";
 import { isSuperAdmin, SUPER_ADMIN_EMAIL } from "@/lib/super-admin";
-import { useFornecedores, useMotoristas } from "@/hooks/use-cadastros";
 import {
   USUARIOS_SLUG,
   completePermissionGaps,
@@ -67,8 +66,6 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
   const [fornecedorId, setFornecedorId] = useState("");
   const [motoristaId, setMotoristaId] = useState("");
   const [loading, setLoading] = useState(false);
-  const { data: fornecedores = [] } = useFornecedores();
-  const { data: motoristas = [] } = useMotoristas();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -80,11 +77,15 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
       toast.error(`O email ${SUPER_ADMIN_EMAIL} é reservado ao administrador do sistema`);
       return;
     }
+    if (role === "fornecedor" && !fornecedorId) {
+      toast.error("Selecione o fornecedor vinculado");
+      return;
+    }
     setLoading(true);
     try {
       await createUserViaEdge(nome.trim(), email.trim(), password, role, {
         fornecedor_id: role === "fornecedor" ? fornecedorId || null : null,
-        motorista_id: motoristaId || null,
+        motorista_id: role === "user" ? motoristaId || null : null,
       });
       toast.success(`Usuário "${nome}" criado com sucesso`);
       setNome("");
@@ -123,7 +124,15 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="role">Perfil</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as "admin" | "user" | "fornecedor")}>
+            <Select
+              value={role}
+              onValueChange={(v) => {
+                const next = v as "admin" | "user" | "fornecedor";
+                setRole(next);
+                if (next !== "fornecedor") setFornecedorId("");
+                if (next !== "user") setMotoristaId("");
+              }}
+            >
               <SelectTrigger id="role">
                 <SelectValue />
               </SelectTrigger>
@@ -144,17 +153,22 @@ export function CreateUserForm({ onCreated }: { onCreated?: () => void }) {
               />
             </div>
           )}
-          <div className="space-y-2">
-            <Label>Motorista vinculado (opcional)</Label>
-            <SeletorCadastro
-              tipo="motorista"
-              value={motoristaId || null}
-              onChange={(id) => setMotoristaId(id)}
-              allowClear
-              clearLabel="Nenhum"
-              placeholder="Nenhum"
-            />
-          </div>
+          {role === "user" && (
+            <div className="space-y-2">
+              <Label>Motorista vinculado (opcional)</Label>
+              <SeletorCadastro
+                tipo="motorista"
+                value={motoristaId || null}
+                onChange={(id) => setMotoristaId(id)}
+                allowClear
+                clearLabel="Nenhum"
+                placeholder="Nenhum"
+              />
+              <p className="text-xs text-muted-foreground">
+                Com motorista vinculado, o login abre Meu turno de motorista (minha rota).
+              </p>
+            </div>
+          )}
           <Button type="submit" className="w-full sm:w-auto" disabled={loading}>
             {loading ? "Criando..." : "Criar usuário"}
           </Button>
@@ -473,8 +487,6 @@ function PermissionsSheet({
 
 export function UsersList() {
   const { data: users = [], isLoading } = useProfiles();
-  const { data: motoristas = [] } = useMotoristas();
-  const { data: fornecedores = [] } = useFornecedores();
   const updateProfile = useUpdateProfile();
   const [openUserId, setOpenUserId] = useState<string | null>(null);
 
@@ -511,7 +523,15 @@ export function UsersList() {
                   <Select
                     value={u.role}
                     onValueChange={(role) =>
-                      updateProfile.mutate({ id: u.id, role }, { onSuccess: () => toast.success("Role atualizada") })
+                      updateProfile.mutate(
+                        {
+                          id: u.id,
+                          role,
+                          motorista_id: role === "user" ? u.motorista_id ?? null : null,
+                          fornecedor_id: role === "fornecedor" ? u.fornecedor_id ?? null : null,
+                        },
+                        { onSuccess: () => toast.success("Role atualizada") },
+                      )
                     }
                   >
                     <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>
@@ -539,38 +559,52 @@ export function UsersList() {
                   </button>
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <div className="w-44">
-                  <SeletorCadastro
-                    tipo="motorista"
-                    value={u.motorista_id ?? null}
-                    onChange={(id) =>
-                      updateProfile.mutate(
-                        { id: u.id, motorista_id: id || null },
-                        { onSuccess: () => toast.success("Motorista vinculado") },
-                      )
-                    }
-                    allowClear
-                    clearLabel="Sem motorista"
-                    placeholder="Motorista"
-                  />
+              {u.role === "user" || u.role === "fornecedor" ? (
+                <div className="mt-3 flex flex-wrap gap-3">
+                  {u.role === "user" ? (
+                    <div className="min-w-[12rem] flex-1 max-w-xs space-y-1">
+                      <Label className="text-xs text-muted-foreground">Motorista vinculado</Label>
+                      <SeletorCadastro
+                        tipo="motorista"
+                        value={u.motorista_id ?? null}
+                        onChange={(id) =>
+                          updateProfile.mutate(
+                            { id: u.id, motorista_id: id || null },
+                            {
+                              onSuccess: () =>
+                                toast.success(id ? "Motorista vinculado" : "Motorista desvinculado"),
+                            },
+                          )
+                        }
+                        allowClear
+                        clearLabel="Sem motorista"
+                        placeholder="Motorista"
+                      />
+                    </div>
+                  ) : null}
+                  {u.role === "fornecedor" ? (
+                    <div className="min-w-[12rem] flex-1 max-w-xs space-y-1">
+                      <Label className="text-xs text-muted-foreground">Fornecedor vinculado</Label>
+                      <SeletorCadastro
+                        tipo="fornecedor"
+                        value={u.fornecedor_id ?? null}
+                        onChange={(id) =>
+                          updateProfile.mutate(
+                            { id: u.id, fornecedor_id: id || null },
+                            {
+                              onSuccess: () =>
+                                toast.success(id ? "Fornecedor vinculado" : "Fornecedor desvinculado"),
+                            },
+                          )
+                        }
+                        allowClear
+                        clearLabel="Sem fornecedor"
+                        placeholder="Fornecedor"
+                      />
+                    </div>
+                  ) : null}
                 </div>
-                <div className="w-44">
-                  <SeletorCadastro
-                    tipo="fornecedor"
-                    value={u.fornecedor_id ?? null}
-                    onChange={(id) =>
-                      updateProfile.mutate(
-                        { id: u.id, fornecedor_id: id || null },
-                        { onSuccess: () => toast.success("Fornecedor vinculado") },
-                      )
-                    }
-                    allowClear
-                    clearLabel="Sem fornecedor"
-                    placeholder="Fornecedor"
-                  />
-                </div>
-              </div>
+              ) : null}
             </div>
           ))}
         </CardContent>
