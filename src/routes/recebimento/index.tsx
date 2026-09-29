@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import {
   usePedidosDia,
   usePedidosAbertos,
+  usePedidosConferidos,
   usePedidosRealtime,
   useCreatePedidoManual,
   useAliases,
@@ -42,7 +43,7 @@ import { ImportacoesPanel } from "@/components/importacoes-panel";
 import { TableWrapper } from "@/components/table-wrapper";
 import { usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { formatDateBRT, formatDurationMinutes, formatTime, todayBRT } from "@/lib/utils-date";
-import { dataOperacionalPedido } from "@/lib/pedidos-abertos";
+import { dataOperacionalPedido, isPedidoConferido } from "@/lib/pedidos-abertos";
 import { useSaidasEmTransito } from "@/hooks/use-saida-roca";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { useFornecedoresComEntregaRecente } from "@/hooks/use-seletor-cadastro";
@@ -136,8 +137,9 @@ function PedidoRowAdminMenu({
   onEditar: () => void;
 }) {
   const canEncerrar = canAdmin && p.status === "parcial";
+  // NOP-471: ADM também edita pedido já conferido (recebido/encerrado/conferido legado).
   const canEditar =
-    canAdmin && (p.status === "conferido" || p.status === "pendente" || p.status === "parcial");
+    canAdmin && (isPedidoConferido(p.status) || p.status === "pendente" || p.status === "parcial");
   if (!canEncerrar && !canEditar) return null;
   return (
     <DropdownMenu>
@@ -182,12 +184,14 @@ function origemLabel(o: string) {
 type TabKey =
   | "todos"
   | "pendente"
+  | "conferidos"
   | "divergencia"
   | "aguardando_vinculo"
   | "outros"
   | "importacoes";
 
-const OUTROS_STATUS = new Set(["parcial", "em_transito", "conferido", "encerrado", "recebido"]);
+/** NOP-471: conferidos têm aba própria — Outros fica só com o que está em andamento. */
+const OUTROS_STATUS = new Set(["parcial", "em_transito"]);
 
 function Page() {
   const navigate = useNavigate();
@@ -209,9 +213,19 @@ function Page() {
   usePedidosRealtime();
   const diaQ = usePedidosDia(dataFiltro);
   const abertosQ = usePedidosAbertos();
-  const pedidos = (escopo === "abertos" ? abertosQ.data : diaQ.data) ?? [];
-  const isLoading = escopo === "abertos" ? abertosQ.isLoading : diaQ.isLoading;
-  const error = escopo === "abertos" ? abertosQ.error : diaQ.error;
+  // NOP-471: a query de abertos esconde recebido/encerrado — sem isso a aba/contador
+  // de Conferidos fica sempre em zero no escopo "todas as datas".
+  const conferidosQ = usePedidosConferidos();
+  const pedidos = useMemo(
+    () =>
+      escopo === "abertos"
+        ? [...(abertosQ.data ?? []), ...(conferidosQ.data ?? [])]
+        : (diaQ.data ?? []),
+    [escopo, abertosQ.data, conferidosQ.data, diaQ.data],
+  );
+  const isLoading =
+    escopo === "abertos" ? abertosQ.isLoading || conferidosQ.isLoading : diaQ.isLoading;
+  const error = escopo === "abertos" ? (abertosQ.error ?? conferidosQ.error) : diaQ.error;
   const { data: fornecedores = [] } = useFornecedores();
   const { data: produtos = [] } = useProdutos();
   const { data: destinatarios = [] } = useDestinatarios();
@@ -235,13 +249,18 @@ function Page() {
     { produto_id: "", quantidade: 1, preco_unitario: "", cliente_id: "", rateio: [] },
   ]);
 
-  const typedPedidos: PedidoDia[] = pedidos.map((p) => ({
-    ...p,
-    fornecedores: one(p.fornecedores),
-    itens_pedido: (p.itens_pedido ?? []) as ItemPedido[],
-  }));
+  const typedPedidos: PedidoDia[] = useMemo(
+    () =>
+      pedidos.map((p) => ({
+        ...p,
+        fornecedores: one(p.fornecedores),
+        itens_pedido: (p.itens_pedido ?? []) as ItemPedido[],
+      })),
+    [pedidos],
+  );
   const filtered = typedPedidos.filter((p) => {
     if (tab === "pendente" && p.status !== "pendente") return false;
+    if (tab === "conferidos" && !isPedidoConferido(p.status)) return false;
     if (tab === "aguardando_vinculo" && p.status !== "aguardando_vinculo") return false;
     if (
       tab === "divergencia" &&
@@ -266,11 +285,22 @@ function Page() {
     const divergencias = typedPedidos.filter(
       (p) => p.status === "divergencia" || p.status === "aguardando_liberacao",
     ).length;
-    const conferidos = typedPedidos.filter(
-      (p) => p.status === "conferido" || p.status === "recebido",
-    ).length;
+    // NOP-471: conta recebido + encerrado + conferido (legado).
+    const conferidos = typedPedidos.filter((p) => isPedidoConferido(p.status)).length;
     return { pendentes, emConferencia, divergencias, conferidos };
   }, [typedPedidos]);
+
+  /** Vazio honesto por aba/escopo (NOP-471). */
+  const emptyMsg = useMemo(() => {
+    if (tab === "conferidos") return "Nenhum pedido conferido";
+    if (escopo === "dia" && (abertosQ.data?.length ?? 0) > 0) {
+      return `Nenhum pedido nesta data. Há ${abertosQ.data!.length} pendente(s) em outras datas — use "Pendentes (todas as datas)".`;
+    }
+    if (tab === "divergencia") return "Nenhum pedido com divergência";
+    if (tab === "aguardando_vinculo") return "Nenhuma pendência de vínculo";
+    if (tab === "outros") return "Nenhum pedido em conferência";
+    return "Nenhum pedido pendente";
+  }, [tab, escopo, abertosQ.data]);
 
   const syncWiseAction = async () => {
     if (!user?.id) return;
@@ -365,7 +395,7 @@ function Page() {
     <div>
       <PageHeader
         title="Conferência de Mercadoria"
-        subtitle={escopo === "abertos" ? "Pedidos pendentes (todas as datas) · recebimento sempre aceito" : "Pedidos do dia selecionado · recebimento sempre aceito"}
+        subtitle={escopo === "abertos" ? "Pedidos pendentes e conferidos (todas as datas) · recebimento sempre aceito" : "Pedidos do dia selecionado · recebimento sempre aceito"}
         actions={
           <HeaderAcoes
             primary={
@@ -546,6 +576,7 @@ function Page() {
             [
               ["todos", "Todos"],
               ["pendente", "Pendentes"],
+              ["conferidos", "Conferidos"],
               ["divergencia", "Divergência"],
               ["aguardando_vinculo", "Vínculo"],
               ["outros", "Outros"],
@@ -572,9 +603,7 @@ function Page() {
           )}
           {!isLoading && filtered.length === 0 && (
             <p className="col-span-full text-center text-muted-foreground py-8">
-              {escopo === "dia" && (abertosQ.data?.length ?? 0) > 0
-                ? `Nenhum pedido nesta data. Há ${abertosQ.data!.length} pendente(s) em outras datas — use "Pendentes (todas as datas)".`
-                : "Nenhum pedido pendente"}
+              {emptyMsg}
             </p>
           )}
           {filtered.map((p) => (
@@ -670,9 +699,7 @@ function Page() {
               {!isLoading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
-                    {escopo === "dia" && (abertosQ.data?.length ?? 0) > 0
-                      ? `Nenhum pedido nesta data. Há ${abertosQ.data!.length} pendente(s) em outras datas — use "Pendentes (todas as datas)".`
-                      : "Nenhum pedido pendente"}
+                    {emptyMsg}
                   </td>
                 </tr>
               )}

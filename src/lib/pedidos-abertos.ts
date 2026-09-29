@@ -5,6 +5,17 @@
 
 export const PEDIDO_STATUS_ABERTO = ["pendente", "parcial", "em_transito"] as const;
 
+/**
+ * NOP-471 — pedidos com conferência finalizada. `conferido` é legado (antes de
+ * `recebido`/`encerrado`) e segue contando para não sumir histórico.
+ */
+export const PEDIDO_STATUS_CONFERIDO = ["recebido", "encerrado", "conferido"] as const;
+
+/** true quando o pedido já teve a conferência finalizada (inclui encerrado e legado). */
+export function isPedidoConferido(status: string): boolean {
+  return (PEDIDO_STATUS_CONFERIDO as readonly string[]).includes(status);
+}
+
 export type PedidoComDatas = {
   data_pedido: string;
   data_prevista?: string | null;

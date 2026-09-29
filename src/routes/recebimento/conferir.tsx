@@ -52,6 +52,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   usePedidosAbertos,
+  usePedidosConferidos,
   usePedido,
   useConfigValor,
   useSaldoItensPedido,
@@ -170,6 +171,9 @@ function Page() {
 
   // NOP-457: lista pendentes de qualquer data (não só hoje).
   const { data: pedidos = [], isLoading: loadingPedidos } = usePedidosAbertos();
+  // NOP-471: deep-link "Ver" de um pedido já conferido precisa resolver o pedido,
+  // que não está em abertos. Só os IDs da URL entram — a lista de seleção segue pendente.
+  const { data: conferidos = [] } = usePedidosConferidos();
   const { from, to } = janelaParaRange(janela, todayBRT(), addDaysBRT);
   const abertos = useMemo(
     () => pedidos.filter((p) => PEDIDO_ABERTO.includes(p.status)),
@@ -179,6 +183,12 @@ function Page() {
     () => filterPorJanelaData(abertos, from, to),
     [abertos, from, to],
   );
+  const pendentesParaSessao = useMemo(() => {
+    if (pedidoIds.length === 0) return pendentes;
+    const jaNaLista = new Set(pendentes.map((p) => p.id));
+    const extras = conferidos.filter((c) => pedidoIds.includes(c.id) && !jaNaLista.has(c.id));
+    return extras.length > 0 ? [...pendentes, ...extras] : pendentes;
+  }, [pendentes, conferidos, pedidoIds]);
   const { data: emTransito = [] } = useSaidasEmTransito();
   const saidaPorPedido = new Map(emTransito.map((s) => [s.pedido_id, s]));
 
@@ -187,7 +197,7 @@ function Page() {
   /** NOP-328: tela única em 3 passos (mockup). Mantém ConferenciaItens no arquivo para fluxos legados/ADM. */
   return (
     <ConferenciaCaminhao
-      pendentes={pendentes}
+      pendentes={pendentesParaSessao}
       totalAbertos={abertos.length}
       janela={janela}
       onJanelaChange={setJanela}

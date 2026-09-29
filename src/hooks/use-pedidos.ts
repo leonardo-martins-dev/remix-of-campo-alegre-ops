@@ -5,7 +5,7 @@ import { validateRateio } from "@/lib/rateio";
 import { addDaysBRT, dateRangeBRT, todayBRT } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { safePct } from "@/lib/indicadores-metricas";
-import { sortPedidosMaisAntigosPrimeiro } from "@/lib/pedidos-abertos";
+import { PEDIDO_STATUS_CONFERIDO, sortPedidosMaisAntigosPrimeiro } from "@/lib/pedidos-abertos";
 
 async function fetchConfigNum(chave: string, fallback: number): Promise<number> {
   const { data } = await supabase.from("configuracoes").select("valor").eq("chave", chave).maybeSingle();
@@ -103,6 +103,26 @@ export function usePedidosAbertos() {
         .order("data_pedido", { ascending: true });
       if (error) throw error;
       return sortPedidosMaisAntigosPrimeiro(data ?? []);
+    },
+  });
+}
+
+/** NOP-471: pedidos com conferência finalizada (qualquer data), mais recentes primeiro. */
+export function usePedidosConferidos() {
+  return useQuery({
+    queryKey: ["pedidos", "conferidos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pedidos_recebimento")
+        .select(`
+          id, codigo, fornecedor_id, origem, data_pedido, hora_chegada, status, wise_pedido_id, data_prevista,
+          fornecedores(nome, cor),
+          itens_pedido(id, cliente_id, clientes(nome), itens_pedido_rateio(destinatario_id, quantidade, destinatarios(nome)))
+        `)
+        .in("status", [...PEDIDO_STATUS_CONFERIDO])
+        .order("data_pedido", { ascending: false });
+      if (error) throw error;
+      return sortPedidosMaisAntigosPrimeiro(data ?? []).reverse();
     },
   });
 }
