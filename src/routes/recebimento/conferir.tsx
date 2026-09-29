@@ -51,12 +51,17 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  usePedidosDia,
+  usePedidosAbertos,
   usePedido,
   useConfigValor,
   useSaldoItensPedido,
   useRegistrarHoraChegada,
 } from "@/hooks/use-pedidos";
+import {
+  filterPorJanelaData,
+  janelaParaRange,
+  type JanelaPedidos,
+} from "@/lib/pedidos-abertos";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { useRegistrarEntradaGalpao } from "@/hooks/use-ledger";
 import {
@@ -70,7 +75,7 @@ import {
 } from "@/hooks/use-conferencia";
 import { useProdutos } from "@/hooks/use-cadastros";
 import { useAuth } from "@/lib/auth";
-import { formatTime, formatDateBRT, dateKeyBRT } from "@/lib/utils-date";
+import { formatTime, formatDateBRT, dateKeyBRT, addDaysBRT, todayBRT } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -161,9 +166,19 @@ function Page() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const pedidoIds = parsePedidoIds(search);
+  const [janela, setJanela] = useState<JanelaPedidos>("todos");
 
-  const { data: pedidos = [], isLoading: loadingPedidos } = usePedidosDia();
-  const pendentes = pedidos.filter((p) => PEDIDO_ABERTO.includes(p.status));
+  // NOP-457: lista pendentes de qualquer data (não só hoje).
+  const { data: pedidos = [], isLoading: loadingPedidos } = usePedidosAbertos();
+  const { from, to } = janelaParaRange(janela, todayBRT(), addDaysBRT);
+  const abertos = useMemo(
+    () => pedidos.filter((p) => PEDIDO_ABERTO.includes(p.status)),
+    [pedidos],
+  );
+  const pendentes = useMemo(
+    () => filterPorJanelaData(abertos, from, to),
+    [abertos, from, to],
+  );
   const { data: emTransito = [] } = useSaidasEmTransito();
   const saidaPorPedido = new Map(emTransito.map((s) => [s.pedido_id, s]));
 
@@ -173,6 +188,9 @@ function Page() {
   return (
     <ConferenciaCaminhao
       pendentes={pendentes}
+      totalAbertos={abertos.length}
+      janela={janela}
+      onJanelaChange={setJanela}
       loadingPedidos={loadingPedidos}
       saidaPorPedido={saidaPorPedido}
       pedidoIds={pedidoIds}
@@ -438,7 +456,7 @@ function SelecaoMultiFornecedor({
 
       {loading && <p className="text-sm text-muted-foreground">Carregando pedidos…</p>}
       {!loading && grupos.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nenhum pedido pendente hoje.</p>
+        <p className="text-sm text-muted-foreground">Nenhum pedido pendente.</p>
       )}
       {!loading && grupos.length > 0 && gruposFiltrados.length === 0 && (
         <p className="text-sm text-muted-foreground">Nenhum resultado para “{buscaForn}”.</p>
@@ -1041,7 +1059,7 @@ function ConferenciaItens({
   embedded?: boolean;
 }) {
   const { user, profile, isAdmin } = useAuth();
-  const { data: pedidos = [] } = usePedidosDia();
+  const { data: pedidos = [] } = usePedidosAbertos();
   const { data: pedido } = usePedido(pedidoId);
   const { data: conferencia, isLoading, error } = useConferencia(pedidoId);
   const startMut = useStartConferencia();

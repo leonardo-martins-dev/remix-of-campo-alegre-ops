@@ -5,6 +5,7 @@ import { validateRateio } from "@/lib/rateio";
 import { addDaysBRT, dateRangeBRT, todayBRT } from "@/lib/utils-date";
 import { one } from "@/lib/embed";
 import { safePct } from "@/lib/indicadores-metricas";
+import { sortPedidosMaisAntigosPrimeiro } from "@/lib/pedidos-abertos";
 
 async function fetchConfigNum(chave: string, fallback: number): Promise<number> {
   const { data } = await supabase.from("configuracoes").select("valor").eq("chave", chave).maybeSingle();
@@ -82,6 +83,26 @@ export function usePedidosDia(date = todayBRT()) {
         .order("hora_chegada", { ascending: true });
       if (error) throw error;
       return data ?? [];
+    },
+  });
+}
+
+/** NOP-457: pedidos ainda abertos (qualquer data), mais antigos primeiro. */
+export function usePedidosAbertos() {
+  return useQuery({
+    queryKey: ["pedidos", "abertos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pedidos_recebimento")
+        .select(`
+          id, codigo, fornecedor_id, origem, data_pedido, hora_chegada, status, wise_pedido_id, data_prevista,
+          fornecedores(nome, cor),
+          itens_pedido(id, cliente_id, clientes(nome), itens_pedido_rateio(destinatario_id, quantidade, destinatarios(nome)))
+        `)
+        .in("status", ["pendente", "parcial", "em_transito"])
+        .order("data_pedido", { ascending: true });
+      if (error) throw error;
+      return sortPedidosMaisAntigosPrimeiro(data ?? []);
     },
   });
 }

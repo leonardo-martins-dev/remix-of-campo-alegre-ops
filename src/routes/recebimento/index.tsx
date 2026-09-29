@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
   usePedidosDia,
+  usePedidosAbertos,
   usePedidosRealtime,
   useCreatePedidoManual,
   useAliases,
@@ -41,6 +42,7 @@ import { ImportacoesPanel } from "@/components/importacoes-panel";
 import { TableWrapper } from "@/components/table-wrapper";
 import { usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { formatDateBRT, formatDurationMinutes, formatTime, todayBRT } from "@/lib/utils-date";
+import { dataOperacionalPedido } from "@/lib/pedidos-abertos";
 import { useSaidasEmTransito } from "@/hooks/use-saida-roca";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { useFornecedoresComEntregaRecente } from "@/hooks/use-seletor-cadastro";
@@ -73,6 +75,7 @@ type PedidoDia = {
   codigo: string;
   fornecedor_id: string;
   origem: string;
+  data_pedido?: string;
   hora_chegada: string | null;
   status: string;
   wise_pedido_id?: string | null;
@@ -80,6 +83,9 @@ type PedidoDia = {
   fornecedores: { nome: string } | null;
   itens_pedido: ItemPedido[];
 };
+
+/** NOP-457: dia = lista pela data; abertos = todos pendentes/parcial/em_transito. */
+type EscopoLista = "dia" | "abertos";
 
 type ManualItem = {
   produto_id: string;
@@ -186,6 +192,7 @@ const OUTROS_STATUS = new Set(["parcial", "em_transito", "conferido", "encerrado
 function Page() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabKey>("todos");
+  const [escopo, setEscopo] = useState<EscopoLista>("abertos");
   const [dataFiltro, setDataFiltro] = useState(todayBRT());
   const [busca, setBusca] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
@@ -200,7 +207,11 @@ function Page() {
 
   const { user, profile, isAdmin } = useAuth();
   usePedidosRealtime();
-  const { data: pedidos = [], isLoading, error } = usePedidosDia(dataFiltro);
+  const diaQ = usePedidosDia(dataFiltro);
+  const abertosQ = usePedidosAbertos();
+  const pedidos = (escopo === "abertos" ? abertosQ.data : diaQ.data) ?? [];
+  const isLoading = escopo === "abertos" ? abertosQ.isLoading : diaQ.isLoading;
+  const error = escopo === "abertos" ? abertosQ.error : diaQ.error;
   const { data: fornecedores = [] } = useFornecedores();
   const { data: produtos = [] } = useProdutos();
   const { data: destinatarios = [] } = useDestinatarios();
@@ -354,7 +365,7 @@ function Page() {
     <div>
       <PageHeader
         title="Conferência de Mercadoria"
-        subtitle="Pedidos a conferir do dia · recebimento sempre aceito"
+        subtitle={escopo === "abertos" ? "Pedidos pendentes (todas as datas) · recebimento sempre aceito" : "Pedidos do dia selecionado · recebimento sempre aceito"}
         actions={
           <HeaderAcoes
             primary={
@@ -497,16 +508,36 @@ function Page() {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row gap-2 md:gap-3 mb-3">
-        <Input
-          type="date"
-          className="w-full md:w-44 h-11 lg:h-9"
-          value={dataFiltro}
-          onChange={(e) => setDataFiltro(e.target.value || todayBRT())}
-          title="Data prevista de entrega"
-          aria-label="Data prevista de entrega"
-        />
-        <Input className="w-full md:flex-1 lg:max-w-sm h-11 lg:h-9" placeholder="Buscar pedido, fornecedor..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+      <div className="flex flex-col gap-2 mb-3">
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Escopo da lista">
+          <button
+            type="button"
+            onClick={() => setEscopo("abertos")}
+            className={`px-2.5 min-h-9 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${escopo === "abertos" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+          >
+            Pendentes (todas as datas)
+          </button>
+          <button
+            type="button"
+            onClick={() => setEscopo("dia")}
+            className={`px-2.5 min-h-9 rounded-md text-xs font-semibold whitespace-nowrap transition-colors ${escopo === "dia" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+          >
+            Por dia
+          </button>
+        </div>
+        <div className="flex flex-col md:flex-row gap-2 md:gap-3">
+          {escopo === "dia" && (
+            <Input
+              type="date"
+              className="w-full md:w-44 h-11 lg:h-9"
+              value={dataFiltro}
+              onChange={(e) => setDataFiltro(e.target.value || todayBRT())}
+              title="Data prevista de entrega"
+              aria-label="Data prevista de entrega"
+            />
+          )}
+          <Input className="w-full md:flex-1 lg:max-w-sm h-11 lg:h-9" placeholder="Buscar pedido, fornecedor..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+        </div>
       </div>
 
       <div className="card-base">
@@ -540,7 +571,11 @@ function Page() {
             <p className="col-span-full text-center text-muted-foreground py-8">Carregando pedidos…</p>
           )}
           {!isLoading && filtered.length === 0 && (
-            <p className="col-span-full text-center text-muted-foreground py-8">Nenhum pedido encontrado</p>
+            <p className="col-span-full text-center text-muted-foreground py-8">
+              {escopo === "dia" && (abertosQ.data?.length ?? 0) > 0
+                ? `Nenhum pedido nesta data. Há ${abertosQ.data!.length} pendente(s) em outras datas — use "Pendentes (todas as datas)".`
+                : "Nenhum pedido pendente"}
+            </p>
           )}
           {filtered.map((p) => (
             <div key={p.id} className="mobile-item-card flex flex-col gap-3">
@@ -567,7 +602,7 @@ function Page() {
                 </div>
                 <div className="flex items-center justify-between gap-2 py-2 sm:block sm:py-0">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide">Prevista</span>
-                  <span className="block font-semibold text-navy">{formatDateBRT(p.data_prevista)}</span>
+                  <span className="block font-semibold text-navy">{formatDateBRT(dataOperacionalPedido({ data_pedido: p.data_pedido ?? p.data_prevista ?? "", data_prevista: p.data_prevista }))}</span>
                 </div>
                 <div className="flex items-center justify-between gap-2 py-2 sm:block sm:py-0">
                   <span className="text-xs text-muted-foreground uppercase tracking-wide">Origem</span>
@@ -635,7 +670,9 @@ function Page() {
               {!isLoading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
-                    Nenhum pedido encontrado
+                    {escopo === "dia" && (abertosQ.data?.length ?? 0) > 0
+                      ? `Nenhum pedido nesta data. Há ${abertosQ.data!.length} pendente(s) em outras datas — use "Pendentes (todas as datas)".`
+                      : "Nenhum pedido pendente"}
                   </td>
                 </tr>
               )}
@@ -665,7 +702,7 @@ function Page() {
                   <td className="px-4 py-3 text-ink whitespace-nowrap">
                     {p.hora_chegada ? formatTime(p.hora_chegada) : ""}
                   </td>
-                  <td className="px-4 py-3 text-ink whitespace-nowrap">{formatDateBRT(p.data_prevista)}</td>
+                  <td className="px-4 py-3 text-ink whitespace-nowrap">{formatDateBRT(dataOperacionalPedido({ data_pedido: p.data_pedido ?? p.data_prevista ?? "", data_prevista: p.data_prevista }))}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{statusChip(p.status)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2 whitespace-nowrap">

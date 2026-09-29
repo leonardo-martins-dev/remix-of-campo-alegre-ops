@@ -56,7 +56,7 @@ export const OPS_HUBS: OpsHub[] = [
     to: "/receber",
     slug: "receber",
     icon: PackageCheck,
-    desc: "Chegadas, conferência e pedidos do dia",
+    desc: "Chegadas, conferência e pedidos pendentes",
     children: [
       {
         id: "aguardar",

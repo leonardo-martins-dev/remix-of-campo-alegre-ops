@@ -4,13 +4,14 @@ import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { resumoSelecao } from "@/lib/conferir-chegada";
 import { FornecedorCorBadge } from "@/components/fornecedor-cor-badge";
 import { fornecedorCorDef } from "@/lib/fornecedor-cores";
+import { labelJanela, type JanelaPedidos } from "@/lib/pedidos-abertos";
 
 export type GrupoFornecedor = {
   fornecedorId: string;
   nome: string;
   /** NOP-360 — cor da paleta (null = legado) */
   cor: string | null;
-  /** todos os pedidos abertos do fornecedor hoje */
+  /** todos os pedidos abertos do fornecedor (janela atual) */
   pedidoIds: string[];
   /** os que já estão na sessão de conferência */
   pedidoIdsSelecionados: string[];
@@ -18,25 +19,36 @@ export type GrupoFornecedor = {
   emTransito: boolean;
   saidaResumo: string | null;
   codigos: string[];
+  /** NOP-457 — datas operacionais (dd/MM/yyyy), mais antiga → mais recente */
+  datas: string[];
 };
 
 /** Quantos cards aparecem antes de "ver todos" quando ninguém saiu da roça. */
 const CARDS_INICIAIS = 6;
 
+const JANELAS: JanelaPedidos[] = ["todos", "30d", "7d", "hoje"];
+
 /**
  * NOP-328 passo 1 — fornecedores no caminhão.
  * NOP-318: sugeridos (em trânsito / já escolhidos) primeiro e busca para o
  * resto — nunca uma parede de botões com dezenas de fornecedores.
+ * NOP-457: lista pendentes de qualquer data; filtro de janela visível.
  */
 export function PassoFornecedores({
   grupos,
   loading,
+  janela,
+  onJanelaChange,
+  totalAbertos,
   onToggle,
   onSelecionarTodos,
   onLimparSelecao,
 }: {
   grupos: GrupoFornecedor[];
   loading: boolean;
+  janela: JanelaPedidos;
+  onJanelaChange: (j: JanelaPedidos) => void;
+  totalAbertos: number;
   onToggle: (fornecedorId: string) => void;
   onSelecionarTodos: () => void;
   onLimparSelecao: () => void;
@@ -61,6 +73,7 @@ export function PassoFornecedores({
 
   const ocultos = grupos.length - visiveis.length;
   const todosMarcados = grupos.length > 0 && selecionadosIds.length === grupos.length;
+  const foraDaJanela = Math.max(0, totalAbertos - grupos.reduce((n, g) => n + g.pedidoIds.length, 0));
 
   const itensSeletor = useMemo(
     () => grupos.map((g) => ({ id: g.fornecedorId, nome: g.nome, codigo: g.codigos[0] })),
@@ -75,8 +88,32 @@ export function PassoFornecedores({
     }
   };
 
+  const labelDatas = (datas: string[]) => {
+    if (datas.length === 0) return null;
+    if (datas.length === 1) return datas[0];
+    return `${datas[0]} → ${datas[datas.length - 1]}`;
+  };
+
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Janela de pedidos">
+        {JANELAS.map((j) => (
+          <button
+            key={j}
+            type="button"
+            onClick={() => onJanelaChange(j)}
+            className={[
+              "px-2.5 min-h-9 rounded-md text-xs font-semibold whitespace-nowrap transition-colors",
+              janela === j
+                ? "bg-primary-soft text-primary-dark"
+                : "text-muted-foreground hover:bg-secondary",
+            ].join(" ")}
+          >
+            {labelJanela(j)}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-sm font-semibold text-navy tabular-nums">
           {resumoSelecao(selecionadosIds.length, grupos.length)}
@@ -103,10 +140,22 @@ export function PassoFornecedores({
         />
       )}
 
-      {loading && <p className="text-sm text-muted-foreground">Carregando pedidos do dia…</p>}
-      {!loading && grupos.length === 0 && (
+      {loading && <p className="text-sm text-muted-foreground">Carregando pedidos pendentes…</p>}
+      {!loading && grupos.length === 0 && totalAbertos === 0 && (
         <p className="text-sm text-muted-foreground">
-          Nenhum pedido aberto hoje. Importe ou cadastre um pedido para conferir a chegada.
+          Nenhum pedido pendente. Importe ou cadastre um pedido para conferir a chegada.
+        </p>
+      )}
+      {!loading && grupos.length === 0 && totalAbertos > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Nenhum pedido em &quot;{labelJanela(janela)}&quot;. Há {totalAbertos} pendente
+          {totalAbertos === 1 ? "" : "s"} fora desta janela — amplie o filtro.
+        </p>
+      )}
+      {!loading && grupos.length > 0 && foraDaJanela > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {foraDaJanela} pedido{foraDaJanela === 1 ? "" : "s"} pendente
+          {foraDaJanela === 1 ? "" : "s"} fora de &quot;{labelJanela(janela)}&quot;.
         </p>
       )}
 
@@ -115,6 +164,7 @@ export function PassoFornecedores({
           const marcado = g.pedidoIdsSelecionados.length > 0;
           const parcial = marcado && g.pedidoIdsSelecionados.length < g.pedidoIds.length;
           const corDef = fornecedorCorDef(g.cor);
+          const datasLabel = labelDatas(g.datas);
           return (
             <button
               key={g.fornecedorId}
@@ -161,6 +211,11 @@ export function PassoFornecedores({
                   {g.pedidoIds.length > 1 ? ` · ${g.pedidoIds.length} pedidos` : ""}
                   {parcial ? ` · ${g.pedidoIdsSelecionados.length} na conferência` : ""}
                 </span>
+                {datasLabel && (
+                  <span className="block text-xs font-semibold text-navy/80 mt-0.5 tabular-nums">
+                    {datasLabel}
+                  </span>
+                )}
                 {g.saidaResumo && (
                   <span className="block text-xs text-primary-dark font-semibold mt-1">
                     {g.saidaResumo}

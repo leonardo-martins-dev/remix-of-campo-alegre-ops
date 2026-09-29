@@ -30,7 +30,12 @@ import { PassoFila, type LinhaFila } from "@/components/recebimento/passo-fila";
 import { useAuth } from "@/lib/auth";
 import { one } from "@/lib/embed";
 import { isAguardandoVinculo } from "@/lib/seletor-cadastro";
-import { formatTime, dateKeyBRT } from "@/lib/utils-date";
+import { formatTime, formatDateBRT, dateKeyBRT } from "@/lib/utils-date";
+import {
+  dataOperacionalPedido,
+  datasDoGrupo,
+  type JanelaPedidos,
+} from "@/lib/pedidos-abertos";
 import {
   caixasEsperadas,
   draftConferenciaDirty,
@@ -58,6 +63,8 @@ type PedidoAberto = {
   id: string;
   codigo: string;
   fornecedor_id: string;
+  data_pedido: string;
+  data_prevista?: string | null;
   hora_chegada: string | null;
   status: string;
   fornecedores?: { nome: string; cor?: string | null } | { nome: string; cor?: string | null }[] | null;
@@ -101,6 +108,9 @@ function itemPedidoEmbed(ic: ItemConferenciaRow) {
 
 export function ConferenciaCaminhao({
   pendentes,
+  totalAbertos,
+  janela,
+  onJanelaChange,
   loadingPedidos,
   saidaPorPedido,
   pedidoIds,
@@ -108,6 +118,10 @@ export function ConferenciaCaminhao({
   onAllDone,
 }: {
   pendentes: PedidoAberto[];
+  /** Total abertos sem janela — para empty state honesto (NOP-457). */
+  totalAbertos: number;
+  janela: JanelaPedidos;
+  onJanelaChange: (j: JanelaPedidos) => void;
   loadingPedidos: boolean;
   saidaPorPedido: Map<string, SaidaResumo>;
   pedidoIds: string[];
@@ -138,7 +152,7 @@ export function ConferenciaCaminhao({
   itemAtivoIdRef.current = itemAtivoId;
 
   const grupos = useMemo((): GrupoFornecedor[] => {
-    const map = new Map<string, GrupoFornecedor & { pedidos: PedidoAberto[] }>();
+    const map = new Map<string, GrupoFornecedor & { pedidos: PedidoAberto[]; dataMin: string }>();
     for (const p of pendentes) {
       if (!p.fornecedor_id) continue;
       let g = map.get(p.fornecedor_id);
@@ -153,7 +167,9 @@ export function ConferenciaCaminhao({
           emTransito: false,
           saidaResumo: null,
           codigos: [],
+          datas: [],
           pedidos: [],
+          dataMin: dataOperacionalPedido(p),
         };
         map.set(p.fornecedor_id, g);
       }
@@ -162,6 +178,8 @@ export function ConferenciaCaminhao({
       g.itensTotal += p.itens_pedido?.length ?? 0;
       g.codigos.push(p.codigo);
       if (pedidoIds.includes(p.id)) g.pedidoIdsSelecionados.push(p.id);
+      const dop = dataOperacionalPedido(p);
+      if (dop < g.dataMin) g.dataMin = dop;
       const saida = saidaPorPedido.get(p.id);
       if (saida) {
         g.emTransito = true;
@@ -174,11 +192,16 @@ export function ConferenciaCaminhao({
       }
     }
     return [...map.values()]
-      .map(({ pedidos: _p, ...rest }) => rest)
       .sort((a, b) => {
+        // NOP-457: em trânsito primeiro; depois mais antigo → mais recente
         if (a.emTransito !== b.emTransito) return a.emTransito ? -1 : 1;
+        if (a.dataMin !== b.dataMin) return a.dataMin.localeCompare(b.dataMin);
         return a.nome.localeCompare(b.nome, "pt-BR");
-      });
+      })
+      .map(({ pedidos: ps, dataMin: _dm, ...rest }) => ({
+        ...rest,
+        datas: datasDoGrupo(ps).map((d) => formatDateBRT(d)),
+      }));
   }, [pendentes, saidaPorPedido, pedidoIds]);
 
   const pedidosSelecionados = useMemo(
@@ -879,6 +902,9 @@ export function ConferenciaCaminhao({
           <PassoFornecedores
             grupos={grupos}
             loading={loadingPedidos}
+            janela={janela}
+            onJanelaChange={onJanelaChange}
+            totalAbertos={totalAbertos}
             onToggle={toggleFornecedor}
             onSelecionarTodos={selecionarTodos}
             onLimparSelecao={limparSelecao}

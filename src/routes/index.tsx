@@ -17,7 +17,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/lib/auth";
 import { resolveNavProfile, PROFILE_PRIMARY, type NavProfile } from "@/lib/nav";
-import { usePedidosDia, usePendenciasVinculo } from "@/hooks/use-pedidos";
+import { usePedidosAbertos, usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { useOrdensExpedicao } from "@/hooks/use-ordem-expedicao";
 import { usePosicoesPendentes } from "@/hooks/use-minimo-estoque";
 import { useQuebras } from "@/hooks/use-quebra";
@@ -151,7 +151,8 @@ function PendencyGrid({ cards }: { cards: PendencyCard[] }) {
 
 function OperadorTurno() {
   const hoje = todayBRT();
-  const { data: pedidos = [], isLoading: l1 } = usePedidosDia(hoje);
+  // NOP-457: contagem de chegadas = abertos de qualquer data (tela de conferir).
+  const { data: pedidosAbertos = [], isLoading: l1 } = usePedidosAbertos();
   const { data: ordens = [], isLoading: l2 } = useOrdensExpedicao({
     data: hoje,
     status: ["importada", "conferida"],
@@ -163,15 +164,13 @@ function OperadorTurno() {
     return <p className="text-sm text-muted-foreground py-8">Carregando seu turno…</p>;
   }
 
-  const chegadas = pedidos.filter((p: { status: string }) =>
-    ["pendente", "parcial", "em_transito", "aguardando_liberacao"].includes(p.status),
-  ).length;
+  const chegadas = pedidosAbertos.length;
 
   const cards: PendencyCard[] = [
     {
       id: "chegadas",
       title: "Chegadas para conferir",
-      desc: "Receber e conferir pedidos do dia",
+      desc: "Receber e conferir pedidos pendentes",
       count: chegadas,
       to: "/recebimento/conferir",
       icon: PackageCheck,
