@@ -190,6 +190,7 @@ export function FornecedoresPage() {
                 type="button"
                 variant="outline"
                 size="sm"
+                className="min-h-11 h-11"
                 disabled={resolverMassa.isPending}
                 onClick={() =>
                   resolverMassa.mutate(undefined, {
@@ -208,7 +209,7 @@ export function FornecedoresPage() {
                 {resolverMassa.isPending ? "Revinculando…" : "Revincular pendências"}
               </Button>
             )}
-            <Button onClick={openCreate}>Novo</Button>
+            <Button className="min-h-11 h-11" onClick={openCreate}>Novo</Button>
           </div>
         }
       />
@@ -249,6 +250,7 @@ export function FornecedoresPage() {
                 <Button
                   size="sm"
                   variant="outline"
+                  className="min-h-11 h-11"
                   disabled={!isAdmin}
                   title={!isAdmin ? "Só administrador pode criar fornecedor novo" : undefined}
                   onClick={() =>
@@ -348,7 +350,7 @@ export function FornecedoresPage() {
           placeholder="Buscar fornecedor…"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          className="max-w-xs"
+          className="max-w-xs min-h-11 h-11"
         />
         {inativoCount > 0 && (
           <label className="text-sm flex items-center gap-1.5">
@@ -400,7 +402,7 @@ export function FornecedoresPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7"
+                    className="min-h-11 h-11"
                     onClick={() =>
                       update.mutate(
                         { id: row.id, ativo: true },
@@ -417,7 +419,7 @@ export function FornecedoresPage() {
                   <Button
                     variant="destructive"
                     size="sm"
-                    className="h-7"
+                    className="min-h-11 h-11"
                     onClick={() => setPendingDesativar(row)}
                   >
                     Desativar

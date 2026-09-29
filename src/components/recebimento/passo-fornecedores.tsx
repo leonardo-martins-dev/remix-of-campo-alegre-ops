@@ -114,7 +114,7 @@ export function PassoFornecedores({
             type="button"
             onClick={() => onJanelaChange(j)}
             className={[
-              "px-2.5 min-h-9 rounded-md text-xs font-semibold whitespace-nowrap transition-colors",
+              "px-2.5 min-h-11 rounded-md text-xs font-semibold whitespace-nowrap transition-colors",
               janela === j
                 ? "bg-primary-soft text-primary-dark"
                 : "text-muted-foreground hover:bg-secondary",
@@ -133,7 +133,7 @@ export function PassoFornecedores({
           type="button"
           onClick={todosMarcados ? onLimparSelecao : onSelecionarTodos}
           disabled={grupos.length === 0}
-          className="text-sm font-semibold text-primary-dark hover:underline min-h-9 disabled:opacity-50"
+          className="text-sm font-semibold text-primary-dark hover:underline min-h-11 disabled:opacity-50"
         >
           {todosMarcados ? "Limpar seleção" : "Selecionar todos"}
         </button>
@@ -259,7 +259,7 @@ export function PassoFornecedores({
         <button
           type="button"
           onClick={() => setVerTodos((v) => !v)}
-          className="text-sm font-semibold text-primary-dark hover:underline min-h-9"
+          className="text-sm font-semibold text-primary-dark hover:underline min-h-11"
         >
           {verTodos
             ? "Mostrar só os do caminhão"

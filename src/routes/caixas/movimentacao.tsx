@@ -66,14 +66,14 @@ function Page() {
               <button
                 type="button"
                 onClick={() => setView("campo")}
-                className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "campo" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+                className={`px-3 min-h-11 h-11 rounded-md text-xs font-semibold ${view === "campo" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
               >
                 Movimentar
               </button>
               <button
                 type="button"
                 onClick={() => setView("painel")}
-                className={`px-3 h-9 rounded-md text-xs font-semibold ${view === "painel" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+                className={`px-3 min-h-11 h-11 rounded-md text-xs font-semibold ${view === "painel" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
               >
                 Painel / Ranking
               </button>

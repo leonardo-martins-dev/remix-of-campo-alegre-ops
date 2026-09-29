@@ -288,7 +288,7 @@ export function AppShell() {
               placeholder={isNarrow ? "Buscar..." : "Buscar pedido, fornecedor, cliente..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-10 sm:h-9 pl-9 pr-3 rounded-lg bg-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full h-11 pl-9 pr-3 rounded-lg bg-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
             {search.length >= 2 && searchResults && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-64 overflow-auto text-sm">

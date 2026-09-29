@@ -829,7 +829,7 @@ export function ConferenciaCaminhao({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1"
+                className="min-h-11 h-11 gap-1"
                 onClick={() => setHoraEditOpen((v) => !v)}
               >
                 <Pencil size={12} /> Editar
