@@ -102,6 +102,7 @@ export function useItensCadastro(tipo: SeletorTipo, enabled = true) {
               id: f.id,
               nome: f.nome,
               // NOP-132: código Wise tem coluna própria; alias entra como reserva.
+              // Nunca inventar código — só coluna real ou alias.codigo_externo.
               codigo:
                 texto(row, "codigo_wise") ??
                 texto(row, "codigo") ??
@@ -109,7 +110,13 @@ export function useItensCadastro(tipo: SeletorTipo, enabled = true) {
                 null,
               cnpj: texto(row, "cnpj"),
               ativo: f.ativo,
-              meta: { ultimaEntrega: entregas.data?.ultimaPorFornecedor[f.id] ?? null },
+              meta: {
+                ultimaEntrega: entregas.data?.ultimaPorFornecedor[f.id] ?? null,
+                cidade: texto(row, "cidade") ?? texto(row, "municipio"),
+                numPedidos: entregas.data
+                  ? (entregas.data.numPedidosPorFornecedor[f.id] ?? 0)
+                  : null,
+              },
             };
           }),
         );
@@ -235,34 +242,45 @@ export function useCodigosExternosFornecedor(enabled = true) {
 }
 
 /**
- * Fornecedores que entregaram nos últimos dias — sugestão de contexto e
- * linha "última entrega".
+ * Histórico de pedidos por fornecedor — sugestão (últimos `dias`), linha
+ * "última entrega" e nº de pedidos (diferenciador quando não há código Wise).
+ * Pagina além do limite padrão do PostgREST para cobrir cadastros antigos
+ * (ex.: 4× MATHEUS sem entrega recente).
  */
 export function useUltimasEntregasFornecedor(enabled = true, dias = 7) {
-  const desde = addDaysBRT(todayBRT(), -30);
   return useQuery({
-    queryKey: ["seletor-entregas-fornecedor", desde, dias],
+    queryKey: ["seletor-entregas-fornecedor", "all", dias],
     enabled,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pedidos_recebimento")
-        .select("fornecedor_id, data_pedido")
-        .gte("data_pedido", desde)
-        .order("data_pedido", { ascending: false });
-      if (error) throw error;
-
-      const limite = addDaysBRT(todayBRT(), -dias);
+      const pageSize = 1000;
+      const maxRows = 10_000;
       const ultimaPorFornecedor: Record<string, string> = {};
+      const numPedidosPorFornecedor: Record<string, number> = {};
       const recentes: string[] = [];
-      for (const row of data ?? []) {
-        const id = row.fornecedor_id as string | null;
-        const dataPedido = row.data_pedido as string;
-        if (!id) continue;
-        if (!ultimaPorFornecedor[id]) ultimaPorFornecedor[id] = dataPedido;
-        if (dataPedido >= limite && !recentes.includes(id)) recentes.push(id);
+      const limite = addDaysBRT(todayBRT(), -dias);
+
+      for (let from = 0; from < maxRows; from += pageSize) {
+        const { data, error } = await supabase
+          .from("pedidos_recebimento")
+          .select("fornecedor_id, data_pedido")
+          .order("data_pedido", { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+
+        const rows = data ?? [];
+        for (const row of rows) {
+          const id = row.fornecedor_id as string | null;
+          const dataPedido = row.data_pedido as string;
+          if (!id || !dataPedido) continue;
+          if (!ultimaPorFornecedor[id]) ultimaPorFornecedor[id] = dataPedido;
+          numPedidosPorFornecedor[id] = (numPedidosPorFornecedor[id] ?? 0) + 1;
+          if (dataPedido >= limite && !recentes.includes(id)) recentes.push(id);
+        }
+        if (rows.length < pageSize) break;
       }
-      return { ultimaPorFornecedor, recentes };
+
+      return { ultimaPorFornecedor, numPedidosPorFornecedor, recentes };
     },
   });
 }

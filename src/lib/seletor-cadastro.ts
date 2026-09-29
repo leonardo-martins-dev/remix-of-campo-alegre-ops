@@ -18,6 +18,10 @@ export type SeletorItemMeta = {
   /** cor de fundo do chip (tipo de caixa) */
   cor?: string | null;
   ultimaEntrega?: string | null;
+  /** cidade/município quando existir no cadastro (fallback sem código) */
+  cidade?: string | null;
+  /** total de pedidos_recebimento do fornecedor (fallback sem código) */
+  numPedidos?: number | null;
   placa?: string | null;
   sigla?: string | null;
 };
@@ -151,4 +155,43 @@ export function corDoNome(nome: string): string {
   const k = normalizeKey(nome);
   for (let i = 0; i < k.length; i++) hash = (hash * 31 + k.charCodeAt(i)) % 360;
   return `hsl(${hash} 55% 42%)`;
+}
+
+/**
+ * Linha secundária do fornecedor (NOP-131).
+ * Com código Wise/alias real → "Cód. …" (preferido).
+ * Sem código → diferenciadores: última entrega, cidade, nº de pedidos.
+ * Nunca inventa código Wise.
+ */
+export function montarDetalheFornecedor(
+  item: Pick<SeletorItem, "codigo" | "cnpj" | "meta">,
+  formatDate: (iso: string) => string,
+  opts?: { duplicado?: boolean },
+): string | null {
+  const partes: string[] = [];
+  const meta = item.meta ?? {};
+  const duplicado = !!opts?.duplicado;
+
+  if (item.codigo) {
+    partes.push(`Cód. ${item.codigo}`);
+    if (item.cnpj) partes.push(item.cnpj);
+    if (meta.ultimaEntrega) {
+      partes.push(`última entrega ${formatDate(meta.ultimaEntrega)}`);
+    }
+    return partes.join(" · ");
+  }
+
+  // Fallback sem código — Leo: última entrega / cidade / nº pedidos.
+  if (meta.ultimaEntrega) {
+    partes.push(`última entrega ${formatDate(meta.ultimaEntrega)}`);
+  }
+  if (meta.cidade) partes.push(meta.cidade);
+  if (typeof meta.numPedidos === "number") {
+    // >0 sempre; 0 só em nomes duplicados (senão polui a lista).
+    if (meta.numPedidos > 0 || duplicado) {
+      partes.push(meta.numPedidos === 1 ? "1 pedido" : `${meta.numPedidos} pedidos`);
+    }
+  }
+  if (item.cnpj) partes.push(item.cnpj);
+  return partes.length ? partes.join(" · ") : null;
 }

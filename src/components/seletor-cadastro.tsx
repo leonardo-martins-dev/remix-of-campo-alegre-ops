@@ -11,6 +11,7 @@ import {
   corDoNome,
   filtrarItens,
   iniciaisDe,
+  montarDetalheFornecedor,
   nomesDuplicados,
   prepararItens,
   SELETOR_LABEL,
@@ -49,16 +50,13 @@ type Props = {
 
 /** Linha secundária por tipo de cadastro. */
 function detalheDoItem(item: SeletorItem, tipo: SeletorTipo, duplicado: boolean): string | null {
+  if (tipo === "fornecedor") {
+    return montarDetalheFornecedor(item, formatDateBRT, { duplicado });
+  }
   const partes: string[] = [];
   if (tipo === "produto") {
     if (item.codigo) partes.push(`Cód. ${item.codigo}`);
     if (item.meta?.unidade) partes.push(item.meta.unidade);
-  } else if (tipo === "fornecedor") {
-    if (item.codigo) partes.push(`Cód. ${item.codigo}`);
-    if (item.cnpj) partes.push(item.cnpj);
-    if (item.meta?.ultimaEntrega) {
-      partes.push(`última entrega ${formatDateBRT(item.meta.ultimaEntrega)}`);
-    }
   } else if (tipo === "cliente") {
     if (item.meta?.rota) partes.push(item.meta.rota);
     if (item.cnpj && (duplicado || partes.length === 0)) partes.push(item.cnpj);
@@ -497,6 +495,7 @@ export function SeletorCadastro({
     [values, itensFinais],
   ) as SeletorItem[];
   const atual = value ? (itensFinais.find((i) => i.id === value) ?? null) : null;
+  const nomesDup = useMemo(() => nomesDuplicados(itensFinais), [itensFinais]);
 
   const escolher = (item: SeletorItem) => {
     if (item.id) registrar(item.id);
@@ -538,7 +537,9 @@ export function SeletorCadastro({
     : (atual?.nome ??
       (value && !itensFinais.length ? "…" : (placeholder ?? `${SELETOR_LABEL[tipo].singular}…`)));
 
-  const detalheAtual = atual ? detalheDoItem(atual, tipo, false) : null;
+  const detalheAtual = atual
+    ? detalheDoItem(atual, tipo, nomesDup.has(normalizeKey(atual.nome)))
+    : null;
   /** Escolhido fica visível na origem como cartão, com ação "Trocar". */
   const preenchido = !!atual || selecionados.length > 0;
 
