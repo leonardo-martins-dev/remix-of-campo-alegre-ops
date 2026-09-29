@@ -1,6 +1,7 @@
 /**
  * NOP-362 — mapa fixo de dependências entre permissões (slug → requer).
- * Espelhado em supabase/migrations/00060_nop362_permission_deps.sql.
+ * Espelhado em supabase/migrations/00060_nop362_permission_deps.sql
+ * (mapa atualizado em 00067_nop462_admin_pages_deps.sql).
  * Derivado do que cada tela consome (hub + listagens + cadastros).
  */
 
@@ -46,10 +47,7 @@ export const PERMISSION_DEPS: Record<string, readonly string[]> = {
   "caixas/movimentacao": ["caixas", "caixas/saldo"],
   "caixas/inventario": ["caixas", "caixas/saldo"],
   "caixas/economia": ["caixas", "caixas/saldo"],
-  "caixas/galpao": ["caixas"],
-  "caixas/retorno": ["caixas", "caixas/movimentacao"],
-  "caixas/fornecedor": ["caixas", "caixas/movimentacao"],
-  "caixas/motorista": ["caixas", "caixas/movimentacao"],
+  // caixas/galpao, retorno, fornecedor, motorista: rotas mortas (redirect) — NOP-462
 
   // Embalagens
   "embalagens/saldo": ["embalagens"],

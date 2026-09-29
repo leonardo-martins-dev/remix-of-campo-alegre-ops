@@ -1,18 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { isSuperAdmin, SUPER_ADMIN_EMAIL } from "@/lib/super-admin";
+import { SUPER_ADMIN_EMAIL } from "@/lib/super-admin";
 
 export function useProfiles() {
   return useQuery({
     queryKey: ["profiles"],
     queryFn: async () => {
+      // NOP-462: nunca ocultar admin ativo (incl. serviço/suporte admin@noponto.io)
       const { data, error } = await supabase
         .from("profiles")
         .select("id, nome, email, role, ativo, motorista_id, fornecedor_id, created_at")
-        .not("email", "ilike", SUPER_ADMIN_EMAIL)
         .order("nome");
       if (error) throw error;
-      return (data ?? []).filter((u) => !isSuperAdmin(u.email));
+      return data ?? [];
     },
   });
 }

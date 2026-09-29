@@ -506,7 +506,12 @@ export function UsersList() {
       <Card>
         <CardHeader>
           <CardTitle>Usuários cadastrados</CardTitle>
-          <CardDescription>Gerencie roles, status e permissões por página</CardDescription>
+          <CardDescription>
+            Gerencie roles, status e permissões por página
+            <span className="ml-1 tabular-nums">
+              — {users.length} usuário{users.length === 1 ? "" : "s"}
+            </span>
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {users.length === 0 && (
@@ -516,7 +521,14 @@ export function UsersList() {
             <div key={u.id} className="border border-border rounded-lg p-4">
               <div className="flex flex-wrap items-center gap-3 justify-between">
                 <div>
-                  <div className="font-semibold text-navy">{u.nome}</div>
+                  <div className="font-semibold text-navy flex flex-wrap items-center gap-2">
+                    <span>{u.nome}</span>
+                    {isSuperAdmin(u.email) ? (
+                      <span className="chip chip-info text-[10px]" title="Conta de serviço/suporte — não ocultar">
+                        Serviço / suporte
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="text-xs text-muted-foreground">{u.email}</div>
                 </div>
                 <div className="flex items-center gap-2">

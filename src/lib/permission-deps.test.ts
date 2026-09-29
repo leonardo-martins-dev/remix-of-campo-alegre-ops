@@ -2,6 +2,7 @@
  * NOP-362 — bun src/lib/permission-deps.test.ts
  */
 import {
+  PERMISSION_DEPS,
   completePermissionGaps,
   counterLabel,
   dependentsOf,
@@ -81,5 +82,14 @@ const groups = groupPagesByModule([
 assert(groups[0].module === "Recebimento", "primeiro módulo");
 assert(groups.some((g) => g.module === "Gestão"), "tem gestão");
 assert(groups.some((g) => g.module === "Caixas"), "tem caixas");
+
+
+// NOP-462: rotas mortas fora do mapa; gestao/regras permanece
+assert(!("caixas/galpao" in PERMISSION_DEPS), "galpao morta fora do mapa");
+assert(!("caixas/retorno" in PERMISSION_DEPS), "retorno morta fora do mapa");
+assert(!("caixas/motorista" in PERMISSION_DEPS), "motorista morta fora do mapa");
+assert(!("caixas/fornecedor" in PERMISSION_DEPS), "fornecedor morta fora do mapa");
+assert("gestao/regras" in PERMISSION_DEPS, "regras no mapa");
+assert(requiredDepsOf("gestao/regras").includes("gestao"), "regras → gestao");
 
 console.log("permission-deps.test.ts: ok");
