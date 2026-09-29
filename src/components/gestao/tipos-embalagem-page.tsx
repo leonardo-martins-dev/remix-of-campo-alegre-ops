@@ -89,7 +89,7 @@ export function TiposEmbalagemPage() {
     <div>
       <PageHeader
         title="Tipos de embalagem"
-        subtitle="Nome, unidade de contagem e quantidade por pacote de cada embalagem"
+        subtitle="Cada tipo é uma embalagem contável no inventário — por produto hortifruti ou material (nome, unidade e quantidade por pacote)"
         actions={<Button onClick={openCreate}>Novo</Button>}
       />
 
@@ -173,7 +173,7 @@ export function TiposEmbalagemPage() {
               <Input
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                placeholder="Ex: Sacos 5kg"
+                placeholder="Ex: AGRIÃO C ou Sacos 5kg"
               />
             </div>
             <div className="space-y-1">

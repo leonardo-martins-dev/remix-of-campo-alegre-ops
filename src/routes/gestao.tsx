@@ -93,7 +93,7 @@ function CadastrosHub() {
     },
     {
       title: "Tipos de embalagem",
-      description: "Sacos, filme, etiquetas — unidade de contagem e quantidade por pacote",
+      description: "Embalagem por produto hortifruti (e materiais) — unidade de contagem e quantidade por pacote",
       icon: PackageOpen,
       href: "/gestao/tipos-embalagem",
     },

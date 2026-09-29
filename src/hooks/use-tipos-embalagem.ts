@@ -89,7 +89,16 @@ export function useDeleteTipoEmbalagem() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("tipos_embalagem").delete().eq("id", id);
-      if (error) throw error;
+      if (error) {
+        // Trigger prevent_delete_tipo_embalagem / tipo_embalagem_em_uso (NOP-157).
+        const msg = error.message ?? "";
+        if (msg.includes("não pode ser excluído") || error.code === "P0001") {
+          throw new Error(
+            "Tipo com contagem lançada não pode ser excluído — inative o cadastro.",
+          );
+        }
+        throw error;
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tipos-embalagem"] }),
   });
