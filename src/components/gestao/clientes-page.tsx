@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,12 +19,13 @@ import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/com
 import { PageHeader } from "@/components/page-header";
 import {
   useClientes,
-  useDestinatarios,
   useDestinatarioClienteMap,
   useCadastroMutations,
 } from "@/hooks/use-cadastros";
 import { normalizeKey } from "@/lib/normalize";
-import { useAliases } from "@/hooks/use-pedidos";
+import { useAliases, usePendenciasVinculo } from "@/hooks/use-pedidos";
+import { useResolverPendencia } from "@/hooks/use-wise-pedidos";
+import { useAuth } from "@/lib/auth";
 import { MesclarCadastrosPanel } from "@/components/gestao/mesclar-cadastros";
 
 type ClienteRow = {
@@ -34,12 +37,21 @@ type ClienteRow = {
   mesclado_em_id?: string | null;
 };
 
+type PendenciaVinculoRow = {
+  id: string;
+  tipo: string;
+  nome_externo: string;
+  codigo_externo: string | null;
+};
+
 export function ClientesPage() {
   const { data: clientes = [], isLoading } = useClientes();
-  const { data: destinatarios = [] } = useDestinatarios();
   const { data: destMap = [] } = useDestinatarioClienteMap();
   const { data: aliases = [] } = useAliases();
+  const { data: pendencias = [] } = usePendenciasVinculo();
   const { insert, update } = useCadastroMutations("clientes", ["cadastros", "clientes"]);
+  const { user } = useAuth();
+  const resolver = useResolverPendencia();
 
   const [busca, setBusca] = useState("");
   const [showInativos, setShowInativos] = useState(false);
@@ -50,6 +62,13 @@ export function ClientesPage() {
   const [codigoWise, setCodigoWise] = useState("");
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [pendingDesativar, setPendingDesativar] = useState<ClienteRow | null>(null);
+  const [pendingCriar, setPendingCriar] = useState<PendenciaVinculoRow | null>(null);
+
+  // tipo no banco/código: destinatario (não "cliente") — badge Clientes conta este tipo
+  const pendDestinatario = useMemo(
+    () => (pendencias as PendenciaVinculoRow[]).filter((p) => p.tipo === "destinatario"),
+    [pendencias],
+  );
 
   const rows = useMemo(() => {
     const q = normalizeKey(busca);
@@ -147,6 +166,61 @@ export function ClientesPage() {
         subtitle="Supermercados atendidos pelo galpão"
         actions={<Button onClick={openCreate}>Novo</Button>}
       />
+
+      {pendDestinatario.length > 0 && (
+        <Card className="mb-4 border-warning/50 bg-warning/5">
+          <CardHeader>
+            <CardTitle className="text-sm text-warning">
+              {pendDestinatario.length} nome(s) a vincular
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {pendDestinatario.map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center gap-2 text-sm border-b pb-2">
+                <span className="font-medium">
+                  {p.nome_externo}
+                  {p.codigo_externo ? (
+                    <span className="text-muted-foreground font-normal"> · {p.codigo_externo}</span>
+                  ) : null}
+                </span>
+                <div className="w-52">
+                  <SeletorCadastro
+                    tipo="cliente"
+                    value={null}
+                    placeholder="Vincular a…"
+                    onChange={(id) => {
+                      if (!id || !user) return;
+                      resolver.mutate(
+                        {
+                          pendenciaId: p.id,
+                          acao: "vincular",
+                          tipo: "destinatario",
+                          nomeExterno: p.nome_externo,
+                          codigoExterno: p.codigo_externo,
+                          entidadeId: id,
+                          userId: user.id,
+                        },
+                        {
+                          onSuccess: () => toast.success("Vinculado"),
+                          onError: (e) => toast.error(e.message),
+                        },
+                      );
+                    }}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11 h-11"
+                  onClick={() => setPendingCriar(p)}
+                >
+                  Criar
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <MesclarCadastrosPanel
         tipo="cliente"
@@ -279,6 +353,62 @@ export function ClientesPage() {
               }}
             >
               Desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!pendingCriar} onOpenChange={(open) => !open && setPendingCriar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Criar cliente novo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingCriar
+                ? `Confirma criar “${pendingCriar.nome_externo}” no cadastro de clientes? Preferível vincular a um existente se já houver correspondência.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={insert.isPending || resolver.isPending || !user}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!pendingCriar || !user) return;
+                insert.mutate(
+                  {
+                    nome: pendingCriar.nome_externo,
+                    codigo_wise: pendingCriar.codigo_externo,
+                    ativo: true,
+                  },
+                  {
+                    onSuccess: (created) => {
+                      const row = created as { id: string };
+                      resolver.mutate(
+                        {
+                          pendenciaId: pendingCriar.id,
+                          acao: "vincular",
+                          tipo: "destinatario",
+                          nomeExterno: pendingCriar.nome_externo,
+                          codigoExterno: pendingCriar.codigo_externo,
+                          entidadeId: row.id,
+                          userId: user.id,
+                        },
+                        {
+                          onSuccess: () => {
+                            toast.success("Cliente criado e vinculado");
+                            setPendingCriar(null);
+                          },
+                          onError: (err) => toast.error(err.message),
+                        },
+                      );
+                    },
+                    onError: (err) => toast.error(err.message),
+                  },
+                );
+              }}
+            >
+              Confirmar criação
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

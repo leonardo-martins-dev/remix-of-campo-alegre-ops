@@ -466,7 +466,7 @@ export function useResolverPendencia() {
           resolved_at: new Date().toISOString(),
         })
         .eq("id", payload.pendenciaId)
-        .select("pedido_id")
+        .select("pedido_id, carga_id")
         .single();
 
       if (pend?.pedido_id && entidadeId && payload.acao !== "dispensar") {
@@ -492,6 +492,25 @@ export function useResolverPendencia() {
             .from("pedidos_recebimento")
             .update({ fornecedor_id: entidadeId })
             .eq("id", pend.pedido_id);
+        }
+      }
+
+      // NOP-478: destinatario pendências (Wise vendas) resolvem contra clientes.
+      // Vincular → entidadeId é cliente; criar+clienteId → map legado + carga.
+      if (payload.tipo === "destinatario" && entidadeId && payload.acao !== "dispensar") {
+        const clienteId =
+          payload.acao === "vincular" ? entidadeId : (payload.clienteId ?? null);
+        if (payload.acao === "vincular" && payload.codigoExterno) {
+          await supabase
+            .from("clientes")
+            .update({ codigo_wise: payload.codigoExterno })
+            .eq("id", entidadeId);
+        }
+        if (pend?.carga_id && clienteId) {
+          await supabase
+            .from("cargas")
+            .update({ cliente_id: clienteId })
+            .eq("id", pend.carga_id);
         }
       }
 
@@ -523,6 +542,9 @@ export function useResolverPendencia() {
       qc.invalidateQueries({ queryKey: ["pedidos"] });
       qc.invalidateQueries({ queryKey: ["cadastros"] });
       qc.invalidateQueries({ queryKey: ["conferencia"] });
+      qc.invalidateQueries({ queryKey: ["cargas"] });
+      qc.invalidateQueries({ queryKey: ["cargas-sem-cliente"] });
+      qc.invalidateQueries({ queryKey: ["carga"] });
     },
   });
 }

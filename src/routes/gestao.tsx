@@ -57,7 +57,12 @@ function Page() {
 
 function CadastrosHub() {
   const { data: pendencias = [] } = usePendenciasVinculo();
-  const pendCount = (pendencias as unknown[]).length;
+  const typed = pendencias as { tipo: string }[];
+  const countByTipo = (tipo: string) => typed.filter((p) => p.tipo === tipo).length;
+  const badgeFornecedor = countByTipo("fornecedor");
+  // DB/code enum is destinatario (not cliente) — Wise cargas use this tipo for loja sem match
+  const badgeCliente = countByTipo("destinatario");
+  const badgeProduto = countByTipo("produto");
 
   const cards: CadastroCard[] = [
     {
@@ -65,19 +70,21 @@ function CadastrosHub() {
       description: "Cadastro, aliases Wise, conversões e estoque mínimo",
       icon: Handshake,
       href: "/gestao/fornecedores",
-      badge: pendCount > 0 ? pendCount : undefined,
+      badge: badgeFornecedor > 0 ? badgeFornecedor : undefined,
     },
     {
       title: "Clientes",
       description: "Supermercados, CNPJs e nomes alternativos",
       icon: Store,
       href: "/gestao/clientes",
+      badge: badgeCliente > 0 ? badgeCliente : undefined,
     },
     {
       title: "Produtos",
       description: "Catálogo Wise + fatores un/cx padrão (vinculado a Unidades por caixa)",
       icon: Package,
       href: "/gestao/produtos",
+      badge: badgeProduto > 0 ? badgeProduto : undefined,
     },
     {
       title: "Unidades por caixa",
@@ -130,7 +137,11 @@ function CadastrosHub() {
                 <CardTitle className="text-base flex items-center gap-2">
                   {c.title}
                   {c.badge != null && (
-                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-medium text-destructive-foreground">
+                    <span
+                      title={`${c.badge} pendência(s) de vínculo a resolver`}
+                      aria-label={`${c.badge} pendências de vínculo`}
+                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-medium text-destructive-foreground"
+                    >
                       {c.badge}
                     </span>
                   )}

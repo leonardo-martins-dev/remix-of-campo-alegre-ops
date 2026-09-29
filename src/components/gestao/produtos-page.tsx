@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Sheet,
@@ -27,6 +28,9 @@ import { PageHeader } from "@/components/page-header";
 import { useProdutos, useFamilias, useCadastroMutations } from "@/hooks/use-cadastros";
 import { useConversoesProduto, useSaveConversaoProduto, useProdutosSemConversao } from "@/hooks/use-conversoes";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
+import { usePendenciasVinculo } from "@/hooks/use-pedidos";
+import { useResolverPendencia } from "@/hooks/use-wise-pedidos";
+import { useAuth } from "@/lib/auth";
 import { normalizeKey } from "@/lib/normalize";
 
 type ProdutoRow = {
@@ -73,12 +77,127 @@ function isFkError(err: unknown): boolean {
   return /23503|foreign key|violates foreign key/i.test(msg);
 }
 
+type PendenciaVinculoRow = {
+  id: string;
+  tipo: string;
+  nome_externo: string;
+  codigo_externo: string | null;
+};
+
 export function ProdutosPage() {
   const [tab, setTab] = useState("produtos");
+  const { data: pendencias = [] } = usePendenciasVinculo();
+  const { user } = useAuth();
+  const resolver = useResolverPendencia();
+  const [pendingCriar, setPendingCriar] = useState<PendenciaVinculoRow | null>(null);
+
+  const pendProduto = useMemo(
+    () => (pendencias as PendenciaVinculoRow[]).filter((p) => p.tipo === "produto"),
+    [pendencias],
+  );
 
   return (
     <div>
       <PageHeader title="Produtos" subtitle="Catálogo Wise — fatores un/cx no próprio produto (mesma fonte de Unidades por caixa)" />
+
+      {pendProduto.length > 0 && (
+        <Card className="mb-4 border-warning/50 bg-warning/5">
+          <CardHeader>
+            <CardTitle className="text-sm text-warning">
+              {pendProduto.length} nome(s) a vincular
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {pendProduto.map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center gap-2 text-sm border-b pb-2">
+                <span className="font-medium">
+                  {p.nome_externo}
+                  {p.codigo_externo ? (
+                    <span className="text-muted-foreground font-normal"> · {p.codigo_externo}</span>
+                  ) : null}
+                </span>
+                <div className="w-52">
+                  <SeletorCadastro
+                    tipo="produto"
+                    value={null}
+                    placeholder="Vincular a…"
+                    onChange={(id) => {
+                      if (!id || !user) return;
+                      resolver.mutate(
+                        {
+                          pendenciaId: p.id,
+                          acao: "vincular",
+                          tipo: "produto",
+                          nomeExterno: p.nome_externo,
+                          codigoExterno: p.codigo_externo,
+                          entidadeId: id,
+                          userId: user.id,
+                        },
+                        {
+                          onSuccess: () => toast.success("Vinculado"),
+                          onError: (e) => toast.error(e.message),
+                        },
+                      );
+                    }}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="min-h-11 h-11"
+                  onClick={() => setPendingCriar(p)}
+                >
+                  Criar
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      <AlertDialog open={!!pendingCriar} onOpenChange={(open) => !open && setPendingCriar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Criar produto novo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingCriar
+                ? `Confirma criar “${pendingCriar.nome_externo}” no catálogo? Preferível vincular a um existente se já houver correspondência.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resolver.isPending || !user}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!pendingCriar || !user) return;
+                resolver.mutate(
+                  {
+                    pendenciaId: pendingCriar.id,
+                    acao: "criar",
+                    tipo: "produto",
+                    nomeExterno: pendingCriar.nome_externo,
+                    codigoExterno: pendingCriar.codigo_externo,
+                    criarNome: pendingCriar.nome_externo,
+                    userId: user.id,
+                  },
+                  {
+                    onSuccess: () => {
+                      toast.success("Produto criado");
+                      setPendingCriar(null);
+                    },
+                    onError: (err) => toast.error(err.message),
+                  },
+                );
+              }}
+            >
+              Confirmar criação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="produtos">Produtos</TabsTrigger>
