@@ -28,7 +28,8 @@ import { AplicarSugestoesGiroPanel } from "@/components/gestao/aplicar-sugestoes
 import { AplicarSugestoesCoresPanel } from "@/components/gestao/aplicar-sugestoes-cores-panel";
 import { ConflitosCorFornecedor } from "@/components/gestao/conflitos-cor-fornecedor";
 import { useFornecedoresAbaixoMinimo } from "@/hooks/use-minimo-estoque";
-import { formatBRL } from "@/lib/format";
+import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
+import { formatBRLOrEmpty } from "@/lib/format";
 import {
   countFornecedoresUnicos,
   textoAcaoAlerta,
@@ -56,8 +57,15 @@ export function FornecedoresPage() {
   const { insert, update } = useCadastroMutations("fornecedores", ["cadastros", "fornecedores"]);
   const { data: pendencias = [] } = usePendenciasVinculo();
   const { data: aliases = [] } = useAliases();
-  const { data: abaixoMinimo = [] } = useFornecedoresAbaixoMinimo();
-  const { user, isAdmin } = useAuth();
+  const {
+    data: abaixoMinimo = [],
+    isError: abaixoMinimoError,
+    error: abaixoMinimoErr,
+    isLoading: abaixoMinimoLoading,
+    isFetched: abaixoMinimoFetched,
+  } = useFornecedoresAbaixoMinimo();
+  const { data: tiposCaixa = [] } = useTiposCaixa();
+  const { user, isAdmin, canViewValoresCaixa } = useAuth();
   const resolver = useResolverPendencia();
   const resolverMassa = useResolverPendenciasFornecedorCertas();
 
@@ -174,6 +182,31 @@ export function FornecedoresPage() {
 
   const abaixoMinimoFornecedores = countFornecedoresUnicos(abaixoMinimo);
 
+  const custoBySigla = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of tiposCaixa) {
+      if (t.sigla) m.set(t.sigla, Number(t.custo_unitario) || 0);
+    }
+    return m;
+  }, [tiposCaixa]);
+
+  const valorFaltando = (f: {
+    tipo_caixa: string;
+    faltando: number;
+    custo_unitario: number | null;
+    valor_faltando: number | null;
+  }) => {
+    if (f.valor_faltando != null && Number.isFinite(f.valor_faltando)) {
+      return f.valor_faltando;
+    }
+    if (!canViewValoresCaixa) return null;
+    const custo =
+      f.custo_unitario != null && Number.isFinite(f.custo_unitario)
+        ? f.custo_unitario
+        : (custoBySigla.get(f.tipo_caixa) ?? 0);
+    return f.faltando * custo;
+  };
+
   const inativoCount = (fornecedores as FornecedorRow[]).filter(
     (f) => f.ativo === false && f.nome !== AGUARDANDO_VINCULO,
   ).length;
@@ -273,7 +306,35 @@ export function FornecedoresPage() {
 
       <AplicarSugestoesGiroPanel />
 
-      {abaixoMinimo.length > 0 && (
+      {abaixoMinimoError && (
+        <Card className="mb-4 border-destructive/40">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+              <AlertTriangle size={16} />
+              Erro ao carregar alertas de estoque mínimo
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-destructive">
+              {abaixoMinimoErr instanceof Error
+                ? abaixoMinimoErr.message
+                : "Não foi possível consultar fornecedores abaixo do mínimo. Tente recarregar."}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!abaixoMinimoError && !abaixoMinimoLoading && abaixoMinimoFetched && abaixoMinimo.length === 0 && (
+        <Card className="mb-4 border-border">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
+              Nenhum fornecedor abaixo do estoque mínimo
+            </CardTitle>
+          </CardHeader>
+        </Card>
+      )}
+
+      {!abaixoMinimoError && abaixoMinimo.length > 0 && (
         <Card className="mb-4 border-warning/40">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
@@ -294,7 +355,9 @@ export function FornecedoresPage() {
                     <th className="text-right py-2 px-2">Mín.</th>
                     <th className="text-right py-2 px-2">Atual</th>
                     <th className="text-left py-2 px-2">Ação</th>
-                    <th className="text-right py-2 px-2">Valor</th>
+                    {canViewValoresCaixa && (
+                      <th className="text-right py-2 px-2">Valor</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -318,9 +381,11 @@ export function FornecedoresPage() {
                           {f.saldo_atual}
                         </td>
                         <td className="py-2 px-2 text-danger font-medium">{acao}</td>
-                        <td className="py-2 px-2 text-right">
-                          {formatBRL(f.valor_faltando)}
-                        </td>
+                        {canViewValoresCaixa && (
+                          <td className="py-2 px-2 text-right">
+                            {formatBRLOrEmpty(valorFaltando(f))}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}

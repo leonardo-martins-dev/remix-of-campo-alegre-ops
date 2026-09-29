@@ -166,7 +166,13 @@ function VisaoGeralInventario() {
   const { data: tipos = [] } = useTiposCaixa();
   const { data: totais = [] } = useTotalGeralCaixas();
   const { data: pendentes = [] } = usePosicoesPendentes();
-  const { data: abaixoMinimo = [] } = useFornecedoresAbaixoMinimo();
+  const {
+    data: abaixoMinimo = [],
+    isError: abaixoMinimoError,
+    error: abaixoMinimoErr,
+    isFetched: abaixoMinimoFetched,
+    isLoading: abaixoMinimoLoading,
+  } = useFornecedoresAbaixoMinimo();
   const { data: saldos = [] } = useSaldosCaixa();
 
   const saldoPorPosicaoTipo = useMemo(() => {
@@ -224,11 +230,36 @@ function VisaoGeralInventario() {
         />
         <KpiCard
           label="Abaixo mínimo"
-          value={String(abaixoMinimo.length)}
+          value={
+            abaixoMinimoError
+              ? "—"
+              : abaixoMinimoLoading
+                ? "…"
+                : String(abaixoMinimo.length)
+          }
           icon={AlertTriangle}
           positiveIsGood={false}
         />
       </div>
+
+      {abaixoMinimoError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          Erro ao carregar alertas de estoque mínimo
+          {abaixoMinimoErr instanceof Error ? `: ${abaixoMinimoErr.message}` : ". Tente recarregar."}
+        </div>
+      )}
+
+      {!abaixoMinimoError &&
+        !abaixoMinimoLoading &&
+        abaixoMinimoFetched &&
+        abaixoMinimo.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            Nenhum fornecedor abaixo do estoque mínimo
+          </p>
+        )}
 
       {/* NOP-158: pendência do inventário de embalagens junto com a de caixas */}
       <PendenciasInventarioSemanal origem="caixas" />

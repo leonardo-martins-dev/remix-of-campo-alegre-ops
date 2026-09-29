@@ -22,8 +22,9 @@ export type FornecedorAbaixoMinimo = {
   enviar_qtd?: number;
   /** Texto acionável, ex.: "Enviar 12 caixa(s) tipo VM" */
   acao?: string;
-  custo_unitario: number;
-  valor_faltando: number;
+  /** NOP-159/479: view invoker não lê custo; UI admin enriquece */
+  custo_unitario: number | null;
+  valor_faltando: number | null;
 };
 
 export type GiroFornecedorCaixa = {
