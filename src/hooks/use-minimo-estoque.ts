@@ -47,7 +47,7 @@ export type PosicaoPendente = {
   inicio_semana: string;
   /** Sexta-feira — prazo da contagem (BRT) */
   vencimento: string;
-  /** Último responsável pela contagem (null se nunca contada) */
+  /** Responsável do cadastro da posição (null = sem responsável) */
   responsavel: string | null;
   nunca_contado: boolean;
 };

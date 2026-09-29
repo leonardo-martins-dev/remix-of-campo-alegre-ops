@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { todayBRT } from "@/lib/utils-date";
 import type { CaixasMap } from "@/lib/caixas-map";
+import { normalizeResponsavelPosicao } from "@/lib/responsavel-posicao";
+import { ensurePosicao, type PosicaoTipo } from "@/hooks/use-movimentacao";
 
 export function useSaldosCaixa() {
   return useQuery({
@@ -37,7 +39,44 @@ export function usePosicoes() {
     queryFn: async () => {
       const { data, error } = await supabase.from("posicoes_caixa").select("*");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as {
+        id: string;
+        tipo: string;
+        ref_id: string | null;
+        responsavel?: string | null;
+        created_at?: string;
+      }[];
+    },
+  });
+}
+
+/** NOP-319: grava responsável no cadastro da posição (texto livre; vazio → null). */
+export function useSavePosicaoResponsavel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      posicao_id?: string;
+      tipo?: PosicaoTipo;
+      ref_id?: string | null;
+      responsavel: string | null;
+    }) => {
+      const valor = normalizeResponsavelPosicao(payload.responsavel);
+      let id = payload.posicao_id;
+      if (!id) {
+        if (!payload.tipo) throw new Error("Informe a posição");
+        id = await ensurePosicao(payload.tipo, payload.ref_id ?? null);
+      }
+      const { error } = await supabase
+        .from("posicoes_caixa")
+        .update({ responsavel: valor })
+        .eq("id", id);
+      if (error) throw error;
+      return { id, responsavel: valor };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["posicoes-caixa"] });
+      qc.invalidateQueries({ queryKey: ["posicoes-contagem-pendente"] });
+      qc.invalidateQueries({ queryKey: ["painel-inventario"] });
     },
   });
 }

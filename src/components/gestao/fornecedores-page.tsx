@@ -18,6 +18,7 @@ import {
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PageHeader } from "@/components/page-header";
 import { useFornecedores, useCadastroMutations } from "@/hooks/use-cadastros";
+import { usePosicoes, useSavePosicaoResponsavel } from "@/hooks/use-ledger";
 import { useAliases, usePendenciasVinculo } from "@/hooks/use-pedidos";
 import { useResolverPendencia, useResolverPendenciasFornecedorCertas } from "@/hooks/use-wise-pedidos";
 import { useAuth } from "@/lib/auth";
@@ -52,6 +53,8 @@ const AGUARDANDO_VINCULO = "Aguardando vínculo";
 export function FornecedoresPage() {
   const { data: fornecedores = [], isLoading } = useFornecedores();
   const { insert, update } = useCadastroMutations("fornecedores", ["cadastros", "fornecedores"]);
+  const { data: posicoes = [] } = usePosicoes();
+  const saveResponsavel = useSavePosicaoResponsavel();
   const { data: pendencias = [] } = usePendenciasVinculo();
   const { data: aliases = [] } = useAliases();
   const { data: abaixoMinimo = [] } = useFornecedoresAbaixoMinimo();
@@ -67,6 +70,7 @@ export function FornecedoresPage() {
   const [codigoWise, setCodigoWise] = useState("");
   const [cor, setCor] = useState<FornecedorCorId | null>(null);
   const [corError, setCorError] = useState<string | null>(null);
+  const [responsavel, setResponsavel] = useState("");
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const { data: coresEmUso = [] } = useCoresEmUsoFornecedor(sheetOpen ? editId : null);
   const [pendingDesativar, setPendingDesativar] = useState<FornecedorRow | null>(null);
@@ -112,6 +116,7 @@ export function FornecedoresPage() {
     setCodigoWise("");
     setCor(null);
     setCorError(null);
+    setResponsavel("");
     setSheetOpen(true);
   };
 
@@ -121,8 +126,11 @@ export function FornecedoresPage() {
     setCodigoWise(row.codigo_wise ?? "");
     setCor(isFornecedorCorId(row.cor) ? row.cor : null);
     setCorError(null);
+    const pos = posicoes.find((x) => x.tipo === "fornecedor" && x.ref_id === row.id);
+    setResponsavel(pos?.responsavel?.trim() ?? "");
     setSheetOpen(true);
   };
+
 
   const nomePorId = useMemo(
     () => new Map((fornecedores as FornecedorRow[]).map((f) => [f.id, f.nome])),
@@ -132,7 +140,7 @@ export function FornecedoresPage() {
   const toggleSelecionado = (id: string) =>
     setSelecionados((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  const save = () => {
+  const save = async () => {
     if (!nome.trim()) {
       toast.error("Informe o nome do fornecedor");
       return;
@@ -144,28 +152,35 @@ export function FornecedoresPage() {
     }
     setCorError(null);
     const codigo = codigoWise.trim() || null;
-    if (editId) {
-      update.mutate(
-        { id: editId, nome: nome.trim(), codigo_wise: codigo, cor },
-        {
-          onSuccess: () => {
-            toast.success("Fornecedor atualizado");
-            setSheetOpen(false);
-          },
-          onError: (e) => toast.error(e.message),
-        },
-      );
-    } else {
-      insert.mutate(
-        { nome: nome.trim(), codigo_wise: codigo, cor, ativo: true },
-        {
-          onSuccess: () => {
-            toast.success("Fornecedor cadastrado");
-            setSheetOpen(false);
-          },
-          onError: (e) => toast.error(e.message),
-        },
-      );
+    try {
+      if (editId) {
+        await update.mutateAsync({ id: editId, nome: nome.trim(), codigo_wise: codigo, cor });
+        await saveResponsavel.mutateAsync({
+          tipo: "fornecedor",
+          ref_id: editId,
+          responsavel,
+        });
+        toast.success("Fornecedor atualizado");
+      } else {
+        const created = await insert.mutateAsync({
+          nome: nome.trim(),
+          codigo_wise: codigo,
+          cor,
+          ativo: true,
+        });
+        const novoId = (created as { id?: string } | null)?.id;
+        if (novoId) {
+          await saveResponsavel.mutateAsync({
+            tipo: "fornecedor",
+            ref_id: novoId,
+            responsavel,
+          });
+        }
+        toast.success("Fornecedor cadastrado");
+      }
+      setSheetOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
     }
   };
 
@@ -574,6 +589,18 @@ export function FornecedoresPage() {
                 </ul>
               </div>
             )}
+            <div className="space-y-1">
+              <Label>Responsável inventário de caixas</Label>
+              <p className="text-xs text-muted-foreground mb-1">
+                Quem responde pela contagem semanal desta posição. Se vazio, a
+                pendência mostra &quot;sem responsável&quot; — não inventamos nome.
+              </p>
+              <Input
+                value={responsavel}
+                onChange={(e) => setResponsavel(e.target.value)}
+                placeholder="Nome do responsável"
+              />
+            </div>
             {editId && (
               <EstoqueMinimoEditor fornecedorIds={[editId]} />
             )}
@@ -582,8 +609,13 @@ export function FornecedoresPage() {
             <Button variant="outline" onClick={() => setSheetOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={save} disabled={insert.isPending || update.isPending}>
-              {insert.isPending || update.isPending ? "Salvando…" : "Salvar"}
+            <Button
+              onClick={save}
+              disabled={insert.isPending || update.isPending || saveResponsavel.isPending}
+            >
+              {insert.isPending || update.isPending || saveResponsavel.isPending
+                ? "Salvando…"
+                : "Salvar"}
             </Button>
           </SheetFooter>
         </SheetContent>

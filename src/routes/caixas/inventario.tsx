@@ -38,7 +38,8 @@ import { KpiCard } from "@/components/kpi-card";
 import { PendenciasInventarioSemanal } from "@/components/pendencias-inventario-semanal";
 import { useAuth } from "@/lib/auth";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
-import { useSaldosCaixa, usePosicoes } from "@/hooks/use-ledger";
+import { useSaldosCaixa, usePosicoes, useSavePosicaoResponsavel } from "@/hooks/use-ledger";
+import { labelResponsavelPosicao } from "@/lib/responsavel-posicao";
 import { useClientes, useFornecedores } from "@/hooks/use-cadastros";
 import { SeletorCadastro } from "@/components/seletor-cadastro";
 import {
@@ -311,7 +312,8 @@ function VisaoGeralInventario() {
                       </div>
                       <p className="text-[11px] text-muted-foreground">
                         Prazo sexta {formatDateBRT(p.vencimento)}
-                        {p.responsavel ? ` · ${p.responsavel}` : " · sem responsável"}
+                        {" · "}
+                        {labelResponsavelPosicao(p.responsavel)}
                       </p>
                     </li>
                   ))}
@@ -322,8 +324,123 @@ function VisaoGeralInventario() {
         })}
       </div>
 
-      {/* Configurar estoque mínimo - apenas ADM */}
-      {isAdmin && <ConfigurarMinimoEstoque />}
+      {/* Cadastro de responsável / estoque mínimo - apenas ADM */}
+      {isAdmin && (
+        <>
+          <ConfigurarResponsavelPosicao />
+          <ConfigurarMinimoEstoque />
+        </>
+      )}
+    </div>
+  );
+}
+
+function ConfigurarResponsavelPosicao() {
+  const { data: posicoes = [] } = usePosicoes();
+  const saveResponsavel = useSavePosicaoResponsavel();
+  const galpao = posicoes.find((p) => p.tipo === "galpao");
+  const [galpaoResp, setGalpaoResp] = useState(galpao?.responsavel?.trim() ?? "");
+  const [fornId, setFornId] = useState("");
+  const [fornResp, setFornResp] = useState("");
+
+  useEffect(() => {
+    setGalpaoResp(galpao?.responsavel?.trim() ?? "");
+  }, [galpao?.id, galpao?.responsavel]);
+
+  useEffect(() => {
+    if (!fornId) {
+      setFornResp("");
+      return;
+    }
+    const pos = posicoes.find((p) => p.tipo === "fornecedor" && p.ref_id === fornId);
+    setFornResp(pos?.responsavel?.trim() ?? "");
+  }, [fornId, posicoes]);
+
+  async function saveGalpao() {
+    try {
+      await saveResponsavel.mutateAsync({
+        tipo: "galpao",
+        ref_id: null,
+        responsavel: galpaoResp,
+      });
+      toast.success("Responsável do galpão salvo");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+    }
+  }
+
+  async function saveFornecedor() {
+    if (!fornId) {
+      toast.error("Selecione o fornecedor");
+      return;
+    }
+    try {
+      await saveResponsavel.mutateAsync({
+        tipo: "fornecedor",
+        ref_id: fornId,
+        responsavel: fornResp,
+      });
+      toast.success("Responsável da posição salvo");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+    }
+  }
+
+  return (
+    <div className="card-base p-4 space-y-4">
+      <div>
+        <h3 className="font-semibold text-sm mb-1">Responsável do inventário por posição</h3>
+        <p className="text-xs text-muted-foreground">
+          Cadastro da posição (galpão e fornecedor). Vazio aparece como &quot;sem responsável&quot;
+          na pendência — não usamos quem contou.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-end">
+        <div className="flex-1 min-w-[180px]">
+          <Label className="text-xs">Galpão</Label>
+          <Input
+            className="mt-1 h-10"
+            value={galpaoResp}
+            onChange={(e) => setGalpaoResp(e.target.value)}
+            placeholder="Nome do responsável"
+          />
+        </div>
+        <Button onClick={saveGalpao} disabled={saveResponsavel.isPending} className="h-10">
+          Salvar galpão
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-end">
+        <div className="flex-1 min-w-[180px]">
+          <Label className="text-xs">Fornecedor</Label>
+          <div className="mt-1">
+            <SeletorCadastro
+              tipo="fornecedor"
+              value={fornId || null}
+              onChange={(id) => setFornId(id)}
+            />
+          </div>
+        </div>
+        <div className="flex-1 min-w-[160px]">
+          <Label className="text-xs">Responsável</Label>
+          <Input
+            className="mt-1 h-10"
+            value={fornResp}
+            onChange={(e) => setFornResp(e.target.value)}
+            placeholder="Nome do responsável"
+            disabled={!fornId}
+          />
+        </div>
+        <Button
+          onClick={saveFornecedor}
+          disabled={saveResponsavel.isPending || !fornId}
+          className="h-10"
+        >
+          Salvar posição
+        </Button>
+      </div>
+
     </div>
   );
 }
