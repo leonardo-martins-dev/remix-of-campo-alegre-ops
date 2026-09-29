@@ -6,7 +6,6 @@ import {
   useStatusInventarioEmbalagem,
 } from "@/hooks/use-inventario-embalagens";
 import { formatDateBRT } from "@/lib/utils-date";
-import { labelResponsavelPosicao } from "@/lib/responsavel-posicao";
 
 /**
  * NOP-158 — pendências semanais de caixas e embalagens no mesmo destaque.
@@ -50,11 +49,10 @@ export function PendenciasInventarioSemanal({ origem }: { origem: "caixas" | "em
                 .slice(0, 3)
                 .map((p) => {
                   const prazo = `prazo ${formatDateBRT(p.vencimento)}`;
-                  const resp = ` · ${labelResponsavelPosicao(p.responsavel)}`;
                   const idade = p.nunca_contado || p.dias_desde_contagem === 999
                     ? "nunca"
                     : `${p.dias_desde_contagem}d`;
-                  return `${p.posicao_nome} (${idade}, ${prazo}${resp})`;
+                  return `${p.posicao_nome} (${idade}, ${prazo})`;
                 })
                 .join(" · ")}
               {posicoes.length > 3 ? ` · e mais ${posicoes.length - 3}` : ""}
