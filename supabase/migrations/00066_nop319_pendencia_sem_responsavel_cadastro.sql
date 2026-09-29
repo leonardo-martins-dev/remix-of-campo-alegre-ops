@@ -16,6 +16,9 @@ COMMENT ON COLUMN public.posicoes_caixa.responsavel IS
 COMMENT ON COLUMN public.contagens_caixa.contado_por IS
   'NOP-319: usuário logado que registrou a contagem (histórico do evento).';
 
+-- DROP first: CREATE OR REPLACE cannot remove columns (responsavel left 00064).
+DROP VIEW IF EXISTS public.v_posicoes_contagem_pendente;
+
 CREATE OR REPLACE VIEW public.v_posicoes_contagem_pendente
 WITH (security_invoker = true) AS
 WITH hoje AS (
