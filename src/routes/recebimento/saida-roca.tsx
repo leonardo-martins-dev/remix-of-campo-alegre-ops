@@ -20,6 +20,7 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { one } from "@/lib/embed";
 import { formatDateBRT } from "@/lib/utils-date";
+import { resumoProdutosDeclarados } from "@/lib/saida-roca-resumo";
 import { useMotoristas } from "@/hooks/use-cadastros";
 import { useTiposCaixa } from "@/hooks/use-tipos-caixa";
 import { useSugestaoCaixas } from "@/hooks/use-sugestao-caixas";
@@ -152,6 +153,11 @@ function Page() {
         0,
       ),
     [caixas],
+  );
+
+  const produtosDeclarados = useMemo(
+    () => resumoProdutosDeclarados(itens, caixas),
+    [itens, caixas],
   );
 
   const totaisPorTipo = useMemo(() => {
@@ -645,12 +651,41 @@ function Page() {
                   {one(pedido.fornecedores)?.nome ?? "—"}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">Transporte</span>
-                <span className="font-semibold text-navy">
+                <span className="font-semibold text-navy text-right">
                   {veiculoFornecedor ? "Veículo do fornecedor" : (motoristaNome ?? "—")}
                 </span>
               </div>
+              {produtosDeclarados.length > 0 && (
+                <div className="border-t border-border pt-2 space-y-2.5 md:space-y-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground md:text-sm">
+                    Produtos
+                  </div>
+                  {produtosDeclarados.map((p) => (
+                    <div key={p.item_pedido_id} className="space-y-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="font-semibold text-navy break-words leading-snug">
+                          {p.produto}
+                        </span>
+                        <span className="font-bold text-navy shrink-0">{p.totalCx} cx</span>
+                      </div>
+                      {p.linhas.map((linha) => (
+                        <div
+                          key={`${p.item_pedido_id}-${linha.sigla}`}
+                          className="flex items-center justify-between gap-3 pl-3 text-muted-foreground"
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <Package size={14} className="text-primary shrink-0" />
+                            <span className="truncate">{linha.sigla}</span>
+                          </span>
+                          <span className="font-semibold text-navy shrink-0">{linha.qtd} cx</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="border-t border-border pt-2 space-y-1 md:space-y-1.5">
                 {Object.entries(totaisPorTipo).map(([sigla, qtd]) => (
                   <div key={sigla} className="flex items-center justify-between">
