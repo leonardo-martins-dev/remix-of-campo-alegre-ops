@@ -424,6 +424,10 @@ function Page() {
                 label: emTransito.length > 0 ? `Saída na roça (${emTransito.length})` : "Saída na roça",
                 onClick: () => navigate({ to: "/recebimento/saida-roca" }),
               },
+              {
+                label: "Cores da carga",
+                onClick: () => navigate({ to: "/caixas/cores" }),
+              },
               ...(canAdmin
                 ? [
                     {

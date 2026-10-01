@@ -19,6 +19,7 @@ import { Route as IndicadoresRouteImport } from './routes/indicadores'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ReceberRouteImport } from './routes/receber'
 import { Route as CaixasIndexRouteImport } from './routes/caixas/index'
+import { Route as CaixasCoresRouteImport } from './routes/caixas/cores'
 import { Route as CaixasEconomiaRouteImport } from './routes/caixas/economia'
 import { Route as CaixasFornecedorRouteImport } from './routes/caixas/fornecedor'
 import { Route as CaixasGalpaoRouteImport } from './routes/caixas/galpao'
@@ -105,6 +106,11 @@ const ReceberRoute = ReceberRouteImport.update({
 const CaixasIndexRoute = CaixasIndexRouteImport.update({
   id: '/caixas/',
   path: '/caixas/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CaixasCoresRoute = CaixasCoresRouteImport.update({
+  id: '/caixas/cores',
+  path: '/caixas/cores',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CaixasEconomiaRoute = CaixasEconomiaRouteImport.update({
@@ -303,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
   '/receber': typeof ReceberRoute
+  '/caixas/cores': typeof CaixasCoresRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
@@ -352,6 +359,7 @@ export interface FileRoutesByTo {
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
   '/receber': typeof ReceberRoute
+  '/caixas/cores': typeof CaixasCoresRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
@@ -402,6 +410,7 @@ export interface FileRoutesById {
   '/indicadores': typeof IndicadoresRoute
   '/login': typeof LoginRoute
   '/receber': typeof ReceberRoute
+  '/caixas/cores': typeof CaixasCoresRoute
   '/caixas/economia': typeof CaixasEconomiaRoute
   '/caixas/fornecedor': typeof CaixasFornecedorRoute
   '/caixas/galpao': typeof CaixasGalpaoRoute
@@ -453,6 +462,7 @@ export interface FileRouteTypes {
     | '/indicadores'
     | '/login'
     | '/receber'
+    | '/caixas/cores'
     | '/caixas/economia'
     | '/caixas/fornecedor'
     | '/caixas/galpao'
@@ -502,6 +512,7 @@ export interface FileRouteTypes {
     | '/indicadores'
     | '/login'
     | '/receber'
+    | '/caixas/cores'
     | '/caixas/economia'
     | '/caixas/fornecedor'
     | '/caixas/galpao'
@@ -551,6 +562,7 @@ export interface FileRouteTypes {
     | '/indicadores'
     | '/login'
     | '/receber'
+    | '/caixas/cores'
     | '/caixas/economia'
     | '/caixas/fornecedor'
     | '/caixas/galpao'
@@ -601,6 +613,7 @@ export interface RootRouteChildren {
   IndicadoresRoute: typeof IndicadoresRoute
   LoginRoute: typeof LoginRoute
   ReceberRoute: typeof ReceberRoute
+  CaixasCoresRoute: typeof CaixasCoresRoute
   CaixasEconomiaRoute: typeof CaixasEconomiaRoute
   CaixasFornecedorRoute: typeof CaixasFornecedorRoute
   CaixasGalpaoRoute: typeof CaixasGalpaoRoute
@@ -701,6 +714,13 @@ declare module '@tanstack/react-router' {
       path: '/caixas'
       fullPath: '/caixas/'
       preLoaderRoute: typeof CaixasIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/caixas/cores': {
+      id: '/caixas/cores'
+      path: '/caixas/cores'
+      fullPath: '/caixas/cores'
+      preLoaderRoute: typeof CaixasCoresRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/caixas/economia': {
@@ -1004,6 +1024,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndicadoresRoute: IndicadoresRoute,
   LoginRoute: LoginRoute,
   ReceberRoute: ReceberRoute,
+  CaixasCoresRoute: CaixasCoresRoute,
   CaixasEconomiaRoute: CaixasEconomiaRoute,
   CaixasFornecedorRoute: CaixasFornecedorRoute,
   CaixasGalpaoRoute: CaixasGalpaoRoute,

@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   Route,
   PackageOpen,
+  Palette,
 } from "lucide-react";
 import type { Profile } from "./supabase";
 import type { ViewMode } from "./roles";
@@ -73,6 +74,14 @@ export const OPS_HUBS: OpsHub[] = [
         slug: "recebimento/conferir",
         icon: ClipboardCheck,
         desc: "Conferir carga e gerar vale",
+      },
+      {
+        id: "cores-carga-receber",
+        label: "Cores da carga",
+        to: "/caixas/cores",
+        slug: "caixas/cores",
+        icon: Palette,
+        desc: "De quem é esta carga? Consulta e folha da parede",
       },
       {
         id: "concluidos",
@@ -172,6 +181,14 @@ export const OPS_HUBS: OpsHub[] = [
         slug: "caixas/inventario",
         icon: Warehouse,
         desc: "Inventário e contagem",
+      },
+      {
+        id: "cores-carga",
+        label: "Cores da carga",
+        to: "/caixas/cores",
+        slug: "caixas/cores",
+        icon: Palette,
+        desc: "Consulta reversa e folha da parede",
       },
     ],
   },

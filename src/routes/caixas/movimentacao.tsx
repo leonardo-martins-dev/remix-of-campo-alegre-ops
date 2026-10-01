@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   Store,
   Building2,
   Warehouse,
+  Palette,
   Search,
   Check,
   WifiOff,
@@ -61,24 +62,32 @@ function Page() {
         title="Movimentação de Caixas"
         subtitle="Registre movimentos entre lojas, fornecedores e packing"
         actions={
-          isAdmin && !isMotorista ? (
-            <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={() => setView("campo")}
-                className={`px-3 min-h-11 h-11 rounded-md text-xs font-semibold ${view === "campo" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
-              >
-                Movimentar
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("painel")}
-                className={`px-3 min-h-11 h-11 rounded-md text-xs font-semibold ${view === "painel" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
-              >
-                Painel / Ranking
-              </button>
-            </div>
-          ) : undefined
+          <div className="flex flex-wrap gap-1 items-center justify-end">
+            <Link
+              to="/caixas/cores"
+              className="inline-flex items-center gap-1.5 px-3 min-h-11 h-11 rounded-md text-xs font-semibold text-navy hover:bg-secondary border border-transparent hover:border-black/10"
+            >
+              <Palette size={14} /> Cores da carga
+            </Link>
+            {isAdmin && !isMotorista ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setView("campo")}
+                  className={`px-3 min-h-11 h-11 rounded-md text-xs font-semibold ${view === "campo" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+                >
+                  Movimentar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("painel")}
+                  className={`px-3 min-h-11 h-11 rounded-md text-xs font-semibold ${view === "painel" ? "bg-primary-soft text-primary-dark" : "text-muted-foreground hover:bg-secondary"}`}
+                >
+                  Painel / Ranking
+                </button>
+              </>
+            ) : null}
+          </div>
         }
       />
       {view === "campo" ? <MovimentacaoWizard /> : <RankingPanel />}

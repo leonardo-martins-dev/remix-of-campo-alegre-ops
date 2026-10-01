@@ -156,6 +156,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return resolveIsAdmin(profile, user);
       }
       if (resolveIsAdmin(profile, user)) return true;
+      // NOP-467: consulta de cor alcançável por quem já opera caixas ou recebimento
+      if (slug === "caixas/cores") {
+        return pages.some(
+          (p) =>
+            p.slug === "caixas/cores" ||
+            p.slug === "caixas" ||
+            p.slug.startsWith("caixas/") ||
+            p.slug === "receber" ||
+            p.slug === "recebimento" ||
+            p.slug.startsWith("recebimento/"),
+        );
+      }
       if (pages.some((p) => p.slug === slug)) return true;
       // NOP-321: hubs acessíveis se o usuário tem qualquer filho
       const hub = OPS_HUBS.find((h) => h.slug === slug);
